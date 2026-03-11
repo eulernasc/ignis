@@ -380,6 +380,13 @@ tr.selected-row td{background:rgba(79,142,247,.06);}
         <div class="sheets-hint" style="margin-bottom:12px">Defina uma senha para proteger importação, edição e exclusão de dados. Quem não tiver a senha só poderá visualizar.</div>
         <div class="form-row">
           <div class="form-group">
+            <label class="form-label">Senha atual</label>
+            <input type="password" class="form-input" id="senha-atual" placeholder="Senha atual">
+          </div>
+          <div class="form-group"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
             <label class="form-label">Nova senha</label>
             <input type="password" class="form-input" id="nova-senha" placeholder="Digite a nova senha">
           </div>
@@ -1113,15 +1120,21 @@ function fecharModalSenha() {
 }
 
 function salvarSenha() {
+  const atual = document.getElementById('senha-atual').value;
   const nova = document.getElementById('nova-senha').value;
   const confirmar = document.getElementById('confirmar-nova-senha').value;
   const msg = document.getElementById('senha-msg');
-  if (!nova) { msg.style.color='var(--red)'; msg.textContent='❌ Digite uma senha!'; return; }
+  const senhaExistente = localStorage.getItem('ft_senha');
+  if (senhaExistente && atual !== senhaExistente) {
+    msg.style.color='var(--red)'; msg.textContent='❌ Senha atual incorreta!'; return;
+  }
+  if (!nova) { msg.style.color='var(--red)'; msg.textContent='❌ Digite a nova senha!'; return; }
   if (nova !== confirmar) { msg.style.color='var(--red)'; msg.textContent='❌ Senhas não coincidem!'; return; }
   localStorage.setItem('ft_senha', nova);
   _sessaoAutorizada = true;
   msg.style.color='var(--green)';
   msg.textContent='✅ Senha salva!';
+  document.getElementById('senha-atual').value = '';
   document.getElementById('nova-senha').value = '';
   document.getElementById('confirmar-nova-senha').value = '';
   setTimeout(() => msg.textContent = '', 3000);
