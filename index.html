@@ -1086,9 +1086,13 @@ function showToast(msg,type='success') {
 let _senhaCallback = null;
 let _sessaoAutorizada = false;
 
+function getSenha() {
+  // Senha vem do Firebase (state.senha) — mesma para todos os usuários
+  return state.senha || '';
+}
+
 function precisaSenha() {
-  const s = localStorage.getItem('ft_senha');
-  return s && s.length > 0;
+  return getSenha().length > 0;
 }
 
 function verificarSenha(callback) {
@@ -1102,8 +1106,7 @@ function verificarSenha(callback) {
 
 function confirmarSenha() {
   const digitada = document.getElementById('senha-input').value;
-  const salva = localStorage.getItem('ft_senha');
-  if (digitada === salva) {
+  if (digitada === getSenha()) {
     _sessaoAutorizada = true;
     document.getElementById('modal-senha').classList.remove('open');
     if (_senhaCallback) { _senhaCallback(); _senhaCallback = null; }
@@ -1124,16 +1127,18 @@ function salvarSenha() {
   const nova = document.getElementById('nova-senha').value;
   const confirmar = document.getElementById('confirmar-nova-senha').value;
   const msg = document.getElementById('senha-msg');
-  const senhaExistente = localStorage.getItem('ft_senha');
+  const senhaExistente = getSenha();
   if (senhaExistente && atual !== senhaExistente) {
     msg.style.color='var(--red)'; msg.textContent='❌ Senha atual incorreta!'; return;
   }
   if (!nova) { msg.style.color='var(--red)'; msg.textContent='❌ Digite a nova senha!'; return; }
   if (nova !== confirmar) { msg.style.color='var(--red)'; msg.textContent='❌ Senhas não coincidem!'; return; }
-  localStorage.setItem('ft_senha', nova);
+  // Salvar senha no state (vai pro Firebase junto com os dados)
+  state.senha = nova;
   _sessaoAutorizada = true;
+  saveState();
   msg.style.color='var(--green)';
-  msg.textContent='✅ Senha salva!';
+  msg.textContent='✅ Senha salva e sincronizada!';
   document.getElementById('senha-atual').value = '';
   document.getElementById('nova-senha').value = '';
   document.getElementById('confirmar-nova-senha').value = '';
