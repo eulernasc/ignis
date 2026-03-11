@@ -297,7 +297,7 @@ tr.selected-row td{background:rgba(79,142,247,.06);}
       <div><div class="page-title">Abastecimentos</div><div class="page-sub">Registre e gerencie os abastecimentos</div></div>
       <div class="header-actions">
         <button class="btn btn-secondary" onclick="verificarSenha(openImport)">⬆️ Importar</button>
-        <button class="btn btn-primary" onclick="openNovoAbast()">+ Novo Registro</button>
+        <button class="btn btn-primary" onclick="verificarSenha(openNovoAbast)">+ Novo Registro</button>
       </div>
     </div>
     <div class="filters">
@@ -333,7 +333,7 @@ tr.selected-row td{background:rgba(79,142,247,.06);}
       <div><div class="page-title">Máquinas</div><div class="page-sub">Gerencie o cadastro de máquinas</div></div>
       <div class="header-actions">
         <select class="filter-select" id="maq-op-filter" onchange="renderMaquinas()"><option value="">Todas as Operações</option></select>
-        <button class="btn btn-primary" onclick="openNovaMaquina()">+ Nova Máquina</button>
+        <button class="btn btn-primary" onclick="verificarSenha(openNovaMaquina)">+ Nova Máquina</button>
       </div>
     </div>
     <div id="maquinas-grid" class="machines-grid"></div>
@@ -765,7 +765,7 @@ function renderAbastecimentos() {
       <td>${a.operador||'—'}</td>
       <td>
         <button class="btn-icon" onclick="verificarSenha(()=>editarAbast(${idx}))" title="Editar">✏️</button>
-        <button class="btn-icon del" onclick="excluirAbast(${idx})" title="Excluir">🗑️</button>
+        <button class="btn-icon del" onclick="verificarSenha(()=>excluirAbast(${idx}))" title="Excluir">🗑️</button>
       </td>
     </tr>`;
   }).join('');
