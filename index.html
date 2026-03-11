@@ -757,7 +757,7 @@ function renderAbastecimentos() {
       <td><span class="badge ${cls}">${media} L/h</span></td>
       <td>${a.operador||'—'}</td>
       <td>
-        <button class="btn-icon" onclick="editarAbast(${idx})" title="Editar">✏️</button>
+        <button class="btn-icon" onclick="verificarSenha(()=>editarAbast(${idx}))" title="Editar">✏️</button>
         <button class="btn-icon del" onclick="excluirAbast(${idx})" title="Excluir">🗑️</button>
       </td>
     </tr>`;
@@ -862,6 +862,7 @@ function openNovoAbast() {
 }
 function openNovaMaquina() { document.getElementById('modal-maquina').classList.add('open'); }
 
+function openImport() {
   for(let i=1;i<=5;i++){
     const el=document.getElementById(`sopt-${i}`);
     const label=document.getElementById(`sopt-label-${i}`);
