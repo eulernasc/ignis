@@ -1089,7 +1089,7 @@ function verificarSenha(callback) {
   _senhaCallback = callback;
   document.getElementById('senha-input').value = '';
   document.getElementById('senha-erro').style.display = 'none';
-  document.getElementById('modal-senha').style.display = 'flex';
+  document.getElementById('modal-senha').classList.add('open');
   setTimeout(() => document.getElementById('senha-input').focus(), 100);
 }
 
@@ -1098,7 +1098,7 @@ function confirmarSenha() {
   const salva = localStorage.getItem('ft_senha');
   if (digitada === salva) {
     _sessaoAutorizada = true;
-    document.getElementById('modal-senha').style.display = 'none';
+    document.getElementById('modal-senha').classList.remove('open');
     if (_senhaCallback) { _senhaCallback(); _senhaCallback = null; }
   } else {
     document.getElementById('senha-erro').style.display = 'block';
@@ -1108,7 +1108,7 @@ function confirmarSenha() {
 }
 
 function fecharModalSenha() {
-  document.getElementById('modal-senha').style.display = 'none';
+  document.getElementById('modal-senha').classList.remove('open');
   _senhaCallback = null;
 }
 
