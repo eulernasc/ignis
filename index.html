@@ -257,7 +257,7 @@ tr.selected-row td{background:rgba(79,142,247,.06);}
           <button class="tab-btn active" id="tab-semanal" onclick="setTab('semanal')">Semanal</button>
           <button class="tab-btn" id="tab-mensal" onclick="setTab('mensal')">Mensal</button>
         </div>
-        <button class="btn btn-secondary" onclick="openImport()">⬆️ Importar</button>
+        <button class="btn btn-secondary" onclick="verificarSenha(openImport)">⬆️ Importar</button>
       </div>
     </div>
     <div class="kpi-grid">
@@ -285,7 +285,7 @@ tr.selected-row td{background:rgba(79,142,247,.06);}
       <div><div class="page-title">Comparativo Semanal</div><div class="page-sub">Compare o consumo entre semanas</div></div>
       <div class="header-actions">
         <select class="filter-select" id="comp-op-filter" onchange="renderComparativo()"><option value="">Todas as Operações</option></select>
-        <button class="btn btn-secondary" onclick="openImport()">⬆️ Importar Semana</button>
+        <button class="btn btn-secondary" onclick="verificarSenha(openImport)">⬆️ Importar Semana</button>
       </div>
     </div>
     <div id="comparativo-content"></div>
@@ -296,7 +296,7 @@ tr.selected-row td{background:rgba(79,142,247,.06);}
     <div class="page-header">
       <div><div class="page-title">Abastecimentos</div><div class="page-sub">Registre e gerencie os abastecimentos</div></div>
       <div class="header-actions">
-        <button class="btn btn-secondary" onclick="openImport()">⬆️ Importar</button>
+        <button class="btn btn-secondary" onclick="verificarSenha(openImport)">⬆️ Importar</button>
         <button class="btn btn-primary" onclick="openNovoAbast()">+ Novo Registro</button>
       </div>
     </div>
@@ -319,7 +319,7 @@ tr.selected-row td{background:rgba(79,142,247,.06);}
           <span class="selected-count" id="selected-count" style="display:none"></span>
         </div>
         <div style="display:flex;gap:8px">
-          <button class="btn btn-danger btn-sm" id="btn-apagar-selecionados" style="display:none" onclick="apagarSelecionados()">🗑️ Apagar Selecionados</button>
+          <button class="btn btn-danger btn-sm" id="btn-apagar-selecionados" style="display:none" onclick="verificarSenha(apagarSelecionados)">🗑️ Apagar Selecionados</button>
           <button class="btn btn-secondary btn-sm" onclick="toggleSelecionarTodos()" id="btn-sel-todos">☐ Selecionar Todos</button>
         </div>
       </div>
@@ -366,19 +366,52 @@ tr.selected-row td{background:rgba(79,142,247,.06);}
         <div class="sheets-config-title">💾 Backup Local</div>
         <div style="display:flex;gap:10px">
           <button class="btn btn-secondary btn-sm" onclick="exportarJSON()">⬇️ Exportar dados (JSON)</button>
-          <button class="btn btn-secondary btn-sm" onclick="document.getElementById('import-json').click()">⬆️ Importar dados (JSON)</button>
+          <button class="btn btn-secondary btn-sm" onclick="verificarSenha(()=>document.getElementById('import-json').click())">⬆️ Importar dados (JSON)</button>
         </div>
         <input type="file" id="import-json" accept=".json" style="display:none" onchange="importarJSON(this)">
         <div class="sheets-hint" style="margin-top:10px">Use o backup JSON para transferir dados entre computadores sem internet.</div>
       </div>
       <div class="sheets-config" style="margin-top:16px;border-color:rgba(239,68,68,.3)">
         <div class="sheets-config-title" style="color:var(--red)">⚠️ Zona de Perigo</div>
-        <button class="btn btn-danger btn-sm" onclick="limparTodosDados()">🗑️ Apagar todos os dados locais</button>
+        <button class="btn btn-danger btn-sm" onclick="verificarSenha(limparTodosDados)">🗑️ Apagar todos os dados locais</button>
+      </div>
+      <div class="sheets-config" style="margin-top:16px;border-color:rgba(99,102,241,.4)">
+        <div class="sheets-config-title">🔐 Controle de Acesso</div>
+        <div class="sheets-hint" style="margin-bottom:12px">Defina uma senha para proteger importação, edição e exclusão de dados. Quem não tiver a senha só poderá visualizar.</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Nova senha</label>
+            <input type="password" class="form-input" id="nova-senha" placeholder="Digite a nova senha">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Confirmar senha</label>
+            <input type="password" class="form-input" id="confirmar-nova-senha" placeholder="Repita a senha">
+          </div>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="salvarSenha()">💾 Salvar Senha</button>
+        <span id="senha-msg" style="font-size:12px;margin-left:10px;color:var(--green)"></span>
       </div>
     </div>
   </div>
 
 </main>
+
+<!-- MODAL SENHA -->
+<div class="modal-overlay" id="modal-senha">
+  <div class="modal" style="max-width:360px">
+    <div class="modal-title">🔒 Área Restrita</div>
+    <div style="color:var(--text2);font-size:13px;margin-bottom:16px">Digite a senha para continuar.</div>
+    <div class="form-group">
+      <label class="form-label">Senha</label>
+      <input type="password" class="form-input" id="senha-input" placeholder="••••••••" onkeydown="if(event.key==='Enter')confirmarSenha()">
+    </div>
+    <div id="senha-erro" style="color:var(--red);font-size:12px;margin-bottom:8px;display:none">❌ Senha incorreta!</div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:8px">
+      <button class="btn btn-secondary" onclick="fecharModalSenha()">Cancelar</button>
+      <button class="btn btn-primary" onclick="confirmarSenha()">Entrar</button>
+    </div>
+  </div>
+</div>
 
 <!-- MODAL ABASTECIMENTO (novo + editar) -->
 <div class="modal-overlay" id="modal-abast">
@@ -396,7 +429,7 @@ tr.selected-row td{background:rgba(79,142,247,.06);}
     </div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeModal('modal-abast')">Cancelar</button>
-      <button class="btn btn-primary" onclick="salvarAbastecimento()">Salvar</button>
+      <button class="btn btn-primary" onclick="verificarSenha(salvarAbastecimento)">Salvar</button>
     </div>
   </div>
 </div>
@@ -416,7 +449,7 @@ tr.selected-row td{background:rgba(79,142,247,.06);}
     <div class="form-group"><label class="form-label">Status</label><select class="form-input" id="maq-status"><option value="Ativa">Ativa</option><option value="Manutenção">Manutenção</option><option value="Inativa">Inativa</option></select></div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeModal('modal-maquina')">Cancelar</button>
-      <button class="btn btn-primary" onclick="salvarMaquina()">Salvar</button>
+      <button class="btn btn-primary" onclick="verificarSenha(salvarMaquina)">Salvar</button>
     </div>
   </div>
 </div>
@@ -443,7 +476,7 @@ tr.selected-row td{background:rgba(79,142,247,.06);}
     <input type="file" id="file-input" accept=".xlsx,.xls" style="display:none" onchange="importarRelatorio(this)">
     <div id="import-preview"></div>
     <div class="modal-actions">
-      <button class="btn btn-danger" onclick="limparSemana()">🗑️ Limpar Semana</button>
+      <button class="btn btn-danger" onclick="verificarSenha(limparSemana)">🗑️ Limpar Semana</button>
       <button class="btn btn-secondary" onclick="closeModal('modal-import')">Fechar</button>
     </div>
   </div>
@@ -828,7 +861,7 @@ function openNovoAbast() {
   document.getElementById('modal-abast').classList.add('open');
 }
 function openNovaMaquina() { document.getElementById('modal-maquina').classList.add('open'); }
-function openImport() {
+
   for(let i=1;i<=5;i++){
     const el=document.getElementById(`sopt-${i}`);
     const label=document.getElementById(`sopt-label-${i}`);
@@ -1039,6 +1072,58 @@ function showToast(msg,type='success') {
   t.textContent=(type==='success'?'✅ ':'❌ ')+msg;
   t.className=`toast ${type} show`;
   setTimeout(()=>t.classList.remove('show'),3500);
+}
+
+// ── SENHA / ACESSO ─────────────────────────────────────────────────────────────
+let _senhaCallback = null;
+let _sessaoAutorizada = false;
+
+function precisaSenha() {
+  const s = localStorage.getItem('ft_senha');
+  return s && s.length > 0;
+}
+
+function verificarSenha(callback) {
+  if (!precisaSenha() || _sessaoAutorizada) { callback(); return; }
+  _senhaCallback = callback;
+  document.getElementById('senha-input').value = '';
+  document.getElementById('senha-erro').style.display = 'none';
+  document.getElementById('modal-senha').style.display = 'flex';
+  setTimeout(() => document.getElementById('senha-input').focus(), 100);
+}
+
+function confirmarSenha() {
+  const digitada = document.getElementById('senha-input').value;
+  const salva = localStorage.getItem('ft_senha');
+  if (digitada === salva) {
+    _sessaoAutorizada = true;
+    document.getElementById('modal-senha').style.display = 'none';
+    if (_senhaCallback) { _senhaCallback(); _senhaCallback = null; }
+  } else {
+    document.getElementById('senha-erro').style.display = 'block';
+    document.getElementById('senha-input').value = '';
+    document.getElementById('senha-input').focus();
+  }
+}
+
+function fecharModalSenha() {
+  document.getElementById('modal-senha').style.display = 'none';
+  _senhaCallback = null;
+}
+
+function salvarSenha() {
+  const nova = document.getElementById('nova-senha').value;
+  const confirmar = document.getElementById('confirmar-nova-senha').value;
+  const msg = document.getElementById('senha-msg');
+  if (!nova) { msg.style.color='var(--red)'; msg.textContent='❌ Digite uma senha!'; return; }
+  if (nova !== confirmar) { msg.style.color='var(--red)'; msg.textContent='❌ Senhas não coincidem!'; return; }
+  localStorage.setItem('ft_senha', nova);
+  _sessaoAutorizada = true;
+  msg.style.color='var(--green)';
+  msg.textContent='✅ Senha salva!';
+  document.getElementById('nova-senha').value = '';
+  document.getElementById('confirmar-nova-senha').value = '';
+  setTimeout(() => msg.textContent = '', 3000);
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
