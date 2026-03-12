@@ -282,7 +282,7 @@ tr.selected-row td{background:rgba(79,142,247,.06);}
     <div style="display:grid;grid-template-columns:1fr 300px;gap:16px;margin-bottom:16px;align-items:start">
       <div class="chart-card">
         <div class="chart-title">Consumo por Máquina — <span id="chart-period-label">Semanal</span></div>
-        <div id="bar-chart-container" style="overflow-x:auto;overflow-y:hidden"><div class="empty"><div class="empty-icon">📊</div><div class="empty-text">Sem dados</div><div class="empty-sub">Importe um relatório para começar</div></div></div>
+        <div id="bar-chart-container"><div class="empty"><div class="empty-icon">📊</div><div class="empty-text">Sem dados</div><div class="empty-sub">Importe um relatório para começar</div></div></div>
         <div class="chart-legend"><div class="legend-item"><div class="legend-dot" style="background:var(--accent)"></div>Litros</div><div class="legend-item"><div class="legend-dot" style="background:var(--yellow)"></div>Média L/h</div></div>
       </div>
       <div class="chart-card">
@@ -713,7 +713,7 @@ function renderOpChart(list) {
   const maxL=Math.max(...ops.map(o=>byOp[o].litros));
   const maxM=Math.max(...ops.map(o=>byOp[o].horas>0?byOp[o].litros/byOp[o].horas:0));
   const H=120;
-  c.innerHTML=`<div style="overflow-x:auto;padding-bottom:4px;display:flex;justify-content:center"><div style="display:inline-flex;align-items:flex-end;gap:16px;padding-top:28px;overflow:visible">`+ops.map(op=>{
+  c.innerHTML=`<div style="overflow-x:auto;padding-bottom:4px"><div style="display:inline-flex;align-items:flex-end;gap:16px;padding-top:28px;overflow:visible;min-width:100%">`+ops.map(op=>{
     const d=byOp[op];
     const l=d.litros, m=d.horas>0?d.litros/d.horas:0;
     const hL=maxL>0?(l/maxL)*H:0, hM=maxM>0?(m/maxM)*H:0;
@@ -743,7 +743,7 @@ function renderBarChart(list) {
   const maxM=Math.max(...pl.map(p=>byMaq[p].horas>0?byMaq[p].litros/byMaq[p].horas:0));
   const H=120;
   const barW=22;
-  c.innerHTML=`<div style="display:inline-flex;align-items:flex-end;gap:12px;padding-top:28px;padding-bottom:4px;min-width:max-content">`+pl.map(p=>{
+  c.innerHTML=`<div style="overflow-x:auto;padding-bottom:4px"><div style="display:inline-flex;align-items:flex-end;gap:12px;padding-top:28px;padding-bottom:4px;min-width:100%">`+pl.map(p=>{
     const l=byMaq[p].litros,m=byMaq[p].horas>0?byMaq[p].litros/byMaq[p].horas:0;
     const hL=maxL>0?(l/maxL)*H:0,hM=maxM>0?(m/maxM)*H:0;
     return `<div class="bar-group">
@@ -759,7 +759,7 @@ function renderBarChart(list) {
       </div>
       <div class="bar-label">${p.replace('MAQ','').replace('TRA','T')}</div>
     </div>`;
-  }).join('')+'</div>';
+  }).join('')+'</div></div>';
 }
 
 function renderRanking(list) {
