@@ -669,29 +669,27 @@ function renderOpChart(list) {
     byOp[op].maquinas.add(a.placa);
   });
   const ops=Object.keys(byOp).sort();
+  const maxL=Math.max(...ops.map(o=>byOp[o].litros));
   const maxM=Math.max(...ops.map(o=>byOp[o].horas>0?byOp[o].litros/byOp[o].horas:0));
   const H=160;
-  let html='<div style="display:flex;flex-direction:column;gap:12px;margin-top:8px">';
-  ops.forEach(op=>{
+  c.innerHTML=`<div style="overflow-x:auto;padding-bottom:8px"><div class="bar-chart" style="min-width:${ops.length*120}px">`+ops.map(op=>{
     const d=byOp[op];
-    const media=d.horas>0?d.litros/d.horas:0;
-    const pct=maxM>0?(media/maxM)*100:0;
-    const cls=media>=12?'var(--green)':media>=9?'var(--accent)':media>0?'var(--red)':'var(--text3)';
-    html+=`<div>
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-        <span style="font-size:13px;font-weight:600;color:var(--text)">${op}</span>
-        <div style="display:flex;gap:16px;align-items:center">
-          <span style="font-size:11px;color:var(--text2)">${d.litros.toFixed(0)}L · ${d.horas.toFixed(0)}h · ${d.maquinas.size} maq.</span>
-          <span style="font-size:15px;font-weight:700;color:${cls};font-family:'DM Mono',monospace">${media.toFixed(2)} L/h</span>
+    const l=d.litros, m=d.horas>0?d.litros/d.horas:0;
+    const hL=maxL>0?(l/maxL)*H:0, hM=maxM>0?(m/maxM)*H:0;
+    return `<div class="bar-group">
+      <div class="bars" style="position:relative;align-items:flex-end">
+        <div style="display:flex;flex-direction:column;align-items:center">
+          <span style="font-size:10px;color:var(--accent);font-weight:700;margin-bottom:3px;font-family:'DM Mono',monospace">${l.toFixed(0)}L</span>
+          <div class="bar bar-litros" style="height:${Math.max(hL,2)}px;width:26px"></div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center">
+          <span style="font-size:10px;color:var(--yellow);font-weight:700;margin-bottom:3px;font-family:'DM Mono',monospace">${m.toFixed(2)}</span>
+          <div class="bar bar-media" style="height:${Math.max(hM,2)}px;width:26px"></div>
         </div>
       </div>
-      <div style="height:8px;background:var(--bg3);border-radius:4px;overflow:hidden">
-        <div style="height:100%;width:${pct}%;background:${cls};border-radius:4px;transition:width .4s"></div>
-      </div>
+      <div class="bar-label" style="max-width:90px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:10px" title="${op}">${op}</div>
     </div>`;
-  });
-  html+='</div>';
-  c.innerHTML=html;
+  }).join('')+'</div></div>';
 }
 
 function renderBarChart(list) {
@@ -707,7 +705,19 @@ function renderBarChart(list) {
   c.innerHTML=`<div style="overflow-x:auto;padding-bottom:8px"><div class="bar-chart" style="min-width:${pl.length*60}px">`+pl.map(p=>{
     const l=byMaq[p].litros,m=byMaq[p].horas>0?byMaq[p].litros/byMaq[p].horas:0;
     const hL=maxL>0?(l/maxL)*H:0,hM=maxM>0?(m/maxM)*H:0;
-    return `<div class="bar-group"><div class="bars"><div class="bar bar-litros" style="height:${Math.max(hL,2)}px;width:${barW}px" title="${l.toFixed(0)}L"></div><div class="bar bar-media" style="height:${Math.max(hM,2)}px;width:${barW}px" title="${m.toFixed(2)}L/h"></div></div><div class="bar-label">${p.replace('MAQ','').replace('TRA','T')}</div></div>`;
+    return `<div class="bar-group">
+      <div class="bars">
+        <div style="display:flex;flex-direction:column;align-items:center">
+          <span style="font-size:9px;color:var(--accent);font-weight:700;margin-bottom:2px;font-family:'DM Mono',monospace">${l.toFixed(0)}</span>
+          <div class="bar bar-litros" style="height:${Math.max(hL,2)}px;width:${barW}px"></div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center">
+          <span style="font-size:9px;color:var(--yellow);font-weight:700;margin-bottom:2px;font-family:'DM Mono',monospace">${m.toFixed(1)}</span>
+          <div class="bar bar-media" style="height:${Math.max(hM,2)}px;width:${barW}px"></div>
+        </div>
+      </div>
+      <div class="bar-label">${p.replace('MAQ','').replace('TRA','T')}</div>
+    </div>`;
   }).join('')+'</div></div>';
 }
 
