@@ -67,6 +67,53 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .sync-dot.error{background:var(--red);}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
 .main{margin-left:220px;flex:1;padding:22px 28px;min-height:100vh;}
+/* ── MOBILE TOPBAR ── */
+.mob-topbar{display:none;position:fixed;top:0;left:0;right:0;height:54px;background:var(--bg2);border-bottom:1px solid var(--border);z-index:200;align-items:center;padding:0 16px;gap:12px;}
+.mob-logo{display:flex;align-items:center;gap:8px;flex:1;}
+.mob-logo-icon{width:30px;height:30px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;}
+.mob-logo-text{font-size:14px;font-weight:700;}
+.mob-hamburger{background:none;border:none;color:var(--text);cursor:pointer;font-size:22px;padding:4px 8px;border-radius:8px;line-height:1;}
+.mob-hamburger:hover{background:var(--bg3);}
+.sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:149;backdrop-filter:blur(2px);}
+.sidebar-overlay.open{display:block;}
+/* ── MOBILE BOTTOM NAV ── */
+.mob-bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--bg2);border-top:1px solid var(--border);z-index:200;padding:6px 0 env(safe-area-inset-bottom,6px);}
+.mob-bottom-nav-inner{display:flex;justify-content:space-around;}
+.mob-nav-item{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 8px;border-radius:10px;cursor:pointer;font-size:10px;font-weight:500;color:var(--text3);transition:.2s;min-width:52px;text-align:center;}
+.mob-nav-item.active{color:var(--accent);}
+.mob-nav-item .mob-icon{font-size:20px;line-height:1;}
+/* ── RESPONSIVE ── */
+@media(max-width:768px){
+  .mob-topbar{display:flex;}
+  .mob-bottom-nav{display:block;}
+  .sidebar{transform:translateX(-100%);transition:transform .3s ease;z-index:150;}
+  .sidebar.open{transform:translateX(0);}
+  .main{margin-left:0;padding:70px 14px 80px;}
+  .kpi-grid{grid-template-columns:repeat(2,1fr);gap:10px;}
+  .kpi-value{font-size:20px;}
+  .page-title{font-size:18px;}
+  .page-header{flex-direction:column;align-items:flex-start;gap:12px;margin-bottom:16px;}
+  .header-actions{width:100%;flex-wrap:wrap;gap:6px;}
+  .header-actions .tab-group{order:-1;width:100%;}
+  .header-actions .tab-btn{flex:1;text-align:center;padding:8px 4px;font-size:12px;}
+  .filters{gap:6px;}
+  .filter-select,.filter-input{font-size:12px;padding:7px 10px;max-width:100%;}
+  .chart-card{padding:14px;}
+  .chart-title{font-size:13px;margin-bottom:12px;}
+  .comp-grid{grid-template-columns:1fr;}
+  .modal{width:calc(100vw - 24px);max-width:100%;padding:20px 16px;border-radius:16px;}
+  .form-row{grid-template-columns:1fr;}
+  table{font-size:12px;}
+  th,td{padding:8px 10px;}
+  .table-toolbar{flex-direction:column;align-items:flex-start;gap:8px;}
+  .machines-grid{grid-template-columns:1fr;}
+  .btn{font-size:12px;padding:8px 14px;}
+  .filter-sep{display:none;}
+  #dash-date-range{flex-wrap:wrap;}
+  #dash-date-range input{width:100%!important;}
+  #op-dropdown-wrap{width:100%;}
+  #op-dropdown-btn{width:100%;}
+}
 .page{display:none;}
 .page.active{display:block;animation:fadeIn .3s ease;}
 @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
@@ -228,7 +275,18 @@ tr.selected-row td{background:rgba(79,142,247,.06);}
 </head>
 <body>
 
-<aside class="sidebar">
+<!-- MOBILE TOPBAR -->
+<div class="mob-topbar">
+  <div class="mob-logo">
+    <div class="mob-logo-icon">⛽</div>
+    <div class="mob-logo-text">FuelTracker Pro</div>
+  </div>
+  <button class="mob-hamburger" onclick="toggleSidebar()">☰</button>
+</div>
+<!-- SIDEBAR OVERLAY -->
+<div class="sidebar-overlay" id="sidebar-overlay" onclick="closeSidebar()"></div>
+
+<aside class="sidebar" id="sidebar">
   <div class="logo">
     <div class="logo-icon">⛽</div>
     <div><div class="logo-text">FuelTracker</div><div class="logo-sub">Gestão de Combustível</div></div>
@@ -245,6 +303,27 @@ tr.selected-row td{background:rgba(79,142,247,.06);}
     <span id="sync-label" style="color:var(--text2)">Sem sincronização</span>
   </div>
 </aside>
+
+<!-- MOBILE BOTTOM NAV -->
+<nav class="mob-bottom-nav">
+  <div class="mob-bottom-nav-inner">
+    <div class="mob-nav-item active" id="mob-nav-dashboard" onclick="showPage('dashboard',this);updateMobNav('dashboard')">
+      <span class="mob-icon">⊞</span>Dashboard
+    </div>
+    <div class="mob-nav-item" id="mob-nav-comparativo" onclick="showPage('comparativo',this);updateMobNav('comparativo')">
+      <span class="mob-icon">📊</span>Comparativo
+    </div>
+    <div class="mob-nav-item" id="mob-nav-abastecimentos" onclick="showPage('abastecimentos',this);updateMobNav('abastecimentos')">
+      <span class="mob-icon">⛽</span>Abastec.
+    </div>
+    <div class="mob-nav-item" id="mob-nav-maquinas" onclick="showPage('maquinas',this);updateMobNav('maquinas')">
+      <span class="mob-icon">🚜</span>Máquinas
+    </div>
+    <div class="mob-nav-item" id="mob-nav-config" onclick="showPage('config',this);updateMobNav('config')">
+      <span class="mob-icon">⚙️</span>Config
+    </div>
+  </div>
+</nav>
 
 <main class="main">
 
@@ -1514,6 +1593,28 @@ function salvarSenha() {
   document.getElementById('confirmar-nova-senha').value = '';
   setTimeout(() => msg.textContent = '', 3000);
 }
+
+// ── MOBILE NAV ───────────────────────────────────────────────────────────────
+function toggleSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('sidebar-overlay');
+  sidebar.classList.toggle('open');
+  overlay.classList.toggle('open');
+}
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebar-overlay').classList.remove('open');
+}
+function updateMobNav(page) {
+  document.querySelectorAll('.mob-nav-item').forEach(el => el.classList.remove('active'));
+  const el = document.getElementById('mob-nav-' + page);
+  if (el) el.classList.add('active');
+  closeSidebar();
+}
+// Fecha sidebar ao clicar em item do menu lateral no mobile
+document.querySelectorAll('.nav-item').forEach(el => {
+  el.addEventListener('click', () => { if(window.innerWidth <= 768) closeSidebar(); });
+});
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
 updateFilters();
