@@ -263,7 +263,7 @@ tr.selected-row td{background:rgba(79,142,247,.06);}
     </div>
     <div class="kpi-grid">
       <div class="kpi-card"><div class="kpi-label">Total de Litros</div><div class="kpi-icon">🛢️</div><div><span class="kpi-value" id="kpi-litros">0</span><span class="kpi-unit">L</span></div><div class="kpi-delta" id="kpi-litros-delta"></div></div>
-      <div class="kpi-card"><div class="kpi-label">Média L/H</div><div class="kpi-icon">📊</div><div><span class="kpi-value" id="kpi-media">0</span><span class="kpi-unit">L/h</span></div><div class="kpi-delta" id="kpi-media-delta"></div></div>
+      <div class="kpi-card"><div class="kpi-label">Média L/H</div><div class="kpi-icon">📊</div><div><span class="kpi-value" id="kpi-media">0</span><span class="kpi-unit">L/h</span></div><div class="kpi-delta" id="kpi-media-delta"></div><div id="kpi-media-meta" style="font-size:11px;color:var(--text3);margin-top:4px"></div></div>
       <div class="kpi-card"><div class="kpi-label">Horas Trabalhadas</div><div class="kpi-icon">⏱️</div><div><span class="kpi-value" id="kpi-horas">0</span><span class="kpi-unit">h</span></div></div>
       <div class="kpi-card"><div class="kpi-label">Máquinas Ativas</div><div class="kpi-icon">🚜</div><div><span class="kpi-value" id="kpi-maquinas">0</span></div><div class="kpi-delta" id="kpi-maq-delta"></div></div>
     </div>
@@ -664,6 +664,18 @@ function renderDashboard() {
   document.getElementById('kpi-horas').textContent=totalH.toFixed(0);
   document.getElementById('kpi-maquinas').textContent=maqAtivas;
   document.getElementById('kpi-maq-delta').textContent=`${state.maquinas.length} total`;
+  // Meta média ponderada das máquinas na lista
+  const maqsComMeta=list.map(a=>getMaquina(a.placa)).filter(m=>m&&m.meta>0);
+  const metaMedia=maqsComMeta.length>0?(maqsComMeta.reduce((s,m)=>s+m.meta,0)/maqsComMeta.length):0;
+  const metaEl=document.getElementById('kpi-media-meta');
+  if(metaMedia>0 && media>0){
+    const desvio=((media-metaMedia)/metaMedia*100);
+    const cor=desvio<=0?'var(--green)':desvio<=10?'#f59e0b':'var(--red)';
+    const seta=desvio<=0?'✅':'⚠️';
+    metaEl.innerHTML=`${seta} meta: <strong style="color:${cor}">${metaMedia.toFixed(2)} L/h</strong> <span style="color:${cor}">(${desvio>0?'+':''}${desvio.toFixed(1)}%)</span>`;
+  } else {
+    metaEl.innerHTML='';
+  }
   const lbl=state.tab==='semanal'?'Semanal':'Mensal';
   if(document.getElementById('chart-period-label2')) document.getElementById('chart-period-label2').textContent=lbl;
   renderOpChart(list); renderBarChart(list); renderRanking(list);
@@ -858,18 +870,24 @@ function renderComparativo() {
   if(todasOps.length>0 && !opF){
     html+=`<div class="comp-maq-table" style="margin-bottom:16px">
       <div class="comp-maq-header"><span>📍 Consumo por Operação</span><span class="comp-badge">${todasOps.length} operações</span></div>
-      <div style="overflow-x:auto"><table><thead><tr><th>Operação</th>${selecionados.map(([id])=>`<th>${dadosPeriodo[id].label} — L</th><th>L/h</th><th>Maq.</th>`).join('')}${selecionados.length>1?'<th>Variação</th>':''}</tr></thead><tbody>`;
+      <div style="overflow-x:auto"><table><thead><tr><th>Operação</th><th style="color:var(--text2)">Meta</th>${selecionados.map(([id])=>`<th>${dadosPeriodo[id].label} — L</th><th>L/h</th><th>Maq.</th>`).join('')}${selecionados.length>1?'<th>Variação</th>':''}</tr></thead><tbody>`;
     todasOps.forEach(op=>{
+      // Calcular meta média das máquinas desta operação
+      const maqsDaOp=state.maquinas.filter(m=>(m.operacao||'').replace(/_/g,' ')===op&&m.meta>0);
+      const metaOp=maqsDaOp.length>0?(maqsDaOp.reduce((s,m)=>s+m.meta,0)/maqsDaOp.length):0;
       const vals=selecionados.map(([id])=>{
         const rows=dadosPeriodo[id].rows.filter(r=>(r.operacao||'').replace(/_/g,' ')===op);
         const l=rows.reduce((a,r)=>a+(r.litros||0),0),h=rows.reduce((a,r)=>a+(r.horas||0),0);
         return{l,h,m:h>0?l/h:0,maq:new Set(rows.map(r=>r.placa)).size};
       });
       html+=`<tr><td style="font-weight:600">${op}</td>`;
+      html+=`<td style="font-size:11px;color:var(--text2)">${metaOp>0?metaOp.toFixed(2)+' L/h':'—'}</td>`;
       vals.forEach(v=>{
         html+=`<td>${v.l>0?v.l.toFixed(0)+'L':'—'}</td>`;
-        const cls=v.m>=12?'badge-green':v.m>=9?'badge-blue':v.m>0?'badge-red':'';
-        html+=`<td>${v.m>0?`<span class="badge ${cls}">${v.m.toFixed(2)}</span>`:'—'}</td>`;
+        const desvio=metaOp>0&&v.m>0?((v.m-metaOp)/metaOp*100):null;
+        const cls=desvio===null?(v.m>=12?'badge-green':v.m>=9?'badge-blue':v.m>0?'badge-red':''):(desvio<=0?'badge-green':desvio<=10?'badge-yellow':'badge-red');
+        const tip=desvio!==null?` · ${desvio>0?'+':''}${desvio.toFixed(0)}%`:'';
+        html+=`<td>${v.m>0?`<span class="badge ${cls}">${v.m.toFixed(2)}${tip}</span>`:'—'}</td>`;
         html+=`<td style="color:var(--text2)">${v.maq||'—'}</td>`;
       });
       if(selecionados.length>1){const f=vals[0],l=vals[vals.length-1];if(f.m>0&&l.m>0){const d=((l.m-f.m)/f.m*100);html+=`<td><span class="badge ${d>=0?'badge-green':'badge-red'}">${d>=0?'▲':'▼'}${Math.abs(d).toFixed(1)}%</span></td>`;}else html+='<td>—</td>';}
@@ -881,22 +899,24 @@ function renderComparativo() {
   // Tabela por Máquina
   const todasPlacas=[...new Set(selecionados.flatMap(([id])=>dadosPeriodo[id].rows.filter(r=>!opF||r.operacao===opF).map(r=>r.placa)))].sort();
   html+=`<div class="comp-maq-table"><div class="comp-maq-header"><span>🚜 Consumo por Máquina</span><span class="comp-badge">${todasPlacas.length} máquinas</span></div>
-  <div style="overflow-x:auto"><table><thead><tr><th>Máquina</th><th>Operação</th>${selecionados.map(([id])=>`<th>${dadosPeriodo[id].label} — L</th><th>L/h</th>`).join('')}${selecionados.length>1?'<th>Variação</th>':''}</tr></thead><tbody>`;
+  <div style="overflow-x:auto"><table><thead><tr><th>Máquina</th><th>Operação</th><th style="color:var(--text2)">Meta</th>${selecionados.map(([id])=>`<th>${dadosPeriodo[id].label} — L</th><th>L/h</th>`).join('')}${selecionados.length>1?'<th>Variação</th>':''}</tr></thead><tbody>`;
   todasPlacas.forEach(placa=>{
     let op='';
+    const maq=getMaquina(placa);
+    const meta=maq?.meta||0;
     const vals=selecionados.map(([id])=>{
       const row=dadosPeriodo[id].rows.find(r=>r.placa===placa);
       if(row) op=row.operacao||'';
       return{l:row?.litros||0,h:row?.horas||0,m:row&&row.horas>0?row.litros/row.horas:0};
     });
     html+=`<tr><td><span class="placa-tag">${placa}</span></td><td style="font-size:11px;color:var(--text2)">${op.replace(/_/g,' ')}</td>`;
+    html+=`<td style="font-size:11px;color:var(--text2)">${meta>0?meta.toFixed(2)+' L/h':'—'}</td>`;
     vals.forEach(v=>{
       html+=`<td>${v.l>0?v.l.toFixed(0)+'L':'—'}</td>`;
-      const maq=getMaquina(placa);
-      const meta=maq?.meta||0;
       const desvio=meta>0&&v.m>0?((v.m-meta)/meta*100):null;
       const cls=desvio===null?(v.m>=10?'badge-green':v.m>0?'badge-red':''):(desvio<=0?'badge-green':desvio<=10?'badge-yellow':'badge-red');
-      html+=`<td>${v.m>0?`<span class="badge ${cls}">${v.m.toFixed(2)}</span>`:'—'}</td>`;
+      const tip=desvio!==null?` · ${desvio>0?'+':''}${desvio.toFixed(0)}%`:'';
+      html+=`<td>${v.m>0?`<span class="badge ${cls}">${v.m.toFixed(2)}${tip}</span>`:'—'}</td>`;
     });
     if(selecionados.length>1){const f=vals[0],l=vals[vals.length-1];if(f.m>0&&l.m>0){const d=((l.m-f.m)/f.m*100);html+=`<td><span class="badge ${d>=0?'badge-green':'badge-red'}">${d>=0?'▲':'▼'}${Math.abs(d).toFixed(1)}%</span></td>`;}else html+='<td>—</td>';}
     html+='</tr>';
@@ -924,8 +944,6 @@ function limparFiltrosAbast() {
 
 function renderAbastecimentos() {
   updateFilters();
-  selectedIds.clear();
-  atualizarBotoesSelecao();
   const opF=document.getElementById('abast-op-filter')?.value||'';
   const maqF=document.getElementById('abast-maq-filter')?.value||'';
   const dIni=document.getElementById('abast-data-ini')?.value||'';
@@ -937,14 +955,25 @@ function renderAbastecimentos() {
   if(dFim) list=list.filter(a=>a.data<=dFim);
   list.sort((a,b)=>new Date(b.data)-new Date(a.data));
   abastFiltrados=list;
+  // Limpar seleções que não estão mais na lista filtrada
+  const idxValidos=new Set(list.map(a=>state.abastecimentos.indexOf(a)));
+  selectedIds.forEach(id=>{ if(!idxValidos.has(id)) selectedIds.delete(id); });
+  atualizarBotoesSelecao();
   document.getElementById('abast-table-title').textContent=`Abastecimentos (${list.length} registro${list.length!==1?'s':''})`;
   const c=document.getElementById('abast-table-container');
   if(!list.length){c.innerHTML='<div class="empty"><div class="empty-icon">⛽</div><div class="empty-text">Nenhum resultado</div><div class="empty-sub">Tente ajustar os filtros</div></div>';return;}
   const rows=list.map((a)=>{
     const idx=state.abastecimentos.indexOf(a);
-    const media=a.horas>0?(a.litros/a.horas).toFixed(2):'—';
     const mN=a.horas>0?a.litros/a.horas:0;
-    const cls=mN>12?'badge-green':mN>8?'badge-blue':'badge-red';
+    const media=mN>0?mN.toFixed(2):'—';
+    const maq=getMaquina(a.placa);
+    const meta=maq?.meta||0;
+    const desvio=meta>0&&mN>0?((mN-meta)/meta*100):null;
+    let cls, desvioLabel='';
+    if(desvio===null){ cls=mN>12?'badge-green':mN>8?'badge-blue':mN>0?'badge-red':''; }
+    else if(desvio<=0){ cls='badge-green'; }
+    else if(desvio<=10){ cls='badge-yellow'; desvioLabel=`+${desvio.toFixed(0)}%`; }
+    else { cls='badge-red'; desvioLabel=`+${desvio.toFixed(0)}%`; }
     const dataFmt=a.data?new Date(a.data+'T00:00:00').toLocaleDateString('pt-BR'):'—';
     return `<tr id="row-${idx}" class="${selectedIds.has(idx)?'selected-row':''}">
       <td class="col-check"><input type="checkbox" class="check-input" ${selectedIds.has(idx)?'checked':''} onchange="toggleSelecionar(${idx},this)"></td>
@@ -952,7 +981,8 @@ function renderAbastecimentos() {
       <td>${dataFmt}</td>
       <td>${(a.litros||0).toFixed(1)}L</td>
       <td>${(a.horas||0).toFixed(1)}h</td>
-      <td><span class="badge ${cls}">${media} L/h</span></td>
+      <td><span class="badge ${cls}">${media} L/h${desvioLabel?' · '+desvioLabel:''}</span></td>
+      <td style="font-size:11px;color:var(--text2)">${meta>0?meta.toFixed(1)+' L/h':''}</td>
       <td>${a.operador||'—'}</td>
       <td>
         <button class="btn-icon" onclick="verificarSenha(()=>editarAbast(${idx}))" title="Editar">✏️</button>
@@ -960,7 +990,7 @@ function renderAbastecimentos() {
       </td>
     </tr>`;
   }).join('');
-  c.innerHTML=`<table><thead><tr><th class="col-check"></th><th>Máquina</th><th>Data</th><th>Litros</th><th>Horas</th><th>L/h</th><th>Operador</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+  c.innerHTML=`<table><thead><tr><th class="col-check"></th><th>Máquina</th><th>Data</th><th>Litros</th><th>Horas</th><th>L/h</th><th>Meta</th><th>Operador</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 // Seleção em massa
