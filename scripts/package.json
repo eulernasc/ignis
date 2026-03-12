@@ -1,11 +1,8 @@
 {
   "name": "fueltracker-relatorio",
   "version": "1.0.0",
-  "description": "Relatório mensal automático de eficiência de combustível",
-  "main": "relatorio.js",
   "type": "module",
   "dependencies": {
-    "firebase-admin": "^12.0.0",
     "resend": "^3.0.0"
   }
 }
