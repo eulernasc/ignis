@@ -287,7 +287,7 @@ tr.selected-row td{background:rgba(79,142,247,.06);}
     <!-- Consumo por Máquina (todas) -->
     <div class="chart-card" style="margin-bottom:24px">
       <div class="chart-title">Consumo por Máquina — <span id="chart-period-label">Semanal</span></div>
-      <div id="bar-chart-container"><div class="empty"><div class="empty-icon">📊</div><div class="empty-text">Sem dados</div><div class="empty-sub">Importe um relatório para começar</div></div></div>
+      <div id="bar-chart-container" style="overflow-x:auto;overflow-y:hidden"><div class="empty"><div class="empty-icon">📊</div><div class="empty-text">Sem dados</div><div class="empty-sub">Importe um relatório para começar</div></div></div>
       <div class="chart-legend"><div class="legend-item"><div class="legend-dot" style="background:var(--accent)"></div>Litros</div><div class="legend-item"><div class="legend-dot" style="background:var(--yellow)"></div>Média L/h</div></div>
     </div>
   </div>
@@ -738,28 +738,28 @@ function renderBarChart(list) {
   if(!list.length){c.innerHTML='<div class="empty"><div class="empty-icon">📊</div><div class="empty-text">Sem dados</div></div>';return;}
   const byMaq={};
   list.forEach(a=>{if(!byMaq[a.placa])byMaq[a.placa]={litros:0,horas:0};byMaq[a.placa].litros+=a.litros||0;byMaq[a.placa].horas+=a.horas||0;});
-  const pl=Object.keys(byMaq).sort(); // TODAS as máquinas, sem slice
+  const pl=Object.keys(byMaq).sort();
   const maxL=Math.max(...pl.map(p=>byMaq[p].litros));
   const maxM=Math.max(...pl.map(p=>byMaq[p].horas>0?byMaq[p].litros/byMaq[p].horas:0));
-  const H=160;
-  const barW=Math.max(16, Math.min(28, Math.floor(600/pl.length)-8));
-  c.innerHTML=`<div style="overflow-x:auto;padding-bottom:8px"><div class="bar-chart" style="min-width:${pl.length*60}px">`+pl.map(p=>{
+  const H=120;
+  const barW=22;
+  c.innerHTML=`<div style="display:inline-flex;align-items:flex-end;gap:12px;padding-top:28px;padding-bottom:4px;min-width:max-content">`+pl.map(p=>{
     const l=byMaq[p].litros,m=byMaq[p].horas>0?byMaq[p].litros/byMaq[p].horas:0;
     const hL=maxL>0?(l/maxL)*H:0,hM=maxM>0?(m/maxM)*H:0;
     return `<div class="bar-group">
       <div class="bars">
         <div style="display:flex;flex-direction:column;align-items:center">
-          <span style="font-size:9px;color:var(--accent);font-weight:700;margin-bottom:2px;font-family:'DM Mono',monospace">${l.toFixed(0)}</span>
+          <span style="font-size:9px;color:var(--accent);font-weight:700;margin-bottom:2px;font-family:'DM Mono',monospace;white-space:nowrap">${l.toFixed(0)}</span>
           <div class="bar bar-litros" style="height:${Math.max(hL,2)}px;width:${barW}px"></div>
         </div>
         <div style="display:flex;flex-direction:column;align-items:center">
-          <span style="font-size:9px;color:var(--yellow);font-weight:700;margin-bottom:2px;font-family:'DM Mono',monospace">${m.toFixed(1)}</span>
+          <span style="font-size:9px;color:var(--yellow);font-weight:700;margin-bottom:2px;font-family:'DM Mono',monospace;white-space:nowrap">${m.toFixed(1)}</span>
           <div class="bar bar-media" style="height:${Math.max(hM,2)}px;width:${barW}px"></div>
         </div>
       </div>
       <div class="bar-label">${p.replace('MAQ','').replace('TRA','T')}</div>
     </div>`;
-  }).join('')+'</div></div>';
+  }).join('')+'</div>';
 }
 
 function renderRanking(list) {
