@@ -9,27 +9,27 @@ const GRUPOS = [
   {
     nome: 'CENIBRA',
     operacoes: ['CENIBRA COCAIS/RIO DOCE','CENIBRA NOVA ERA','CENIBRA SANTA BARBARA'],
-    destinatarios: ['eulernasc2015@gmail.com'],
+    destinatarios: ['eulernascimento@expressonepomuceno.com.br'],
   },
   {
     nome: 'CMPC FLORESTAL',
     operacoes: ['CMPC FLORESTAL'],
-    destinatarios: ['eulernasc2015@gmail.com'],
+    destinatarios: ['eulernascimento@expressonepomuceno.com.br'],
   },
   {
     nome: 'SUZANO ARACRUZ',
     operacoes: ['SUZANO ARACRUZ'],
-    destinatarios: ['eulernasc2015@gmail.com'],
+    destinatarios: ['eulernascimento@expressonepomuceno.com.br'],
   },
   {
     nome: 'SUZANO RIBAS',
     operacoes: ['SUZANO RIBAS'],
-    destinatarios: ['eulernasc2015@gmail.com'],
+    destinatarios: ['eulernascimento@expressonepomuceno.com.br'],
   },
 ];
 
 const LIMITE_EFICIENCIA = 98;
-const DIAS_JANELA = 30;
+const DIAS_JANELA = 15;
 
 // ── Busca o documento único do Firebase ──────────────────────
 async function carregarDados() {
