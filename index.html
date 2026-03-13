@@ -432,7 +432,7 @@ tr.selected-row td{background:rgba(79,142,247,.06);}
     <div class="chart-card" style="margin-bottom:16px">
       <div class="chart-title">Consumo por Máquina — <span id="chart-period-label">Semanal</span></div>
       <div id="bar-chart-container" style="overflow-x:auto"><div class="empty"><div class="empty-icon">📊</div><div class="empty-text">Sem dados</div><div class="empty-sub">Importe um relatório para começar</div></div></div>
-      <div class="chart-legend"><div class="legend-item"><div class="legend-dot" style="background:var(--accent)"></div>Litros</div><div class="legend-item"><div class="legend-dot" style="background:var(--yellow)"></div>Média L/h</div><div class="legend-item"><div style="width:20px;height:2px;background:var(--accent);border-radius:1px"></div>Meta L/h</div></div>
+      <div class="chart-legend"><div class="legend-item"><div class="legend-dot" style="background:var(--accent)"></div>Litros</div><div class="legend-item"><div class="legend-dot" style="background:var(--yellow)"></div>Média L/h</div></div>
     </div>
     <!-- Ranking abaixo -->
     <div class="chart-card" style="margin-bottom:16px">
@@ -1004,25 +1004,22 @@ function renderBarChart(list) {
     const maq=getMaquina(p);
     const meta=maq?.meta||0;
     const hL=maxL>0?(l/maxL)*H:0,hM=maxM>0?(m/maxM)*H:0;
-    const hMeta=maxM>0?(meta/maxM)*H:0;
     const desvio=meta>0&&m>0?((m-meta)/meta*100):null;
     const barColor=desvio===null?'var(--yellow)':desvio<=0?'var(--green)':desvio<=10?'#f59e0b':'var(--red)';
-    const metaLine=meta>0?`<div style="position:absolute;bottom:${Math.max(hMeta,1)}px;left:-3px;right:-3px;height:2px;background:var(--accent);border-radius:1px;opacity:.9" title="Meta: ${meta} L/h"></div>`:'';
+    const metaText=meta>0?`<div style="font-size:8px;color:var(--text3);font-family:'DM Mono',monospace;white-space:nowrap;margin-top:2px">meta ${meta.toFixed(1)}</div>`:'';
     return `<div class="bar-group" style="padding-bottom:20px">
       <div class="bars">
         <div style="display:flex;flex-direction:column;align-items:center">
           <span style="font-size:9px;color:var(--accent);font-weight:700;margin-bottom:2px;font-family:'DM Mono',monospace;white-space:nowrap">${l.toFixed(0)}</span>
           <div class="bar bar-litros" style="height:${Math.max(hL,2)}px;width:${barW}px"></div>
         </div>
-        <div style="display:flex;flex-direction:column;align-items:center;position:relative">
+        <div style="display:flex;flex-direction:column;align-items:center">
           <span style="font-size:9px;color:${barColor};font-weight:700;margin-bottom:2px;font-family:'DM Mono',monospace;white-space:nowrap">${m.toFixed(1)}</span>
-          <div style="position:relative;width:${barW}px;height:${Math.max(hM,2)}px">
-            <div class="bar" style="height:100%;width:100%;background:${barColor};border-radius:4px 4px 0 0;position:absolute;bottom:0"></div>
-            ${metaLine}
-          </div>
+          <div class="bar" style="height:${Math.max(hM,2)}px;width:${barW}px;background:${barColor};border-radius:4px 4px 0 0"></div>
         </div>
       </div>
       <div class="bar-label">${p.replace('MAQ','').replace('TRA','T')}</div>
+      ${metaText}
     </div>`;
   }).join('')+'</div>';
 }
@@ -1810,36 +1807,21 @@ function renderRelatorio() {
 
 function enviarRelatorioEmail() {
   const dest = document.getElementById('rel-email-dest')?.value?.trim();
-  if (!dest) { showToast('Informe o e-mail do destinatário!', 'error'); return; }
+  if (!dest) { showToast('Informe o e-mail do destinatario!', 'error'); return; }
   if (!window._relDados) return;
   const { periodo, byOp, limite } = window._relDados;
-  const mes = new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
-
-  // Monta assunto e corpo do e-mail
-  const assunto = encodeURIComponent(`⚠️ FuelTracker — Alerta de Eficiência · ${periodo.label||'Relatório'}`);
-
-  let corpo = `Relatório de Eficiência — ${periodo.label||'Período'}
-`;
-  corpo += `Limite: ${limite}%
-
-`;
-
+  const assunto = encodeURIComponent('FuelTracker - Alerta de Eficiencia - ' + (periodo.label||'Relatorio'));
+  let corpo = 'Relatorio de Eficiencia - ' + (periodo.label||'Periodo') + '\n';
+  corpo += 'Limite: ' + limite + '%\n\n';
   for (const [op, maquinas] of Object.entries(byOp)) {
-    corpo += `📍 ${op}
-`;
-    corpo += `${'─'.repeat(40)}
-`;
+    corpo += '📍 ' + op + '\n';
     maquinas.forEach(m => {
-      corpo += `• ${m.placa} | Meta: ${m.meta>0?m.meta.toFixed(1):'-'} L/h | Real: ${m.mediaReal.toFixed(2)} L/h | Desvio: +${m.desvio.toFixed(1)}% | Eficiência: ${m.eficiencia.toFixed(1)}%
-`;
+      corpo += '• ' + m.placa + ' | Meta: ' + (m.meta>0 ? m.meta.toFixed(1) : '-') + ' L/h | Real: ' + m.mediaReal.toFixed(2) + ' L/h | +' + m.desvio.toFixed(1) + '% | Efic: ' + m.eficiencia.toFixed(1) + '%\n';
     });
-    corpo += '
-';
+    corpo += '\n';
   }
-  corpo += `
-Acesse o FuelTracker: https://eulernasc.github.io/fueltracker`;
-
-  const link = `mailto:${dest}?subject=${assunto}&body=${encodeURIComponent(corpo)}`;
+  corpo += 'Acesse: https://eulernasc.github.io/fueltracker';
+  const link = 'mailto:' + dest + '?subject=' + assunto + '&body=' + encodeURIComponent(corpo);
   window.location.href = link;
   showToast('Abrindo e-mail...', 'success');
 }
@@ -1847,24 +1829,17 @@ Acesse o FuelTracker: https://eulernasc.github.io/fueltracker`;
 function copiarRelatorio() {
   if (!window._relDados) return;
   const { periodo, byOp, limite } = window._relDados;
-  let texto = `Relatório de Eficiência — ${periodo.label||'Período'}
-Limite: ${limite}%
-
-`;
+  let texto = 'Relatorio de Eficiencia - ' + (periodo.label||'Periodo') + '\n';
+  texto += 'Limite: ' + limite + '%\n\n';
   for (const [op, maquinas] of Object.entries(byOp)) {
-    texto += `📍 ${op}
-`;
+    texto += '📍 ' + op + '\n';
     maquinas.forEach(m => {
-      texto += `• ${m.placa} | Meta: ${m.meta>0?m.meta.toFixed(1):'-'} L/h | Real: ${m.mediaReal.toFixed(2)} L/h | +${m.desvio.toFixed(1)}% | ${m.eficiencia.toFixed(1)}%
-`;
+      texto += '• ' + m.placa + ' | Meta: ' + (m.meta>0 ? m.meta.toFixed(1) : '-') + ' L/h | Real: ' + m.mediaReal.toFixed(2) + ' L/h | +' + m.desvio.toFixed(1) + '% | ' + m.eficiencia.toFixed(1) + '%\n';
     });
-    texto += '
-';
+    texto += '\n';
   }
   navigator.clipboard.writeText(texto).then(()=>showToast('Copiado!','success')).catch(()=>showToast('Erro ao copiar','error'));
 }
-
-// ── MOBILE NAV ───────────────────────────────────────────────────────────────
 function toggleSidebar() {
   const sidebar = document.getElementById('sidebar');
   const overlay = document.getElementById('sidebar-overlay');
