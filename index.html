@@ -1745,12 +1745,15 @@ function relOpUpdateLabel() {
   const sel = checks.filter(c => c.checked);
   const lbl = document.getElementById('rel-op-label');
   if (!lbl) return;
-  if (sel.length === 0 || sel.length === checks.length) {
+  if (sel.length === checks.length) {
     lbl.textContent = 'Todas as Operações';
-    if (all) all.checked = true;
+    if (all) { all.checked = true; all.indeterminate = false; }
+  } else if (sel.length === 0) {
+    lbl.textContent = 'Nenhuma operação';
+    if (all) { all.checked = false; all.indeterminate = false; }
   } else {
-    lbl.textContent = sel.length + ' operação' + (sel.length > 1 ? 'ões' : '') + ' selecionada' + (sel.length > 1 ? 's' : '');
-    if (all) all.checked = false;
+    lbl.textContent = sel.length + ' operaç' + (sel.length > 1 ? 'ões' : 'ão') + ' selecionada' + (sel.length > 1 ? 's' : '');
+    if (all) { all.checked = false; all.indeterminate = true; }
   }
 }
 function getRelOpSelecionadas() {
@@ -1761,12 +1764,13 @@ function getRelOpSelecionadas() {
 function relPopularOps() {
   const cont = document.getElementById('rel-op-checks');
   if (!cont) return;
-  const ops = getOperacoes();
+  const ops = getOperacoes().map(o => o.replace(/_/g,' ')); // normaliza para espaços
+  const jaExiste = cont.children.length > 0;
   const atuais = new Set([...document.querySelectorAll('.rel-op-check:checked')].map(c => c.value));
   cont.innerHTML = ops.map(o =>
     '<label style="display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:7px;cursor:pointer;font-size:13px" onmouseover="this.style.background=\'var(--bg3)\'" onmouseout="this.style.background=\'\'">' +
-      '<input type="checkbox" class="rel-op-check" value="' + o + '" ' + (atuais.size===0||atuais.has(o)?'checked':'') + ' onchange="relOpUpdateLabel();renderRelatorio()" style="accent-color:var(--accent)"> ' +
-      o.replace(/_/g,' ') +
+      '<input type="checkbox" class="rel-op-check" value="' + o + '" ' + (!jaExiste || atuais.has(o) ? 'checked' : '') + ' onchange="relOpUpdateLabel();renderRelatorio()" style="accent-color:var(--accent)"> ' +
+      o +
     '</label>'
   ).join('');
   relOpUpdateLabel();
@@ -1779,8 +1783,8 @@ function renderRelatorio() {
   const c = document.getElementById('relatorio-resultado');
   if (!c) return;
 
-  // Sempre repopula operações para ter dados frescos
-  relPopularOps();
+  // Garante que checkboxes estejam populados (sem resetar seleção)
+  if (document.getElementById('rel-op-checks')?.children.length === 0) relPopularOps();
 
   const opsFiltro = getRelOpSelecionadas(); // [] = todas
 
