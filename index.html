@@ -574,15 +574,23 @@ tr.selected-row td{background:rgba(79,142,247,.06);}
       <div class="sheets-config-title">📋 Configurar Análise</div>
       <div class="form-row" style="margin-bottom:12px">
         <div class="form-group">
-          <label class="form-label">Período</label>
-          <select class="form-input" id="rel-periodo-select" onchange="renderRelatorio()">
-            <option value="">Selecione um período...</option>
-          </select>
+          <label class="form-label">Data Inicial</label>
+          <input type="date" class="form-input" id="rel-data-ini" onchange="renderRelatorio()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Data Final</label>
+          <input type="date" class="form-input" id="rel-data-fim" onchange="renderRelatorio()">
         </div>
         <div class="form-group">
           <label class="form-label">Limite de Eficiência (%)</label>
           <input type="number" class="form-input" id="rel-limite" value="98" min="1" max="100" onchange="renderRelatorio()">
         </div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+        <button class="btn btn-secondary btn-sm" onclick="relSetRange(7)">Últimos 7 dias</button>
+        <button class="btn btn-secondary btn-sm" onclick="relSetRange(15)">Últimos 15 dias</button>
+        <button class="btn btn-secondary btn-sm" onclick="relSetRange('mes')">Este mês</button>
+        <button class="btn btn-secondary btn-sm" onclick="relSetRange(30)">Últimos 30 dias</button>
       </div>
       <div class="form-group">
         <label class="form-label">E-mail do Destinatário</label>
@@ -999,15 +1007,17 @@ function renderBarChart(list) {
   c.style.height='';
   c.style.overflowX='';
   c.style.overflowY='';
-  c.innerHTML=`<div style="display:inline-flex;align-items:flex-end;gap:12px;padding-top:28px;min-width:max-content">`+pl.map(p=>{
+  c.innerHTML=`<div style="display:inline-flex;align-items:flex-end;gap:18px;padding-top:28px;min-width:max-content">`+pl.map(p=>{
     const l=byMaq[p].litros,m=byMaq[p].horas>0?byMaq[p].litros/byMaq[p].horas:0;
     const maq=getMaquina(p);
     const meta=maq?.meta||0;
     const hL=maxL>0?(l/maxL)*H:0,hM=maxM>0?(m/maxM)*H:0;
     const desvio=meta>0&&m>0?((m-meta)/meta*100):null;
     const barColor=desvio===null?'var(--yellow)':desvio<=0?'var(--green)':desvio<=10?'#f59e0b':'var(--red)';
-    const metaText=meta>0?`<div style="font-size:8px;color:var(--text3);font-family:'DM Mono',monospace;white-space:nowrap;margin-top:2px">meta ${meta.toFixed(1)}</div>`:'';
-    return `<div class="bar-group" style="padding-bottom:20px">
+    const metaText = meta > 0
+      ? `<div style="font-size:9px;font-weight:600;font-family:'DM Mono',monospace;white-space:nowrap;margin-top:3px;padding:1px 5px;border-radius:4px;background:rgba(79,142,247,.15);color:var(--accent)">${meta.toFixed(1)}</div>`
+      : '';
+    return `<div class="bar-group" style="padding-bottom:20px;gap:16px">
       <div class="bars">
         <div style="display:flex;flex-direction:column;align-items:center">
           <span style="font-size:9px;color:var(--accent);font-weight:700;margin-bottom:2px;font-family:'DM Mono',monospace;white-space:nowrap">${l.toFixed(0)}</span>
@@ -1689,36 +1699,49 @@ function salvarSenha() {
 }
 
 // ── RELATÓRIO DE EFICIÊNCIA ───────────────────────────────────────────────────
-function renderRelatorio() {
-  // Popula o select de períodos
-  const sel = document.getElementById('rel-periodo-select');
-  if (!sel) return;
-  const periodos = Object.entries(state.semanas).sort((a,b)=>(b[1].importedAt||'').localeCompare(a[1].importedAt||''));
-  const val = sel.value;
-  sel.innerHTML = '<option value="">Selecione um período...</option>' +
-    periodos.map(([id,p])=>`<option value="${id}">${p.label||id}</option>`).join('');
-  if (val) sel.value = val;
+function relSetRange(opt) {
+  const hoje = new Date();
+  const fmt = d => d.toISOString().split('T')[0];
+  let ini;
+  if (opt === 'mes') {
+    ini = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+  } else {
+    ini = new Date(hoje); ini.setDate(hoje.getDate() - opt + 1);
+  }
+  document.getElementById('rel-data-ini').value = fmt(ini);
+  document.getElementById('rel-data-fim').value = fmt(hoje);
+  renderRelatorio();
+}
 
-  const periodoId = sel.value;
+function renderRelatorio() {
+  const ini  = document.getElementById('rel-data-ini')?.value;
+  const fim  = document.getElementById('rel-data-fim')?.value;
   const limite = parseFloat(document.getElementById('rel-limite')?.value||98);
   const c = document.getElementById('relatorio-resultado');
   if (!c) return;
 
-  if (!periodoId) {
-    c.innerHTML = '<div class="empty"><div class="empty-icon">📧</div><div class="empty-text">Selecione um período acima</div></div>';
+  if (!ini || !fim) {
+    c.innerHTML = '<div class="empty"><div class="empty-icon">📅</div><div class="empty-text">Selecione o período acima</div><div class="empty-sub">Escolha a data inicial e final ou use os atalhos</div></div>';
     return;
   }
 
-  const periodo = state.semanas[periodoId];
-  if (!periodo) return;
+  // Filtra abastecimentos no intervalo
+  const registros = state.abastecimentos.filter(a => a.data >= ini && a.data <= fim);
 
-  const registros = periodo.registros || [];
+  if (!registros.length) {
+    c.innerHTML = '<div class="empty"><div class="empty-icon">🔍</div><div class="empty-text">Nenhum registro no período</div></div>';
+    return;
+  }
+
+  // Label do período
+  const fmtBr = d => { const [y,m,dd] = d.split('-'); return `${dd}/${m}/${y}`; };
+  const labelPeriodo = fmtBr(ini) + ' a ' + fmtBr(fim);
 
   // Agrupa por máquina
   const byMaq = {};
   registros.forEach(r => {
     if (!r || !r.placa) return;
-    if (!byMaq[r.placa]) byMaq[r.placa] = { litros:0, horas:0 };
+    if (!byMaq[r.placa]) byMaq[r.placa] = { litros:0, horas:0, operacao: getMaquina(r.placa)?.operacao || r.operacao || 'Sem Operação' };
     byMaq[r.placa].litros += parseFloat(r.litros)||0;
     byMaq[r.placa].horas  += parseFloat(r.horas)||0;
   });
@@ -1732,7 +1755,7 @@ function renderRelatorio() {
     const mediaReal = dados.horas > 0 ? dados.litros / dados.horas : 0;
     const eficiencia = meta > 0 && mediaReal > 0 ? (meta / mediaReal) * 100 : null;
     const desvio = meta > 0 && mediaReal > 0 ? ((mediaReal - meta) / meta * 100) : null;
-    const operacao = (maq?.operacao || r?.operacao || 'Sem Operação').replace(/_/g,' ');
+    const operacao = dados.operacao;
     const item = { placa, operacao, mediaReal, meta, eficiencia, desvio };
     if (eficiencia !== null && eficiencia < limite) maquinasProblema.push(item);
     else maquinasOk.push(item);
@@ -1748,9 +1771,10 @@ function renderRelatorio() {
 
   let html = '';
 
-  // Resumo
+  // KPIs resumo
   html += `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:20px">
-    <div class="kpi-card"><div class="kpi-label">Período</div><div style="font-size:14px;font-weight:700;margin-top:4px">${periodo.label||periodoId}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Período</div><div style="font-size:13px;font-weight:700;margin-top:4px;color:var(--accent)">${labelPeriodo}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Registros</div><div class="kpi-value" style="font-size:26px">${registros.length}</div></div>
     <div class="kpi-card"><div class="kpi-label">Máquinas Analisadas</div><div class="kpi-value" style="font-size:26px">${Object.keys(byMaq).length}</div></div>
     <div class="kpi-card"><div class="kpi-label">Abaixo de ${limite}%</div><div class="kpi-value" style="font-size:26px;color:${maquinasProblema.length>0?'var(--red)':'var(--green)'}">${maquinasProblema.length}</div></div>
     <div class="kpi-card"><div class="kpi-label">Dentro do Limite</div><div class="kpi-value" style="font-size:26px;color:var(--green)">${maquinasOk.length}</div></div>
@@ -1771,7 +1795,7 @@ function renderRelatorio() {
     html += `<div class="chart-card" style="margin-bottom:14px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
         <div class="chart-title" style="margin-bottom:0">📍 ${op}</div>
-        <span class="badge badge-red">${maquinas.length} máquina${maquinas.length>1?'s':''}</span>
+        <span style="background:var(--red);color:#fff;padding:3px 10px;border-radius:99px;font-size:11px;font-weight:700">${maquinas.length} máquina${maquinas.length>1?'s':''}</span>
       </div>
       <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">
         <thead><tr style="background:var(--bg3)">
@@ -1794,24 +1818,23 @@ function renderRelatorio() {
       `</tbody></table></div></div>`;
   }
 
-  // Botão enviar
+  // Botões
   html += `<div style="margin-top:8px;display:flex;gap:10px;flex-wrap:wrap">
     <button class="btn btn-primary" onclick="enviarRelatorioEmail()">📧 Enviar por E-mail</button>
     <button class="btn btn-secondary" onclick="copiarRelatorio()">📋 Copiar Resumo</button>
   </div>`;
 
   c.innerHTML = html;
-  // Guarda dados para uso no envio
-  window._relDados = { periodo, maquinasProblema, byOp, limite };
+  window._relDados = { labelPeriodo, maquinasProblema, byOp, limite };
 }
 
 function enviarRelatorioEmail() {
   const dest = document.getElementById('rel-email-dest')?.value?.trim();
   if (!dest) { showToast('Informe o e-mail do destinatario!', 'error'); return; }
   if (!window._relDados) return;
-  const { periodo, byOp, limite } = window._relDados;
-  const assunto = encodeURIComponent('FuelTracker - Alerta de Eficiencia - ' + (periodo.label||'Relatorio'));
-  let corpo = 'Relatorio de Eficiencia - ' + (periodo.label||'Periodo') + '\n';
+  const { labelPeriodo, byOp, limite } = window._relDados;
+  const assunto = encodeURIComponent('FuelTracker - Alerta de Eficiencia - ' + (labelPeriodo||'Relatorio'));
+  let corpo = 'Relatorio de Eficiencia - ' + (labelPeriodo||'Periodo') + '\n';
   corpo += 'Limite: ' + limite + '%\n\n';
   for (const [op, maquinas] of Object.entries(byOp)) {
     corpo += '📍 ' + op + '\n';
@@ -1828,8 +1851,8 @@ function enviarRelatorioEmail() {
 
 function copiarRelatorio() {
   if (!window._relDados) return;
-  const { periodo, byOp, limite } = window._relDados;
-  let texto = 'Relatorio de Eficiencia - ' + (periodo.label||'Periodo') + '\n';
+  const { labelPeriodo, byOp, limite } = window._relDados;
+  let texto = 'Relatorio de Eficiencia - ' + (labelPeriodo||'Periodo') + '\n';
   texto += 'Limite: ' + limite + '%\n\n';
   for (const [op, maquinas] of Object.entries(byOp)) {
     texto += '📍 ' + op + '\n';
