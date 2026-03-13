@@ -682,7 +682,10 @@ tr.selected-row td{background:rgba(79,142,247,.06);}
     </div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Tipo</label><input type="text" class="form-input" id="maq-tipo" placeholder="Escavadeira"></div>
-      <div class="form-group"><label class="form-label">Operação</label><input type="text" class="form-input" id="maq-operacao" placeholder="CENIBRA_NOVA_ERA"></div>
+      <div class="form-group"><label class="form-label">Operação</label>
+        <select class="form-input" id="maq-operacao-sel" onchange="onMaqOpSelChange()"></select>
+        <input type="text" class="form-input" id="maq-operacao-nova" placeholder="Nome da nova operação" style="display:none;margin-top:8px">
+      </div>
     </div>
     <div class="form-row">
       <div class="form-group"><label class="form-label">Status</label><select class="form-input" id="maq-status"><option value="Ativa">Ativa</option><option value="Manutenção">Manutenção</option><option value="Inativa">Inativa</option></select></div>
@@ -1467,7 +1470,7 @@ function openNovaMaquina() {
   document.getElementById('maq-placa').style.opacity='';
   document.getElementById('maq-modelo').value='';
   document.getElementById('maq-tipo').value='';
-  document.getElementById('maq-operacao').value='';
+  popularMaqOpSel('');
   document.getElementById('maq-status').value='Ativa';
   document.getElementById('maq-meta').value='';
   document.getElementById('modal-maquina').classList.add('open');
@@ -1483,7 +1486,7 @@ function editarMaquina(idx) {
   document.getElementById('maq-placa').style.opacity='0.6';
   document.getElementById('maq-modelo').value=m.modelo||'';
   document.getElementById('maq-tipo').value=m.tipo||'';
-  document.getElementById('maq-operacao').value=m.operacao||'';
+  popularMaqOpSel(m.operacao||'');
   document.getElementById('maq-status').value=m.status||'Ativa';
   document.getElementById('maq-meta').value=m.meta||'';
   document.getElementById('modal-maquina').classList.add('open');
@@ -1554,12 +1557,35 @@ function salvarAbastecimento() {
   saveState(); closeModal('modal-abast'); renderAbastecimentos(); renderDashboard();
 }
 
+function popularMaqOpSel(valorAtual) {
+  const sel = document.getElementById('maq-operacao-sel');
+  const novaInput = document.getElementById('maq-operacao-nova');
+  const ops = getOperacoes();
+  // Se o valor atual não está na lista, coloca como opção selecionada
+  const opcoes = [...ops];
+  if(valorAtual && !opcoes.includes(valorAtual)) opcoes.push(valorAtual);
+  sel.innerHTML =
+    '<option value="">Selecione a operação</option>' +
+    opcoes.map(o=>`<option value="${o}" ${o===valorAtual?'selected':''}>${o.replace(/_/g,' ')}</option>`).join('') +
+    '<option value="__nova__">+ Nova operação...</option>';
+  novaInput.style.display='none';
+  novaInput.value='';
+}
+
+function onMaqOpSelChange() {
+  const sel = document.getElementById('maq-operacao-sel');
+  const novaInput = document.getElementById('maq-operacao-nova');
+  novaInput.style.display = sel.value==='__nova__' ? 'block' : 'none';
+  if(sel.value==='__nova__') novaInput.focus();
+}
+
 function salvarMaquina() {
   const editIdx=parseInt(document.getElementById('maq-edit-idx').value);
   const placa=document.getElementById('maq-placa').value.trim().toUpperCase();
   const modelo=document.getElementById('maq-modelo').value.trim();
   const tipo=document.getElementById('maq-tipo').value.trim();
-  const operacao=document.getElementById('maq-operacao').value.trim();
+  const selOp=document.getElementById('maq-operacao-sel').value;
+  const operacao=(selOp==='__nova__'?document.getElementById('maq-operacao-nova').value.trim():selOp);
   const status=document.getElementById('maq-status').value;
   const meta=parseFloat(document.getElementById('maq-meta').value)||0;
   if(!placa){showToast('Informe a placa','error');return;}
