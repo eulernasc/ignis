@@ -141,6 +141,9 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
   .comp-card{border-radius:12px;padding:14px;}
   .comp-maq-table{border-radius:12px;overflow:hidden;}
   .comp-maq-table > div:last-child,.comp-maq-table > div > div{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  #comp-op-dropdown-wrap{width:100%;}
+  #comp-op-dropdown-btn{width:100%;box-sizing:border-box;padding:10px 14px;border-radius:10px;font-size:13px;}
+  #comp-op-dropdown-menu{width:100%;left:0;right:0;box-sizing:border-box;}
   #comp-periodo-checkboxes{display:flex;flex-wrap:wrap;gap:6px;}
 
   /* ── Tabelas ── */
@@ -446,7 +449,18 @@ tr.selected-row td{background:rgba(79,142,247,.06);}
     <div class="page-header">
       <div class="page-header-title"><div class="page-title">Comparativo de Períodos</div><div class="page-sub">Selecione os períodos para comparar</div></div>
       <div class="header-actions">
-        <select class="filter-select" id="comp-op-filter" onchange="renderComparativo()"><option value="">Todas as Operações</option></select>
+        <div style="position:relative" id="comp-op-dropdown-wrap">
+          <button class="filter-select" id="comp-op-dropdown-btn" onclick="toggleCompOpDropdown()" style="cursor:pointer;text-align:left;min-width:180px;display:flex;align-items:center;justify-content:space-between;gap:8px">
+            <span id="comp-op-dropdown-label">Todas as Operações</span>
+            <span style="font-size:10px">▼</span>
+          </button>
+          <div id="comp-op-dropdown-menu" style="display:none;position:absolute;top:calc(100% + 4px);left:0;min-width:220px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:8px;z-index:200;box-shadow:0 8px 24px rgba(0,0,0,.4);max-height:240px;overflow-y:auto">
+            <label style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--border);margin-bottom:4px">
+              <input type="checkbox" id="comp-op-all-check" checked onchange="toggleAllCompOps(this)"> Todas as Operações
+            </label>
+            <div id="comp-op-checkboxes"></div>
+          </div>
+        </div>
         <button class="btn btn-secondary" onclick="verificarSenha(openImport)">⬆️ Importar Período</button>
       </div>
     </div>
@@ -850,12 +864,24 @@ function updateFilters() {
     }
   }
   // Filtro operação único nos outros lugares
-  ['abast-op-filter','maq-op-filter','comp-op-filter'].forEach(id=>{
+  ['abast-op-filter','maq-op-filter'].forEach(id=>{
     const sel=document.getElementById(id); if(!sel) return;
     const val=sel.value;
     sel.innerHTML='<option value="">Todas as Operações</option>'+ops.map(o=>`<option value="${o}">${o.replace(/_/g,' ')}</option>`).join('');
     sel.value=val;
   });
+  // Popular multi-select do Comparativo
+  const compCb=document.getElementById('comp-op-checkboxes');
+  if(compCb){
+    const selComp=getSelectedCompOps();
+    compCb.innerHTML=ops.map(o=>`
+      <label style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:13px">
+        <input type="checkbox" class="comp-op-check" value="${o}" ${selComp.size===0||selComp.has(o)?'checked':''} onchange="onCompOpCheckChange()">
+        ${o.replace(/_/g,' ')}
+      </label>`).join('');
+    const allCheck=document.getElementById('comp-op-all-check');
+    if(allCheck){ allCheck.checked=true; allCheck.indeterminate=false; }
+  }
   ['dash-maq-filter','abast-maq-filter'].forEach(id=>{
     const sel=document.getElementById(id); if(!sel) return;
     const val=sel.value;
@@ -899,7 +925,39 @@ function onOpCheckChange() {
 document.addEventListener('click', e=>{
   const wrap=document.getElementById('op-dropdown-wrap');
   if(wrap && !wrap.contains(e.target)) document.getElementById('op-dropdown-menu').style.display='none';
+  const compWrap=document.getElementById('comp-op-dropdown-wrap');
+  if(compWrap && !compWrap.contains(e.target)) document.getElementById('comp-op-dropdown-menu').style.display='none';
 });
+
+function toggleCompOpDropdown() {
+  const menu=document.getElementById('comp-op-dropdown-menu');
+  menu.style.display=menu.style.display==='none'?'block':'none';
+}
+
+function toggleAllCompOps(cb) {
+  document.querySelectorAll('.comp-op-check').forEach(c=>c.checked=cb.checked);
+  onCompOpCheckChange();
+}
+
+function onCompOpCheckChange() {
+  const all=[...document.querySelectorAll('.comp-op-check')];
+  const checked=all.filter(c=>c.checked);
+  const allCheck=document.getElementById('comp-op-all-check');
+  allCheck.checked=checked.length===all.length;
+  allCheck.indeterminate=checked.length>0&&checked.length<all.length;
+  const n=checked.length;
+  document.getElementById('comp-op-dropdown-label').textContent=
+    n===0||n===all.length?'Todas as Operações':
+    n===1?checked[0].value.replace(/_/g,' '):
+    `${n} operações`;
+  renderComparativo();
+}
+
+function getSelectedCompOps() {
+  const checks=[...document.querySelectorAll('.comp-op-check')];
+  const sel=checks.filter(c=>c.checked).map(c=>c.value);
+  return sel.length===checks.length||sel.length===0?new Set():new Set(sel);
+}
 
 function getFilteredAbast(opF,maqF) {
   const now=new Date();
@@ -1104,7 +1162,7 @@ let _periodosSelec = new Set();
 
 function renderComparativo() {
   updateFilters();
-  const opF = document.getElementById('comp-op-filter')?.value||'';
+  const opF = getSelectedCompOps(); // Set vazio = todas
   const c = document.getElementById('comparativo-content');
   const selectorDiv = document.getElementById('comp-periodo-selector');
   const checkboxDiv = document.getElementById('comp-periodo-checkboxes');
@@ -1147,7 +1205,7 @@ function renderComparativo() {
   const dadosPeriodo={};
   selecionados.forEach(([id, p])=>{
     let rows = (p.registros||[]);
-    if(opF) rows = rows.filter(r=>r.operacao===opF);
+    if(opF.size>0) rows = rows.filter(r=>opF.has(r.operacao));
     const tL=rows.reduce((a,r)=>a+(r.litros||0),0), tH=rows.reduce((a,r)=>a+(r.horas||0),0);
     dadosPeriodo[id]={label:p.label||id, rows, totalL:tL, totalH:tH, media:tH>0?tL/tH:0, maquinas:new Set(rows.map(r=>r.placa)).size};
   });
@@ -1171,7 +1229,7 @@ function renderComparativo() {
 
   // Tabela por Operação
   const todasOps=[...new Set(selecionados.flatMap(([id])=>dadosPeriodo[id].rows.map(r=>(r.operacao||'').replace(/_/g,' ')).filter(Boolean)))].sort();
-  if(todasOps.length>0 && !opF){
+  if(todasOps.length>0 && opF.size===0){
     html+=`<div class="comp-maq-table" style="margin-bottom:16px">
       <div class="comp-maq-header"><span>📍 Consumo por Operação</span><span class="comp-badge">${todasOps.length} operações</span></div>
       <div style="overflow-x:auto"><table><thead><tr><th>Operação</th><th style="color:var(--text2)">Meta</th>${selecionados.map(([id])=>`<th>${dadosPeriodo[id].label} — L</th><th>L/h</th><th>Maq.</th>`).join('')}${selecionados.length>1?'<th>Variação</th>':''}</tr></thead><tbody>`;
@@ -1201,7 +1259,7 @@ function renderComparativo() {
   }
 
   // Tabela por Máquina
-  const todasPlacas=[...new Set(selecionados.flatMap(([id])=>dadosPeriodo[id].rows.filter(r=>!opF||r.operacao===opF).map(r=>r.placa)))].sort();
+  const todasPlacas=[...new Set(selecionados.flatMap(([id])=>dadosPeriodo[id].rows.filter(r=>opF.size===0||opF.has(r.operacao)).map(r=>r.placa)))].sort();
   html+=`<div class="comp-maq-table"><div class="comp-maq-header"><span>🚜 Consumo por Máquina</span><span class="comp-badge">${todasPlacas.length} máquinas</span></div>
   <div style="overflow-x:auto"><table><thead><tr><th>Máquina</th><th>Operação</th><th style="color:var(--text2)">Meta</th>${selecionados.map(([id])=>`<th>${dadosPeriodo[id].label} — L</th><th>L/h</th>`).join('')}${selecionados.length>1?'<th>Variação</th>':''}</tr></thead><tbody>`;
   todasPlacas.forEach(placa=>{
@@ -1970,7 +2028,7 @@ function buildEmailHTML(blocoOps, byOp, labelPeriodo, limite, labelBloco) {
     secoes +=
       '<tr><td colspan="5" style="padding:0"><table width="100%" cellpadding="0" cellspacing="0">' +
         '<tr style="background:#1e40af">' +
-          '<td style="padding:10px 16px;color:#ffffff">' +
+          '<td style="padding:10px 16px">' +
             '<span style="font-size:13px;font-weight:700;color:#fff;letter-spacing:.3px">📍 ' + op + '</span>' +
             '&nbsp;&nbsp;<span style="font-size:11px;color:#ffffff;font-weight:400">' + maquinas.length + ' máquina' + (maquinas.length>1?'s':'') + ' abaixo da meta</span>' +
           '</td>' +
