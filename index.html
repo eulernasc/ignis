@@ -674,7 +674,8 @@ tr.selected-row td{background:rgba(79,142,247,.06);}
 <!-- MODAL NOVA MÁQUINA -->
 <div class="modal-overlay" id="modal-maquina">
   <div class="modal">
-    <div class="modal-title">Nova Máquina</div>
+    <div class="modal-title" id="modal-maquina-title">Nova Máquina</div>
+    <input type="hidden" id="maq-edit-idx" value="-1">
     <div class="form-row">
       <div class="form-group"><label class="form-label">Placa</label><input type="text" class="form-input" id="maq-placa" placeholder="MAQ0000"></div>
       <div class="form-group"><label class="form-label">Modelo</label><input type="text" class="form-input" id="maq-modelo" placeholder="EC 220 DL"></div>
@@ -1434,6 +1435,9 @@ function renderMaquinas() {
         <div class="stat"><div class="stat-value" style="font-size:16px">${media}</div><div class="stat-label">L/H</div></div>
         <div class="stat"><div class="stat-value" style="font-size:16px">${tL.toFixed(0)}</div><div class="stat-label">Litros</div></div>
         <div class="stat"><div class="stat-value" style="font-size:16px">${abasts.length}</div><div class="stat-label">Abast.</div></div>
+      </div>
+      <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);display:flex;justify-content:flex-end">
+        <button class="btn-icon" onclick="verificarSenha(()=>editarMaquina(${state.maquinas.indexOf(m)}))" title="Editar máquina">✏️ Editar</button>
       </div></div>`;
   }).join('');
 }
@@ -1450,7 +1454,35 @@ function openNovoAbast() {
   document.getElementById('abast-operador').value='';
   document.getElementById('modal-abast').classList.add('open');
 }
-function openNovaMaquina() { document.getElementById('modal-maquina').classList.add('open'); }
+function openNovaMaquina() {
+  document.getElementById('modal-maquina-title').textContent='Nova Máquina';
+  document.getElementById('maq-edit-idx').value='-1';
+  document.getElementById('maq-placa').value='';
+  document.getElementById('maq-placa').readOnly=false;
+  document.getElementById('maq-placa').style.opacity='';
+  document.getElementById('maq-modelo').value='';
+  document.getElementById('maq-tipo').value='';
+  document.getElementById('maq-operacao').value='';
+  document.getElementById('maq-status').value='Ativa';
+  document.getElementById('maq-meta').value='';
+  document.getElementById('modal-maquina').classList.add('open');
+}
+
+function editarMaquina(idx) {
+  const m=state.maquinas[idx];
+  if(!m) return;
+  document.getElementById('modal-maquina-title').textContent='Editar Máquina';
+  document.getElementById('maq-edit-idx').value=idx;
+  document.getElementById('maq-placa').value=m.placa;
+  document.getElementById('maq-placa').readOnly=true;
+  document.getElementById('maq-placa').style.opacity='0.6';
+  document.getElementById('maq-modelo').value=m.modelo||'';
+  document.getElementById('maq-tipo').value=m.tipo||'';
+  document.getElementById('maq-operacao').value=m.operacao||'';
+  document.getElementById('maq-status').value=m.status||'Ativa';
+  document.getElementById('maq-meta').value=m.meta||'';
+  document.getElementById('modal-maquina').classList.add('open');
+}
 
 function openImport() {
   // Sugerir nome baseado na semana atual
@@ -1518,6 +1550,7 @@ function salvarAbastecimento() {
 }
 
 function salvarMaquina() {
+  const editIdx=parseInt(document.getElementById('maq-edit-idx').value);
   const placa=document.getElementById('maq-placa').value.trim().toUpperCase();
   const modelo=document.getElementById('maq-modelo').value.trim();
   const tipo=document.getElementById('maq-tipo').value.trim();
@@ -1525,10 +1558,19 @@ function salvarMaquina() {
   const status=document.getElementById('maq-status').value;
   const meta=parseFloat(document.getElementById('maq-meta').value)||0;
   if(!placa){showToast('Informe a placa','error');return;}
-  if(state.maquinas.find(m=>m.placa===placa)){showToast('Placa já cadastrada','error');return;}
-  state.maquinas.push({placa,modelo,tipo,operacao,status,meta});
+  if(editIdx>=0) {
+    // Modo edição — atualizar máquina existente
+    state.maquinas[editIdx]={...state.maquinas[editIdx],modelo,tipo,operacao,status,meta};
+    // Atualizar operacao nos abastecimentos vinculados
+    state.abastecimentos.forEach(a=>{ if(a.placa===placa) a.operacao=operacao; });
+    showToast(`Máquina ${placa} atualizada!`,'success');
+  } else {
+    // Modo novo
+    if(state.maquinas.find(m=>m.placa===placa)){showToast('Placa já cadastrada','error');return;}
+    state.maquinas.push({placa,modelo,tipo,operacao,status,meta});
+    showToast(`Máquina ${placa} cadastrada!`,'success');
+  }
   saveState(); closeModal('modal-maquina'); renderMaquinas(); updateFilters();
-  showToast(`Máquina ${placa} cadastrada!`,'success');
 }
 
 // ── IMPORTAR ──────────────────────────────────────────────────────────────────
