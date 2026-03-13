@@ -1947,30 +1947,48 @@ function renderRelEmailBloco(operacoes) {
   window._relBlocos = blocos;
 }
 
-function buildCorpoTexto(blocoOps, byOp, labelPeriodo, limite) {
-  const sep = '----------------------------------------';
-  let corpo = 'FUELTRACKER PRO - ALERTA DE EFICIENCIA\n' + sep + '\nPeriodo: ' + labelPeriodo + ' | Meta: ' + limite + '%\n\n';
+function buildEmailHTML(blocoOps, byOp, labelPeriodo, limite, labelBloco) {
+  const corEfic = e => e < 90 ? '#dc2626' : e < 95 ? '#f97316' : '#ca8a04';
+  let secoes = '';
   for (const op of blocoOps) {
     const maquinas = byOp[op];
     if (!maquinas) continue;
-    corpo += '>> ' + op.replace(/_/g,' ') + ' (' + maquinas.length + ' maquina' + (maquinas.length>1?'s':'') + ' abaixo da meta)\n';
-    corpo += '   Maquina   | Meta      | Real      | Desvio | Efic%\n';
-    corpo += '   ----------|-----------|-----------|--------|------\n';
-    maquinas.forEach(m => {
-      const maq  = m.placa.padEnd(10);
-      const meta = (m.meta>0 ? m.meta.toFixed(1)+' L/h' : '---').padEnd(9);
-      const real = (m.mediaReal.toFixed(2)+' L/h').padEnd(9);
-      const desv = ('+'+m.desvio.toFixed(1)+'%').padEnd(6);
-      const efic = m.eficiencia.toFixed(1)+'%';
-      corpo += '   ' + maq + ' | ' + meta + ' | ' + real + ' | ' + desv + ' | ' + efic + '\n';
-    });
-    corpo += '\n';
+    const linhas = maquinas.map(m => {
+      const cor = corEfic(m.eficiencia);
+      return '<tr style="border-bottom:1px solid #e2e8f0">' +
+        '<td style="padding:8px 12px;font-weight:700;font-family:monospace;color:#1e293b">' + m.placa + '</td>' +
+        '<td style="padding:8px 12px;color:#3b82f6;font-weight:600;text-align:center">' + (m.meta>0?m.meta.toFixed(1)+' L/h':'—') + '</td>' +
+        '<td style="padding:8px 12px;font-weight:700;text-align:center;color:' + cor + '">' + m.mediaReal.toFixed(2) + ' L/h</td>' +
+        '<td style="padding:8px 12px;text-align:center;color:' + cor + '">+' + m.desvio.toFixed(1) + '%</td>' +
+        '<td style="padding:8px 12px;text-align:center"><span style="background:' + cor + ';color:#fff;padding:2px 10px;border-radius:20px;font-size:12px;font-weight:700">' + m.eficiencia.toFixed(1) + '%</span></td>' +
+        '</tr>';
+    }).join('');
+    secoes += '<tr><td colspan="5" style="padding:12px 12px 4px;font-size:13px;font-weight:700;color:#475569;background:#f8fafc;border-top:2px solid #e2e8f0">📍 ' + op + ' <span style="font-weight:400;color:#94a3b8">(' + maquinas.length + ' máquina' + (maquinas.length>1?'s':'') + ' abaixo da meta)</span></td></tr>' + linhas;
   }
-  corpo += sep + '\nAcesse: https://eulernasc.github.io/fueltracker';
-  return corpo;
+  return '<!DOCTYPE html><html><body style="margin:0;padding:20px;font-family:Arial,sans-serif;background:#f1f5f9">' +
+    '<div style="max-width:620px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.08)">' +
+      '<div style="background:#1e3a5f;padding:20px 24px;display:flex;align-items:center;gap:12px">' +
+        '<span style="font-size:28px">⛽</span>' +
+        '<div><div style="font-size:17px;font-weight:700;color:#fff">FuelTracker Pro — Alerta de Eficiência</div>' +
+        '<div style="font-size:12px;color:#93c5fd;margin-top:2px">Operação: ' + labelBloco + ' · Período: ' + labelPeriodo + ' · Meta: ' + limite + '%</div></div>' +
+      '</div>' +
+      '<table style="width:100%;border-collapse:collapse">' +
+        '<thead><tr style="background:#f8fafc">' +
+          '<th style="padding:10px 12px;text-align:left;font-size:11px;color:#64748b;text-transform:uppercase;border-bottom:2px solid #e2e8f0">Máquina</th>' +
+          '<th style="padding:10px 12px;text-align:center;font-size:11px;color:#64748b;text-transform:uppercase;border-bottom:2px solid #e2e8f0">Meta</th>' +
+          '<th style="padding:10px 12px;text-align:center;font-size:11px;color:#64748b;text-transform:uppercase;border-bottom:2px solid #e2e8f0">Real</th>' +
+          '<th style="padding:10px 12px;text-align:center;font-size:11px;color:#64748b;text-transform:uppercase;border-bottom:2px solid #e2e8f0">Desvio</th>' +
+          '<th style="padding:10px 12px;text-align:center;font-size:11px;color:#64748b;text-transform:uppercase;border-bottom:2px solid #e2e8f0">Eficiência</th>' +
+        '</tr></thead>' +
+        '<tbody>' + secoes + '</tbody>' +
+      '</table>' +
+      '<div style="padding:16px 24px;background:#f8fafc;border-top:1px solid #e2e8f0;text-align:center">' +
+        '<a href="https://eulernasc.github.io/fueltracker" style="color:#3b82f6;font-size:12px;text-decoration:none">🔗 Abrir FuelTracker Pro</a>' +
+      '</div>' +
+    '</div></body></html>';
 }
 
-function enviarBloco(blocoId) {
+async function enviarBloco(blocoId) {
   if (!window._relDados || !window._relBlocos) return;
   const { byOp, labelPeriodo, limite } = window._relDados;
   const bloco = window._relBlocos.find(b => b.id === blocoId);
@@ -1978,13 +1996,18 @@ function enviarBloco(blocoId) {
   const destRaw = document.getElementById('rel-email-bloco-' + encodeURIComponent(blocoId))?.value?.trim();
   if (!destRaw) { showToast('Informe o e-mail para ' + bloco.label, 'error'); return; }
   const dests = destRaw.split(',').map(e => e.trim()).filter(Boolean).join(',');
-  const assunto = encodeURIComponent('FuelTracker — Alerta de Eficiencia · ' + bloco.label.replace(/_/g,' '));
-  const corpo = buildCorpoTexto(bloco.ops, byOp, labelPeriodo, limite);
-  const link = 'mailto:' + dests + '?subject=' + assunto + '&body=' + encodeURIComponent(corpo);
-  window.open(link, '_blank');
-  showToast('Abrindo e-mail: ' + bloco.label + '...', 'success');
+  const assunto = encodeURIComponent('FuelTracker — Alerta de Eficiência · ' + bloco.label);
+  const html = buildEmailHTML(bloco.ops, byOp, labelPeriodo, limite, bloco.label);
+  try {
+    await navigator.clipboard.write([
+      new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }) })
+    ]);
+    showToast('✅ Tabela copiada! Cole no corpo do e-mail (Ctrl+V)', 'success');
+  } catch(e) {
+    showToast('⚠️ Copie manualmente o relatório', 'error');
+  }
+  setTimeout(() => { window.open('mailto:' + dests + '?subject=' + assunto, '_blank'); }, 500);
 }
-
 function enviarTodosEmails() {
   if (!window._relBlocos) return;
   let enviados = 0;
