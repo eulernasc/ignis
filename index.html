@@ -582,8 +582,8 @@ tr.selected-row td{background:rgba(79,142,247,.06);}
           <input type="date" class="form-input" id="rel-data-fim" onchange="renderRelatorio()">
         </div>
         <div class="form-group">
-          <label class="form-label">Limite de Eficiência (%)</label>
-          <input type="number" class="form-input" id="rel-limite" value="98" min="1" max="100" onchange="renderRelatorio()">
+          <label class="form-label">Meta de Eficiência (%)</label>
+          <input type="number" class="form-input" id="rel-meta" value="98" min="1" max="100" onchange="renderRelatorio()">
         </div>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
@@ -1774,7 +1774,7 @@ function relPopularOps() {
 function renderRelatorio() {
   const ini   = document.getElementById('rel-data-ini')?.value;
   const fim   = document.getElementById('rel-data-fim')?.value;
-  const limite = parseFloat(document.getElementById('rel-limite')?.value||98);
+  const limite = parseFloat(document.getElementById('rel-meta')?.value||98);
   const c = document.getElementById('relatorio-resultado');
   if (!c) return;
 
@@ -1838,12 +1838,12 @@ function renderRelatorio() {
     '<div class="kpi-card"><div class="kpi-label">Período</div><div style="font-size:13px;font-weight:700;margin-top:4px;color:var(--accent)">' + labelPeriodo + '</div></div>' +
     '<div class="kpi-card"><div class="kpi-label">Registros</div><div class="kpi-value" style="font-size:26px">' + registros.length + '</div></div>' +
     '<div class="kpi-card"><div class="kpi-label">Máquinas</div><div class="kpi-value" style="font-size:26px">' + Object.keys(byMaq).length + '</div></div>' +
-    '<div class="kpi-card"><div class="kpi-label">Abaixo de ' + limite + '%</div><div class="kpi-value" style="font-size:26px;color:' + (maquinasProblema.length>0?'var(--red)':'var(--green)') + '">' + maquinasProblema.length + '</div></div>' +
-    '<div class="kpi-card"><div class="kpi-label">Dentro do Limite</div><div class="kpi-value" style="font-size:26px;color:var(--green)">' + maquinasOk.length + '</div></div>' +
+    '<div class="kpi-card"><div class="kpi-label">Abaixo de ' + meta + '%</div><div class="kpi-value" style="font-size:26px;color:' + (maquinasProblema.length>0?'var(--red)':'var(--green)') + '">' + maquinasProblema.length + '</div></div>' +
+    '<div class="kpi-card"><div class="kpi-label">Dentro da Meta</div><div class="kpi-value" style="font-size:26px;color:var(--green)">' + maquinasOk.length + '</div></div>' +
   '</div>';
 
   if (maquinasProblema.length === 0) {
-    html += '<div class="chart-card" style="text-align:center;padding:40px"><div style="font-size:48px;margin-bottom:12px">✅</div><div style="font-size:16px;font-weight:700;color:var(--green)">Todas as máquinas dentro do limite!</div></div>';
+    html += '<div class="chart-card" style="text-align:center;padding:40px"><div style="font-size:48px;margin-bottom:12px">✅</div><div style="font-size:16px;font-weight:700;color:var(--green)">Todas as máquinas dentro da meta!</div></div>';
     c.innerHTML = html;
     renderRelEmailBloco([]);
     return;
@@ -1888,105 +1888,110 @@ function renderRelatorio() {
   renderRelEmailBloco(Object.keys(byOp));
 }
 
+// ── Grupos de operações que compartilham destinatário ──────────────────────────
+// Operações no mesmo grupo vão num único e-mail. Edite conforme necessário.
+const REL_GRUPOS = [
+  { nome: 'CENIBRA', ops: ['CENIBRA COCAIS/RIO DOCE', 'CENIBRA NOVA ERA', 'CENIBRA SANTA BARBARA'] },
+];
+function relGetGrupoPorOp(op) {
+  return REL_GRUPOS.find(g => g.ops.includes(op)) || null;
+}
+
+// Constrói lista de "blocos de envio": cada bloco = 1 e-mail
+function relGetBlocos(operacoes) {
+  const blocos = [];
+  const usadas = new Set();
+  for (const op of operacoes) {
+    if (usadas.has(op)) continue;
+    const grupo = relGetGrupoPorOp(op);
+    if (grupo) {
+      // Pega só as ops do grupo que estão na lista
+      const opsGrupo = grupo.ops.filter(o => operacoes.includes(o));
+      opsGrupo.forEach(o => usadas.add(o));
+      blocos.push({ id: grupo.nome, label: grupo.nome, ops: opsGrupo, isGrupo: true });
+    } else {
+      usadas.add(op);
+      blocos.push({ id: op, label: op, ops: [op], isGrupo: false });
+    }
+  }
+  return blocos;
+}
+
 function renderRelEmailBloco(operacoes) {
   const bloco = document.getElementById('rel-email-bloco');
   if (!bloco) return;
-  const dica = '<div style="font-size:11px;color:var(--text3);margin-bottom:10px">💡 Para múltiplos destinatários, separe os e-mails com vírgula: <span style="color:var(--accent)">joao@empresa.com, maria@empresa.com</span></div>';
+  const dica = '<div style="font-size:11px;color:var(--text3);margin-bottom:10px">💡 Para múltiplos destinatários, separe com vírgula: <span style="color:var(--accent)">joao@empresa.com, maria@empresa.com</span></div>';
   if (!operacoes.length) {
-    bloco.innerHTML = dica + '<div class="form-group"><label class="form-label">E-mail do Destinatário</label>' +
-      '<input type="text" class="form-input" id="rel-email-dest" placeholder="email1@empresa.com, email2@empresa.com"></div>';
+    bloco.innerHTML = dica + '<div class="form-group"><label class="form-label">E-mail do Destinatário</label><input type="text" class="form-input" id="rel-email-dest" placeholder="email1@empresa.com, email2@empresa.com"></div>';
     return;
   }
+  const blocos = relGetBlocos(operacoes);
   bloco.innerHTML = dica +
-    '<label class="form-label" style="margin-bottom:8px;display:block">E-mail por Operação</label>' +
-    operacoes.map(op =>
-      '<div style="margin-bottom:10px">' +
-        '<div style="font-size:12px;color:var(--text2);font-weight:600;margin-bottom:4px">📍 ' + op + '</div>' +
+    '<label class="form-label" style="margin-bottom:8px;display:block">Destinatários por Envio</label>' +
+    blocos.map(b =>
+      '<div style="margin-bottom:12px">' +
+        '<div style="font-size:12px;font-weight:600;margin-bottom:4px;color:var(--text2)">' +
+          (b.isGrupo ? '🗂 ' : '📍 ') + b.label +
+          (b.isGrupo ? '<span style="font-size:10px;color:var(--text3);font-weight:400;margin-left:6px">(' + b.ops.join(', ') + ')</span>' : '') +
+        '</div>' +
         '<div style="display:flex;gap:8px">' +
-          '<input type="text" class="form-input" style="flex:1" id="rel-email-' + encodeURIComponent(op) + '" placeholder="email1@empresa.com, email2@empresa.com">' +
-          '<button class="btn btn-primary btn-sm" onclick="enviarEmailOp(' + JSON.stringify(op) + ')">📧 Enviar</button>' +
+          '<input type="text" class="form-input" style="flex:1" id="rel-email-bloco-' + encodeURIComponent(b.id) + '" placeholder="email1@empresa.com, email2@empresa.com">' +
+          '<button class="btn btn-primary btn-sm" onclick="enviarBloco(' + JSON.stringify(b.id) + ')">📧 Enviar</button>' +
         '</div>' +
       '</div>'
     ).join('') +
     '<div style="margin-top:12px"><button class="btn btn-primary" onclick="enviarTodosEmails()">📧 Enviar Todos</button></div>';
+  // Guarda blocos no estado global
+  window._relBlocos = blocos;
 }
 
-function buildEmailHTML(op, maquinas, labelPeriodo, limite) {
-  const mes = new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
-  const rows = maquinas.map(m => {
-    const corBg = m.eficiencia < 90 ? '#dc2626' : m.eficiencia < 95 ? '#f97316' : '#ca8a04';
-    return '<tr style="border-bottom:1px solid #2a2f45">' +
-      '<td style="padding:10px 14px;font-weight:700;font-family:monospace;color:#e2e8f0">' + m.placa + '</td>' +
-      '<td style="padding:10px 14px;color:#94a3b8;font-size:12px">' + m.operacao + '</td>' +
-      '<td style="padding:10px 14px;text-align:center;color:#60a5fa;font-weight:600">' + (m.meta>0?m.meta.toFixed(1)+' L/h':'—') + '</td>' +
-      '<td style="padding:10px 14px;text-align:center;color:' + corBg + ';font-weight:700">' + m.mediaReal.toFixed(2) + ' L/h</td>' +
-      '<td style="padding:10px 14px;text-align:center;color:' + corBg + '">+' + m.desvio.toFixed(1) + '%</td>' +
-      '<td style="padding:10px 14px;text-align:center"><span style="background:' + corBg + ';color:#fff;padding:3px 10px;border-radius:99px;font-size:12px;font-weight:700">' + m.eficiencia.toFixed(1) + '%</span></td>' +
-    '</tr>';
-  }).join('');
-
-  return '<!DOCTYPE html><html><body style="margin:0;padding:0;background:#0f1117;font-family:Arial,sans-serif">' +
-    '<div style="max-width:600px;margin:20px auto;background:#161b2e;border-radius:16px;overflow:hidden">' +
-      '<div style="background:#1e2540;padding:20px 24px;display:flex;align-items:center;gap:12px">' +
-        '<span style="font-size:28px">⛽</span>' +
-        '<div><div style="font-size:18px;font-weight:700;color:#e2e8f0">FuelTracker Pro</div>' +
-        '<div style="font-size:12px;color:#64748b">Relatório de Eficiência — ' + mes + '</div></div>' +
-      '</div>' +
-      '<div style="background:#f59e0b22;border-left:4px solid #f59e0b;margin:20px;padding:14px 16px;border-radius:8px">' +
-        '<div style="font-size:15px;font-weight:700;color:#fbbf24">⚠️ ' + maquinas.length + ' máquina' + (maquinas.length>1?'s':'') + ' da operação ' + op + ' abaixo de ' + limite + '% de eficiência</div>' +
-        '<div style="font-size:12px;color:#94a3b8;margin-top:4px">Período: ' + labelPeriodo + '</div>' +
-      '</div>' +
-      '<div style="margin:0 20px 20px;overflow-x:auto">' +
-        '<table style="width:100%;border-collapse:collapse;background:#1e2540;border-radius:10px;overflow:hidden">' +
-          '<thead><tr style="background:#0f1629">' +
-            '<th style="padding:10px 14px;text-align:left;font-size:11px;color:#64748b;text-transform:uppercase">Máquina</th>' +
-            '<th style="padding:10px 14px;text-align:left;font-size:11px;color:#64748b;text-transform:uppercase">Operação</th>' +
-            '<th style="padding:10px 14px;text-align:center;font-size:11px;color:#64748b;text-transform:uppercase">Meta</th>' +
-            '<th style="padding:10px 14px;text-align:center;font-size:11px;color:#64748b;text-transform:uppercase">Real</th>' +
-            '<th style="padding:10px 14px;text-align:center;font-size:11px;color:#64748b;text-transform:uppercase">Desvio</th>' +
-            '<th style="padding:10px 14px;text-align:center;font-size:11px;color:#64748b;text-transform:uppercase">Eficiência</th>' +
-          '</tr></thead><tbody>' + rows + '</tbody></table>' +
-      '</div>' +
-      '<div style="text-align:center;padding:0 20px 24px">' +
-        '<a href="https://eulernasc.github.io/fueltracker" style="display:inline-block;background:#3b82f6;color:#fff;padding:12px 28px;border-radius:10px;text-decoration:none;font-weight:700;font-size:14px">Abrir FuelTracker Pro →</a>' +
-      '</div>' +
-      '<div style="text-align:center;padding:12px;font-size:11px;color:#475569;border-top:1px solid #1e2540">Gerado manualmente pelo FuelTracker Pro</div>' +
-    '</div></body></html>';
+function buildCorpoTexto(blocoOps, byOp, labelPeriodo, limite) {
+  const sep = '----------------------------------------';
+  let corpo = 'FUELTRACKER PRO - ALERTA DE EFICIENCIA\n' + sep + '\nPeriodo: ' + labelPeriodo + ' | Meta: ' + meta + '%\n\n';
+  for (const op of blocoOps) {
+    const maquinas = byOp[op];
+    if (!maquinas) continue;
+    corpo += '>> ' + op.replace(/_/g,' ') + ' (' + maquinas.length + ' maquina' + (maquinas.length>1?'s':'') + ' abaixo da meta)\n';
+    corpo += '   MAQUINA    META        REAL        DESVIO    EFIC%\n';
+    maquinas.forEach(m => {
+      const maq  = m.placa.padEnd(11);
+      const meta = (m.meta>0 ? m.meta.toFixed(1)+' L/h' : '---').padEnd(12);
+      const real = (m.mediaReal.toFixed(2)+' L/h').padEnd(12);
+      const desv = ('+'+m.desvio.toFixed(1)+'%').padEnd(10);
+      const efic = m.eficiencia.toFixed(1)+'%';
+      corpo += '   ' + maq + meta + real + desv + efic + '\n';
+    });
+    corpo += '\n';
+  }
+  corpo += sep + '\nAcesse: https://eulernasc.github.io/fueltracker';
+  return corpo;
 }
 
-function enviarEmailOp(op) {
-  if (!window._relDados) return;
-  const { labelPeriodo, byOp, limite } = window._relDados;
-  const maquinas = byOp[op];
-  if (!maquinas) return;
-  const destRaw = document.getElementById('rel-email-' + encodeURIComponent(op))?.value?.trim();
-  if (!destRaw) { showToast('Informe o e-mail para ' + op, 'error'); return; }
+function enviarBloco(blocoId) {
+  if (!window._relDados || !window._relBlocos) return;
+  const { byOp, labelPeriodo, limite } = window._relDados;
+  const bloco = window._relBlocos.find(b => b.id === blocoId);
+  if (!bloco) return;
+  const destRaw = document.getElementById('rel-email-bloco-' + encodeURIComponent(blocoId))?.value?.trim();
+  if (!destRaw) { showToast('Informe o e-mail para ' + bloco.label, 'error'); return; }
   const dests = destRaw.split(',').map(e => e.trim()).filter(Boolean).join(',');
-  const assunto = encodeURIComponent('FuelTracker — Alerta de Eficiência · ' + op);
-  let corpo = 'Relatório de Eficiência - ' + op + '\nPeríodo: ' + labelPeriodo + '\nLimite: ' + limite + '%\n\n';
-  maquinas.forEach(m => {
-    corpo += '• ' + m.placa + ' | Meta: ' + (m.meta>0?m.meta.toFixed(1):'-') + ' L/h | Real: ' + m.mediaReal.toFixed(2) + ' L/h | +' + m.desvio.toFixed(1) + '% | ' + m.eficiencia.toFixed(1) + '%\n';
-  });
-  corpo += '\nAcesse: https://eulernasc.github.io/fueltracker';
-  const link = 'mailto:' + dests + '?subject=' + assunto + '&body=' + encodeURIComponent(corpo);
-  window.location.href = link;
-  showToast('Abrindo e-mail para ' + op + '...', 'success');
+  const assunto = encodeURIComponent('FuelTracker — Alerta de Eficiencia · ' + bloco.label.replace(/_/g,' '));
+  const corpo = buildCorpoTexto(bloco.ops, byOp, labelPeriodo, limite);
+  window.location.href = 'mailto:' + dests + '?subject=' + assunto + '&body=' + encodeURIComponent(corpo);
+  showToast('Abrindo e-mail: ' + bloco.label + '...', 'success');
 }
 
 function enviarTodosEmails() {
-  if (!window._relDados) return;
-  const ops = Object.keys(window._relDados.byOp);
-  if (!ops.length) return;
-  // Envia o primeiro com e-mail preenchido
-  for (const op of ops) {
-    const dest = document.getElementById('rel-email-' + encodeURIComponent(op))?.value?.trim();
-    if (dest) { enviarEmailOp(op); return; }
+  if (!window._relBlocos) return;
+  let enviados = 0;
+  for (const b of window._relBlocos) {
+    const dest = document.getElementById('rel-email-bloco-' + encodeURIComponent(b.id))?.value?.trim();
+    if (dest) { enviarBloco(b.id); enviados++; break; } // mailto abre 1 por vez
   }
-  showToast('Preencha pelo menos um e-mail', 'error');
+  if (!enviados) showToast('Preencha pelo menos um e-mail', 'error');
 }
 
 function enviarRelatorioEmail() {
-  if (!window._relDados) return;
   enviarTodosEmails();
 }
 
@@ -1994,7 +1999,7 @@ function copiarRelatorio() {
   if (!window._relDados) return;
   const { labelPeriodo, byOp, limite } = window._relDados;
   let texto = 'Relatorio de Eficiencia - ' + (labelPeriodo||'Periodo') + '\n';
-  texto += 'Limite: ' + limite + '%\n\n';
+  texto += 'Meta: ' + meta + '%\n\n';
   for (const [op, maquinas] of Object.entries(byOp)) {
     texto += '📍 ' + op + '\n';
     maquinas.forEach(m => {
