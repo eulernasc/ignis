@@ -674,22 +674,38 @@ tr.selected-row td{background:rgba(79,142,247,.06);}
     </div>
 
     <div style="background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:22px;margin-bottom:20px">
-      <div style="font-size:14px;font-weight:700;margin-bottom:6px">🔗 Link de compartilhamento da planilha</div>
-      <div style="font-size:13px;color:var(--text2);margin-bottom:14px;line-height:1.7">
-        No SharePoint: <strong style="color:var(--text)">Compartilhar → Copiar link → "Qualquer pessoa com o link pode exibir"</strong>. Cole abaixo e clique em Buscar. O link é salvo automaticamente.
+      <div style="font-size:14px;font-weight:700;margin-bottom:6px">⚙️ Configuração (só uma vez)</div>
+      <div style="font-size:13px;color:var(--text2);margin-bottom:16px;line-height:1.8">
+        O SharePoint bloqueia acesso direto do navegador (CORS). A solução é usar o <strong style="color:var(--text)">Google Apps Script</strong> que você já tem como intermediário — ele busca o arquivo pelo servidor e repassa para o sistema.
       </div>
-      <div style="display:flex;gap:10px;flex-wrap:wrap">
+
+      <!-- Passo 1 -->
+      <div style="background:var(--bg3);border-radius:10px;padding:14px;margin-bottom:12px;border-left:3px solid var(--accent)">
+        <div style="font-size:12px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Passo 1 — Atualizar o Apps Script</div>
+        <div style="font-size:12px;color:var(--text2);line-height:1.9">
+          1. Acesse <a href="https://script.google.com" target="_blank" style="color:var(--accent)">script.google.com</a> → abra seu projeto FuelTracker<br>
+          2. Clique em <strong style="color:var(--text)">📋 Copiar código Apps Script</strong> (botão em Configurações)<br>
+          3. <strong style="color:var(--yellow)">Substitua todo o código</strong> pelo novo e cole o link do SharePoint onde indica<br>
+          4. Clique em <strong style="color:var(--text)">Implantar → Gerenciar implantações → Nova versão → Implantar</strong>
+        </div>
+      </div>
+
+      <!-- Passo 2 -->
+      <div style="background:var(--bg3);border-radius:10px;padding:14px;margin-bottom:16px;border-left:3px solid var(--green)">
+        <div style="font-size:12px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Passo 2 — URL do Apps Script + Link SharePoint</div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:10px">A URL do Apps Script já está salva nas Configurações. Cole abaixo o link do SharePoint:</div>
         <input type="text" class="form-input" id="excluir-link-input"
           placeholder="https://empresa-my.sharepoint.com/:x:/g/personal/..."
-          style="flex:1;min-width:200px;font-size:12px;font-family:monospace"
+          style="width:100%;font-size:12px;font-family:monospace;margin-bottom:10px"
           oninput="localStorage.setItem('sp_sharing_link',this.value)">
-        <button class="btn btn-primary" onclick="buscarPlanilhaSP()">🔄 Buscar Planilha</button>
+        <button class="btn btn-primary" style="width:100%;padding:11px" onclick="buscarPlanilhaSP()">🔄 Buscar Planilha via Apps Script</button>
       </div>
-      <div id="excluir-link-status" style="margin-top:10px;font-size:12px;display:none"></div>
-      <div id="excluir-loading-bar" style="display:none;margin-top:12px;display:none">
+
+      <div id="excluir-link-status" style="font-size:12px;display:none;margin-top:4px"></div>
+      <div id="excluir-loading-bar" style="display:none;margin-top:12px">
         <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--text2)">
           <div style="width:15px;height:15px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;flex-shrink:0"></div>
-          <span id="excluir-loading-txt">Buscando…</span>
+          <span id="excluir-loading-txt">Buscando via Apps Script…</span>
         </div>
       </div>
     </div>
@@ -843,9 +859,33 @@ const APPS_SCRIPT_CODE = `
 
 const SHEET_ID = SpreadsheetApp.getActiveSpreadsheet().getId();
 
+// ── URL DA PLANILHA DE ABASTECIMENTOS A EXCLUIR ──
+// Cole aqui o link de compartilhamento do SharePoint (Qualquer pessoa pode exibir)
+const SHAREPOINT_URL = 'COLE_AQUI_O_LINK_DO_SHAREPOINT';
+
 function doGet(e) {
   const action = e.parameter.action;
   const ss = SpreadsheetApp.openById(SHEET_ID);
+
+  // ── NOVO: busca planilha SharePoint pelo servidor (sem CORS) ──
+  if (action === 'getSharePoint') {
+    try {
+      const urlBase = SHAREPOINT_URL.split('?')[0];
+      const downloadUrl = urlBase + '?download=1';
+      const response = UrlFetchApp.fetch(downloadUrl, {
+        followRedirects: true,
+        muteHttpExceptions: true
+      });
+      const bytes = response.getContent();
+      const b64 = Utilities.base64Encode(bytes);
+      return ContentService.createTextOutput(JSON.stringify({ ok: true, data: b64 }))
+        .setMimeType(ContentService.MimeType.JSON);
+    } catch(err) {
+      return ContentService.createTextOutput(JSON.stringify({ ok: false, error: err.message }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+  }
+
   if (action === 'load') {
     const data = {};
     ss.getSheets().forEach(sh => {
@@ -2382,50 +2422,52 @@ function converterLinkSP(url) {
 }
 
 async function buscarPlanilhaSP() {
-  const rawLink = (document.getElementById('excluir-link-input')?.value || '').trim()
+  const appsScriptUrl = (state.sheetsUrl || '').trim();
+  const spLink = (document.getElementById('excluir-link-input')?.value || '').trim()
     || localStorage.getItem('sp_sharing_link') || '';
-  if (!rawLink) { showToast('Cole o link de compartilhamento primeiro', 'error'); return; }
-  localStorage.setItem('sp_sharing_link', rawLink);
+
+  if (!appsScriptUrl) {
+    showToast('Configure a URL do Apps Script em ⚙️ Configurações primeiro', 'error');
+    document.getElementById('excluir-link-status').style.display = '';
+    document.getElementById('excluir-link-status').style.color = 'var(--yellow)';
+    document.getElementById('excluir-link-status').innerHTML = '⚠️ URL do Apps Script não configurada. Vá em <strong>⚙️ Configurações → URL do Apps Script</strong> e configure.';
+    return;
+  }
+  if (!spLink) { showToast('Cole o link do SharePoint primeiro', 'error'); return; }
+  localStorage.setItem('sp_sharing_link', spLink);
 
   const bar = document.getElementById('excluir-loading-bar');
   const statusEl = document.getElementById('excluir-link-status');
   bar.style.display = 'block';
   statusEl.style.display = 'none';
+  document.getElementById('excluir-loading-txt').textContent = 'Buscando via Apps Script…';
 
-  const downloadUrl = converterLinkSP(rawLink);
-  // Tenta direto primeiro; se CORS bloquear, usa proxy
-  const proxies = [
-    u => u,                                          // direto
-    u => 'https://corsproxy.io/?' + encodeURIComponent(u),
-    u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u),
-  ];
+  try {
+    const url = appsScriptUrl + (appsScriptUrl.includes('?') ? '&' : '?') + 'action=getSharePoint';
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const json = await res.json();
+    if (!json.ok) throw new Error(json.error || 'Apps Script retornou erro');
 
-  for (let i = 0; i < proxies.length; i++) {
-    const url = proxies[i](downloadUrl);
-    document.getElementById('excluir-loading-txt').textContent =
-      i === 0 ? 'Conectando ao SharePoint…' : 'Tentando via proxy ' + i + '…';
-    try {
-      const res = await fetch(url);
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      const buffer = await res.arrayBuffer();
-      bar.style.display = 'none';
-      processarExcluirBuffer(buffer);
-      const agora = new Date().toLocaleString('pt-BR');
-      document.getElementById('excl-ultima-atualizacao').textContent = agora;
-      document.getElementById('btn-excluir-atualizar').style.display = '';
-      statusEl.style.display = '';
-      statusEl.style.color = 'var(--green)';
-      statusEl.textContent = '✅ Carregado em ' + agora + (i > 0 ? ' (via proxy)' : '');
-      return; // sucesso!
-    } catch(e) {
-      if (i < proxies.length - 1) continue; // tenta próximo proxy
-      // Todos falharam
-      bar.style.display = 'none';
-      statusEl.style.display = '';
-      statusEl.style.color = 'var(--red)';
-      statusEl.innerHTML = '❌ Não foi possível buscar automaticamente. Use o botão <strong>📂 Carregar .xlsx</strong> abaixo como alternativa.';
-      showToast('Erro ao buscar — use o upload manual', 'error');
-    }
+    // Decodifica base64 → ArrayBuffer
+    const binary = atob(json.data);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+
+    bar.style.display = 'none';
+    processarExcluirBuffer(bytes.buffer);
+    const agora = new Date().toLocaleString('pt-BR');
+    document.getElementById('excl-ultima-atualizacao').textContent = agora;
+    document.getElementById('btn-excluir-atualizar').style.display = '';
+    statusEl.style.display = '';
+    statusEl.style.color = 'var(--green)';
+    statusEl.textContent = '✅ Carregado em ' + agora;
+  } catch(e) {
+    bar.style.display = 'none';
+    statusEl.style.display = '';
+    statusEl.style.color = 'var(--red)';
+    statusEl.innerHTML = '❌ ' + (e.message || 'Erro desconhecido') + '<br><span style="font-size:11px">Verifique se o Apps Script foi atualizado e reimplantado com o novo código.</span>';
+    showToast('Erro: ' + e.message, 'error');
   }
 }
 
