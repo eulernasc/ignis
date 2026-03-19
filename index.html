@@ -2391,29 +2391,41 @@ async function buscarPlanilhaSP() {
   const statusEl = document.getElementById('excluir-link-status');
   bar.style.display = 'block';
   statusEl.style.display = 'none';
-  document.getElementById('excluir-loading-txt').textContent = 'Baixando planilha…';
 
-  try {
-    const res = await fetch(converterLinkSP(rawLink));
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const buffer = await res.arrayBuffer();
-    bar.style.display = 'none';
-    processarExcluirBuffer(buffer);
-    const agora = new Date().toLocaleString('pt-BR');
-    document.getElementById('excl-ultima-atualizacao').textContent = agora;
-    document.getElementById('btn-excluir-atualizar').style.display = '';
-    statusEl.style.display = '';
-    statusEl.style.color = 'var(--green)';
-    statusEl.textContent = '✅ Carregado em ' + agora;
-  } catch(e) {
-    bar.style.display = 'none';
-    statusEl.style.display = '';
-    statusEl.style.color = 'var(--red)';
-    const cors = e.message.includes('fetch') || e.name === 'TypeError';
-    statusEl.innerHTML = cors
-      ? '❌ CORS bloqueado. O link precisa ser <strong>"Qualquer pessoa com o link pode exibir"</strong>.'
-      : '❌ ' + e.message;
-    showToast(cors ? 'Link precisa ser público no SharePoint' : e.message, 'error');
+  const downloadUrl = converterLinkSP(rawLink);
+  // Tenta direto primeiro; se CORS bloquear, usa proxy
+  const proxies = [
+    u => u,                                          // direto
+    u => 'https://corsproxy.io/?' + encodeURIComponent(u),
+    u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u),
+  ];
+
+  for (let i = 0; i < proxies.length; i++) {
+    const url = proxies[i](downloadUrl);
+    document.getElementById('excluir-loading-txt').textContent =
+      i === 0 ? 'Conectando ao SharePoint…' : 'Tentando via proxy ' + i + '…';
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const buffer = await res.arrayBuffer();
+      bar.style.display = 'none';
+      processarExcluirBuffer(buffer);
+      const agora = new Date().toLocaleString('pt-BR');
+      document.getElementById('excl-ultima-atualizacao').textContent = agora;
+      document.getElementById('btn-excluir-atualizar').style.display = '';
+      statusEl.style.display = '';
+      statusEl.style.color = 'var(--green)';
+      statusEl.textContent = '✅ Carregado em ' + agora + (i > 0 ? ' (via proxy)' : '');
+      return; // sucesso!
+    } catch(e) {
+      if (i < proxies.length - 1) continue; // tenta próximo proxy
+      // Todos falharam
+      bar.style.display = 'none';
+      statusEl.style.display = '';
+      statusEl.style.color = 'var(--red)';
+      statusEl.innerHTML = '❌ Não foi possível buscar automaticamente. Use o botão <strong>📂 Carregar .xlsx</strong> abaixo como alternativa.';
+      showToast('Erro ao buscar — use o upload manual', 'error');
+    }
   }
 }
 
