@@ -2602,8 +2602,21 @@ function marcarConcluido(placa, data) {
   const key = placa + '|' + data;
   if (!concluidos.includes(key)) concluidos.push(key);
   localStorage.setItem('excluir_concluidos', JSON.stringify(concluidos));
+
+  // Atualiza status na lista para EXCLUÍDO e remove alerta
+  const todos = window._excluirDadosTodos || [];
+  todos.forEach(r => {
+    if (r.placa === placa && r.data === data) {
+      r.status = 'EXCLUÍDO';
+      r.alerta72h = false;
+    }
+  });
+  window._excluirDados72h = todos.filter(r => r.alerta72h);
+  // Persiste atualização
+  localStorage.setItem('excluir_dados', JSON.stringify(todos.map(r => ({...r, dataObj: null}))));
+
   atualizarExcluirUI();
-  showToast('✅ Marcado como concluído!', 'success');
+  showToast('✅ Marcado como excluído!', 'success');
 }
 
 function renderExcluirLista() {
@@ -2661,22 +2674,29 @@ function limparExcluir() {
 }
 
 function onShowExcluir() {
-  // Restaura dados do localStorage se existirem
   if (!window._excluirDadosTodos || !window._excluirDadosTodos.length) {
     const saved = localStorage.getItem('excluir_dados');
     if (saved) {
       try {
         const dados = JSON.parse(saved);
-        // Recalcula horasPassadas e alerta72h com a hora atual
         const agora = new Date();
+        const concluidos = JSON.parse(localStorage.getItem('excluir_concluidos') || '[]');
         dados.forEach(r => {
+          // Aplica marcações de concluído
+          if (concluidos.includes(r.placa + '|' + r.data)) {
+            r.status = 'EXCLUÍDO';
+            r.alerta72h = false;
+          }
+          // Recalcula horas
           if (r.data) {
             const parts = r.data.split('/');
             if (parts.length === 3) {
               const d = new Date(+parts[2], +parts[1]-1, +parts[0]);
               if (!isNaN(d)) {
                 r.horasPassadas = (agora - d) / (1000 * 60 * 60);
-                r.alerta72h = r.status && r.status.toUpperCase().includes('AGUARDANDO') && r.horasPassadas >= 72;
+                if (!concluidos.includes(r.placa + '|' + r.data)) {
+                  r.alerta72h = r.status && r.status.toUpperCase().includes('AGUARDANDO') && r.horasPassadas >= 72;
+                }
               }
             }
           }
