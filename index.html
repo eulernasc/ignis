@@ -665,76 +665,38 @@ tr.selected-row td{background:rgba(79,142,247,.06);}
     <div class="page-header">
       <div class="page-header-title">
         <div class="page-title">🗑️ Abastecimentos a Excluir</div>
-        <div class="page-sub">Cola o link de compartilhamento do SharePoint — busca automática</div>
+        <div class="page-sub">Carregue a planilha exportada do SharePoint</div>
       </div>
       <div class="header-actions">
-        <button class="btn btn-secondary btn-sm" id="btn-excluir-atualizar" style="display:none" onclick="buscarPlanilhaSP()">🔄 Atualizar</button>
         <button class="btn btn-secondary btn-sm" onclick="limparExcluir()" id="btn-limpar-excluir" style="display:none">✕ Limpar</button>
+        <button class="btn btn-primary btn-sm" onclick="document.getElementById('excluir-file-input').click()">⬆️ Carregar .xlsx</button>
+        <input type="file" id="excluir-file-input" accept=".xlsx,.xls" style="display:none" onchange="excluirCarregarArquivo(this)">
       </div>
     </div>
 
-    <div style="background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:22px;margin-bottom:20px">
-      <div style="font-size:14px;font-weight:700;margin-bottom:6px">⚙️ Configuração (só uma vez)</div>
-      <div style="font-size:13px;color:var(--text2);margin-bottom:16px;line-height:1.8">
-        O SharePoint bloqueia acesso direto do navegador (CORS). A solução é usar o <strong style="color:var(--text)">Google Apps Script</strong> que você já tem como intermediário — ele busca o arquivo pelo servidor e repassa para o sistema.
+    <!-- Estado vazio -->
+    <div id="excluir-empty" style="background:var(--bg2);border:2px dashed var(--border);border-radius:14px;padding:48px;text-align:center;margin-bottom:20px">
+      <div style="font-size:42px;margin-bottom:12px">🗂️</div>
+      <div style="font-size:15px;font-weight:700;margin-bottom:6px">Nenhuma planilha carregada</div>
+      <div style="font-size:13px;color:var(--text2);margin-bottom:20px;line-height:1.7">
+        Abra a planilha no SharePoint → <strong>Arquivo → Exportar → Baixar uma cópia</strong><br>
+        Depois clique no botão acima para carregar o arquivo.
       </div>
-
-      <!-- Passo 1 -->
-      <div style="background:var(--bg3);border-radius:10px;padding:14px;margin-bottom:12px;border-left:3px solid var(--accent)">
-        <div style="font-size:12px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Passo 1 — Atualizar o Apps Script</div>
-        <div style="font-size:12px;color:var(--text2);line-height:1.9">
-          1. Acesse <a href="https://script.google.com" target="_blank" style="color:var(--accent)">script.google.com</a> → abra seu projeto FuelTracker<br>
-          2. Clique em <strong style="color:var(--text)">📋 Copiar código Apps Script</strong> (botão em Configurações)<br>
-          3. <strong style="color:var(--yellow)">Substitua todo o código</strong> pelo novo e cole o link do SharePoint onde indica<br>
-          4. Clique em <strong style="color:var(--text)">Implantar → Gerenciar implantações → Nova versão → Implantar</strong>
-        </div>
-      </div>
-
-      <!-- Passo 2 -->
-      <div style="background:var(--bg3);border-radius:10px;padding:14px;margin-bottom:16px;border-left:3px solid var(--green)">
-        <div style="font-size:12px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Passo 2 — URL do Apps Script + Link SharePoint</div>
-        <div style="font-size:12px;color:var(--text2);margin-bottom:10px">A URL do Apps Script já está salva nas Configurações. Cole abaixo o link do SharePoint:</div>
-        <input type="text" class="form-input" id="excluir-link-input"
-          placeholder="https://empresa-my.sharepoint.com/:x:/g/personal/..."
-          style="width:100%;font-size:12px;font-family:monospace;margin-bottom:10px"
-          oninput="localStorage.setItem('sp_sharing_link',this.value)">
-        <button class="btn btn-primary" style="width:100%;padding:11px" onclick="buscarPlanilhaSP()">🔄 Buscar Planilha via Apps Script</button>
-      </div>
-
-      <div id="excluir-link-status" style="font-size:12px;display:none;margin-top:4px"></div>
-      <div id="excluir-loading-bar" style="display:none;margin-top:12px">
-        <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:var(--text2)">
-          <div style="width:15px;height:15px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;flex-shrink:0"></div>
-          <span id="excluir-loading-txt">Buscando via Apps Script…</span>
-        </div>
-      </div>
+      <button class="btn btn-primary" onclick="document.getElementById('excluir-file-input').click()">⬆️ Carregar Planilha .xlsx</button>
     </div>
 
+    <!-- Resumo -->
     <div id="excluir-resumo" style="display:none">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
-        <div style="font-size:12px;color:var(--text3)">⏱ Atualizado: <span id="excl-ultima-atualizacao">—</span></div>
-        <button class="btn btn-secondary btn-sm" onclick="buscarPlanilhaSP()">🔄 Atualizar agora</button>
-      </div>
       <div class="excl-summary">
-        <div class="excl-sum-card"><div class="excl-sum-val" id="excl-total">0</div><div class="excl-sum-label">Total a Excluir</div></div>
+        <div class="excl-sum-card"><div class="excl-sum-val" id="excl-total">0</div><div class="excl-sum-label">Total de Registros</div></div>
+        <div class="excl-sum-card"><div class="excl-sum-val" id="excl-alertas" style="color:var(--red)">0</div><div class="excl-sum-label">Alertas +72h</div></div>
         <div class="excl-sum-card"><div class="excl-sum-val" id="excl-maquinas" style="color:var(--yellow)">0</div><div class="excl-sum-label">Máquinas</div></div>
-        <div class="excl-sum-card"><div class="excl-sum-val" id="excl-linhas" style="color:var(--accent);font-size:14px;padding-top:6px">SharePoint</div><div class="excl-sum-label">Fonte</div></div>
       </div>
       <div class="filters" style="margin-bottom:14px">
-        <input type="text" class="filter-input" id="excluir-busca" placeholder="🔍 Buscar placa, operação..." oninput="renderExcluirLista()" style="flex:1;min-width:180px">
-        <select class="filter-select" id="excluir-filter-op" onchange="renderExcluirLista()"><option value="">Todas as Operações</option></select>
+        <input type="text" class="filter-input" id="excluir-busca" placeholder="🔍 Buscar placa, motivo..." oninput="renderExcluirLista()" style="flex:1;min-width:180px">
         <button class="btn btn-secondary btn-sm" onclick="copiarListaExcluir()">📋 Copiar Lista</button>
       </div>
-      <div class="excl-col-header" style="background:var(--bg3);border-radius:8px 8px 0 0;border:1px solid var(--border);border-bottom:none">
-        <span>Placa</span><span>Operação</span><span>Data</span><span>Litros</span><span>Motivo</span>
-      </div>
-      <div id="excluir-lista" style="border:1px solid var(--border);border-top:none;border-radius:0 0 12px 12px;overflow:hidden"></div>
-    </div>
-
-    <div style="margin-top:16px;text-align:center;padding:14px;background:var(--bg2);border:1px solid var(--border);border-radius:12px">
-      <div style="font-size:12px;color:var(--text3);margin-bottom:8px">Prefere carregar manualmente?</div>
-      <button class="btn btn-secondary btn-sm" onclick="document.getElementById('excluir-file-input').click()">📂 Carregar .xlsx</button>
-      <input type="file" id="excluir-file-input" accept=".xlsx,.xls" style="display:none" onchange="excluirCarregarArquivo(this)">
+      <div id="excluir-lista" style="border:1px solid var(--border);border-radius:12px;overflow:hidden"></div>
     </div>
   </div>
 
@@ -2530,7 +2492,19 @@ function processarExcluirBuffer(buffer) {
     const colab   = iColab   >= 0 ? String(r[iColab]||'').trim() : '';
     const combust = iCombust >= 0 ? String(r[iCombust]||'').trim() : '';
     const dataExcl= iDataExcl>= 0 ? String(r[iDataExcl]||'').trim() : '';
-    const hora    = iHora    >= 0 ? String(r[iHora]||'').trim() : '';
+    const hora    = iHora    >= 0 ? r[iHora] : '';
+    // Hora pode vir como número decimal do Excel (ex: 0.612 = 14:41)
+    let horaStr = '';
+    if (hora !== '' && hora !== null && hora !== undefined) {
+      if (typeof hora === 'number') {
+        const totalMin = Math.round(hora * 24 * 60);
+        const hh = Math.floor(totalMin / 60) % 24;
+        const mm = totalMin % 60;
+        horaStr = String(hh).padStart(2,'0') + ':' + String(mm).padStart(2,'0');
+      } else {
+        horaStr = String(hora).trim();
+      }
+    }
 
     const dataObj = parseData(dataVal);
     const dataStr = dataObj ? dataObj.toLocaleDateString('pt-BR') : String(dataVal||'').trim();
@@ -2546,28 +2520,37 @@ function processarExcluirBuffer(buffer) {
     const passou72h = horasPassadas !== null && horasPassadas >= 72;
     const alerta72h = isAguardando && passou72h;
 
-    return { placa, data: dataStr, dataObj, hora, status, motivo, operador: colab, combustivel: combust, dataExcl, horasPassadas, alerta72h };
+    return { placa, data: dataStr, dataObj, hora: horaStr, status, motivo, operador: colab, combustivel: combust, dataExcl, horasPassadas, alerta72h };
   }).filter(r => r.placa);
 
   // Filtra: só mostra AGUARDANDO 48H com mais de 72h
   window._excluirDadosTodos = window._excluirDados;
   window._excluirDados72h = window._excluirDados.filter(r => r.alerta72h);
 
+  // Persiste no localStorage
+  localStorage.setItem('excluir_dados', JSON.stringify(window._excluirDados.map(r => ({...r, dataObj: null}))));
+
   atualizarExcluirUI();
   showToast('✅ ' + window._excluirDados.length + ' registros carregados!', 'success');
 }
 
 function atualizarExcluirUI() {
-  const todos = window._excluirDadosTodos || window._excluirDados;
+  const todos = window._excluirDadosTodos || window._excluirDados || [];
   const alertas = window._excluirDados72h || [];
+  
+  // Mostra/esconde estado vazio
+  const emptyEl = document.getElementById('excluir-empty');
+  if (emptyEl) emptyEl.style.display = todos.length ? 'none' : '';
+
   if (!todos.length) return;
 
   document.getElementById('excluir-resumo').style.display = 'block';
   document.getElementById('btn-limpar-excluir').style.display = '';
   document.getElementById('excl-total').textContent = todos.length;
+  document.getElementById('excl-alertas').textContent = alertas.length;
   document.getElementById('excl-maquinas').textContent = new Set(todos.map(r=>r.placa).filter(Boolean)).size;
 
-  // Badge vermelho: só os de 72h
+  // Badge vermelho no nav: só alertas 72h
   const badge = document.getElementById('excluir-nav-badge');
   badge.textContent = alertas.length; badge.style.display = alertas.length ? '' : 'none';
 
@@ -2665,19 +2648,46 @@ function copiarListaExcluir() {
 
 function limparExcluir() {
   window._excluirDados=[];
+  window._excluirDadosTodos=[];
+  window._excluirDados72h=[];
+  localStorage.removeItem('excluir_dados');
   document.getElementById('excluir-resumo').style.display='none';
   document.getElementById('btn-limpar-excluir').style.display='none';
-  document.getElementById('btn-excluir-atualizar').style.display='none';
   document.getElementById('excluir-nav-badge').style.display='none';
+  const emptyEl = document.getElementById('excluir-empty');
+  if (emptyEl) emptyEl.style.display='';
   const b=document.getElementById('excluir-busca'); if(b) b.value='';
   showToast('Lista limpa','success');
 }
 
 function onShowExcluir() {
-  const saved = localStorage.getItem('sp_sharing_link')||'';
-  const inp = document.getElementById('excluir-link-input');
-  if (inp && saved && !inp.value) inp.value = saved;
-  if (saved && !window._excluirDados.length) buscarPlanilhaSP();
+  // Restaura dados do localStorage se existirem
+  if (!window._excluirDadosTodos || !window._excluirDadosTodos.length) {
+    const saved = localStorage.getItem('excluir_dados');
+    if (saved) {
+      try {
+        const dados = JSON.parse(saved);
+        // Recalcula horasPassadas e alerta72h com a hora atual
+        const agora = new Date();
+        dados.forEach(r => {
+          if (r.data) {
+            const parts = r.data.split('/');
+            if (parts.length === 3) {
+              const d = new Date(+parts[2], +parts[1]-1, +parts[0]);
+              if (!isNaN(d)) {
+                r.horasPassadas = (agora - d) / (1000 * 60 * 60);
+                r.alerta72h = r.status && r.status.toUpperCase().includes('AGUARDANDO') && r.horasPassadas >= 72;
+              }
+            }
+          }
+        });
+        window._excluirDados = dados;
+        window._excluirDadosTodos = dados;
+        window._excluirDados72h = dados.filter(r => r.alerta72h);
+        atualizarExcluirUI();
+      } catch(e) {}
+    }
+  }
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
