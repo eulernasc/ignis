@@ -537,6 +537,7 @@ tr.selected-row td{background:rgba(79,142,247,.06);}
     <div class="page-header">
       <div><div class="page-title">Máquinas</div><div class="page-sub">Gerencie o cadastro de máquinas</div></div>
       <div class="header-actions">
+        <input type="text" class="filter-input" id="maq-busca" placeholder="🔍 Buscar placa ou modelo..." oninput="renderMaquinas()" style="min-width:180px">
         <select class="filter-select" id="maq-op-filter" onchange="renderMaquinas()"><option value="">Todas as Operações</option></select>
         <button class="btn btn-primary" onclick="verificarSenha(openNovaMaquina)">+ Nova Máquina</button>
       </div>
@@ -1561,8 +1562,10 @@ function editarAbast(idx) {
 function renderMaquinas() {
   updateFilters();
   const opF=document.getElementById('maq-op-filter')?.value||'';
+  const busca=(document.getElementById('maq-busca')?.value||'').toLowerCase().trim();
   let list=[...state.maquinas];
   if(opF) list=list.filter(m=>m.operacao===opF);
+  if(busca) list=list.filter(m=>(m.placa+m.modelo+m.tipo).toLowerCase().includes(busca));
   const c=document.getElementById('maquinas-grid');
   if(!list.length){c.innerHTML='<div class="empty" style="grid-column:1/-1"><div class="empty-icon">🚜</div><div class="empty-text">Nenhuma máquina cadastrada</div></div>';return;}
   c.innerHTML=list.map(m=>{
