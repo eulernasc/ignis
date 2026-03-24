@@ -1366,7 +1366,7 @@ function renderComparativo() {
     html+=`<div class="comp-card">
       <div class="comp-card-title">${d.label}</div>
       <div class="comp-row"><span class="comp-semana">Litros</span><span class="comp-val">${d.totalL.toFixed(0)}L</span>${dL!==null?`<span class="comp-diff ${dL>0?'down':'up'}">${dL>0?'▲':'▼'}${Math.abs(dL).toFixed(1)}%</span>`:''}</div>
-      <div class="comp-row"><span class="comp-semana">Média L/h</span><span class="comp-val">${d.media.toFixed(2)}</span>${dM!==null?`<span class="comp-diff ${dM>=0?'up':'down'}">${dM>=0?'▲':'▼'}${Math.abs(dM).toFixed(1)}%</span>`:''}</div>
+      <div class="comp-row"><span class="comp-semana">Média L/h</span><span class="comp-val">${d.media.toFixed(2)}</span>${dM!==null?`<span class="comp-diff ${dM>=0?'down':'up'}">${dM>=0?'▲':'▼'}${Math.abs(dM).toFixed(1)}%</span>`:''}</div>
       <div class="comp-row"><span class="comp-semana">Máquinas</span><span class="comp-val">${d.maquinas}</span></div>
       <div class="comp-row"><span class="comp-semana">Horas</span><span class="comp-val">${d.totalH.toFixed(0)}h</span></div>
     </div>`;
@@ -1398,7 +1398,7 @@ function renderComparativo() {
         html+=`<td>${v.m>0?`<span class="badge ${cls}">${v.m.toFixed(2)}${tip}</span>`:'—'}</td>`;
         html+=`<td style="color:var(--text2)">${v.maq||'—'}</td>`;
       });
-      if(selecionadosFiltrados.length>1){const f=vals[0],l=vals[vals.length-1];if(f.m>0&&l.m>0){const d=((l.m-f.m)/f.m*100);html+=`<td><span class="badge ${d>=0?'badge-green':'badge-red'}">${d>=0?'▲':'▼'}${Math.abs(d).toFixed(1)}%</span></td>`;}else html+='<td>—</td>';}
+      if(selecionadosFiltrados.length>1){const f=vals[0],l=vals[vals.length-1];if(f.m>0&&l.m>0){const d=((l.m-f.m)/f.m*100);html+=`<td><span class="badge ${d>=0?'badge-red':'badge-green'}">${d>=0?'▲':'▼'}${Math.abs(d).toFixed(1)}%</span></td>`;}else html+='<td>—</td>';}
       html+='</tr>';
     });
     html+='</tbody></table></div></div>';
@@ -1427,7 +1427,7 @@ function renderComparativo() {
       const tip=desvio!==null?` · ${desvio>0?'+':''}${desvio.toFixed(0)}%`:'';
       html+=`<td>${v.m>0?`<span class="badge ${cls}">${v.m.toFixed(2)}${tip}</span>`:'—'}</td>`;
     });
-    if(selecionadosFiltrados.length>1){const f=vals[0],l=vals[vals.length-1];if(f.m>0&&l.m>0){const d=((l.m-f.m)/f.m*100);html+=`<td><span class="badge ${d>=0?'badge-green':'badge-red'}">${d>=0?'▲':'▼'}${Math.abs(d).toFixed(1)}%</span></td>`;}else html+='<td>—</td>';}
+    if(selecionadosFiltrados.length>1){const f=vals[0],l=vals[vals.length-1];if(f.m>0&&l.m>0){const d=((l.m-f.m)/f.m*100);html+=`<td><span class="badge ${d>=0?'badge-red':'badge-green'}">${d>=0?'▲':'▼'}${Math.abs(d).toFixed(1)}%</span></td>`;}else html+='<td>—</td>';}
     html+='</tr>';
   });
   html+='</tbody></table></div></div>';
