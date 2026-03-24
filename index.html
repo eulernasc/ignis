@@ -1346,9 +1346,12 @@ function renderComparativo() {
   }
 
   const dadosPeriodo={};
+  const maqCompF = document.getElementById('comp-maq-filter')?.value || '';
   selecionadosFiltrados.forEach(([id, p])=>{
     let rows = (p.registros||[]);
     if(opF.size>0) rows = rows.filter(r=>opF.has(r.operacao));
+    if(maqCompF === '__tratores__') rows = rows.filter(r=>r.placa&&r.placa.toUpperCase().startsWith('TRA'));
+    else if(maqCompF) rows = rows.filter(r=>r.placa===maqCompF);
     const tL=rows.reduce((a,r)=>a+(r.litros||0),0), tH=rows.reduce((a,r)=>a+(r.horas||0),0);
     dadosPeriodo[id]={label:p.label||id, rows, totalL:tL, totalH:tH, media:tH>0?tL/tH:0, maquinas:new Set(rows.map(r=>r.placa)).size};
   });
@@ -1402,9 +1405,7 @@ function renderComparativo() {
   }
 
   // Tabela por Máquina
-  const maqCompF = document.getElementById('comp-maq-filter')?.value || '';
   const todasPlacas=[...new Set(selecionadosFiltrados.flatMap(([id])=>dadosPeriodo[id].rows.filter(r=>opF.size===0||opF.has(r.operacao)).map(r=>r.placa)))]
-    .filter(p => maqCompF === '__tratores__' ? p.toUpperCase().startsWith('TRA') : maqCompF ? p === maqCompF : true)
     .sort();
   html+=`<div class="comp-maq-table"><div class="comp-maq-header"><span>🚜 Consumo por Máquina</span><span class="comp-badge">${todasPlacas.length} máquinas</span></div>
   <div style="overflow-x:auto"><table><thead><tr><th>Máquina</th><th>Operação</th><th style="color:var(--text2)">Meta</th>${selecionadosFiltrados.map(([id])=>`<th>${dadosPeriodo[id].label} — L</th><th>L/h</th>`).join('')}${selecionadosFiltrados.length>1?'<th>Variação</th>':''}</tr></thead><tbody>`;
