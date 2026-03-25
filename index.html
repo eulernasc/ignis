@@ -391,7 +391,7 @@ tr.selected-row td{background:rgba(79,142,247,.06);}
     <div class="nav-item" onclick="showPage('maquinas',this)"><span class="icon">🚜</span>Máquinas</div>
     <div class="nav-item" onclick="showPage('relatorio',this)"><span class="icon">📧</span>Relatório</div>
     <div class="nav-item" id="nav-excluir" onclick="showPage('excluir',this)"><span class="icon">🗑️</span>A Excluir<span id="excluir-nav-badge" style="display:none" class="excl-badge">0</span></div>
-    <div class="nav-item" id="nav-arla" onclick="showPage('arla',this)"><span class="icon">🧪</span>Controle Arla<span id="arla-nav-badge" style="display:none" class="excl-badge" style="background:var(--yellow)">0</span></div>
+    <div class="nav-item" id="nav-arla" onclick="showPage('arla',this)"><span class="icon">🧪</span>Controle Arla<span id="arla-nav-badge" style="display:none" class="excl-badge">0</span><span id="arla-lembrete-badge" style="display:none;background:var(--yellow);color:#000;font-size:9px;font-weight:700;padding:2px 5px;border-radius:8px;margin-left:4px">⏰</span></div>
     <div class="nav-item" onclick="showPage('config',this)"><span class="icon">⚙️</span>Configurações</div>
   </nav>
   <div class="sync-status">
@@ -736,6 +736,9 @@ tr.selected-row td{background:rgba(79,142,247,.06);}
         <input type="file" id="arla-file-input" accept=".xlsx,.xls" style="display:none" onchange="arlaCarregarArquivo(this)">
       </div>
     </div>
+
+    <!-- Lembrete de importação -->
+    <div id="arla-lembrete-banner" style="display:none;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.4);border-radius:12px;padding:14px 18px;margin-bottom:16px"></div>
 
     <!-- Tabs -->
     <div class="arla-tab-group">
@@ -2984,8 +2987,94 @@ function arlaInit() {
   }
 }
 
+function arlaChecarLembrete() {
+  const meses = window._arlaState.meses;
+  const badge = document.getElementById('arla-lembrete-badge');
+  const banner = document.getElementById('arla-lembrete-banner');
+
+  if (!meses.length) {
+    // Nunca importou — sempre lembra
+    if (badge) badge.style.display = '';
+    if (banner) { banner.style.display = ''; banner.innerHTML = arlaLembreteBannerHTML('Nenhum relatório importado ainda. Importe o relatório mensal de Arla para começar o monitoramento.', 'yellow'); }
+    return;
+  }
+
+  // Pega o mês mais recente pelo id (mes_YYYY_MM)
+  const ultimo = meses[meses.length - 1];
+  const mesIdMatch = ultimo.id.match(/mes_(\d{4})_(\d{2})/);
+  let diasDesdeUltimo = null;
+  let mesUltimoLabel = ultimo.label;
+
+  if (mesIdMatch) {
+    const ano = parseInt(mesIdMatch[1]), mes = parseInt(mesIdMatch[2]);
+    // Último dia do mês importado
+    const ultimoDiaMes = new Date(ano, mes, 0); // dia 0 do mês seguinte = último dia do mês atual
+    const hoje = new Date();
+    diasDesdeUltimo = Math.floor((hoje - ultimoDiaMes) / (1000 * 60 * 60 * 24));
+  }
+
+  // Verifica se o mês atual já foi importado
+  const hoje = new Date();
+  const mesAtualId = 'mes_' + hoje.getFullYear() + '_' + String(hoje.getMonth()+1).padStart(2,'0');
+  const mesAtualImportado = meses.some(m => m.id === mesAtualId);
+
+  let mostrarLembrete = false;
+  let mensagem = '';
+
+  if (mesAtualImportado) {
+    // Mês atual já importado — sem lembrete
+    if (badge) badge.style.display = 'none';
+    if (banner) banner.style.display = 'none';
+    return;
+  }
+
+  // Dia >= 5 do mês = hora de importar o mês anterior
+  if (hoje.getDate() >= 5) {
+    const mesAnterior = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
+    const mesAnteriorLabel = mesAnterior.toLocaleDateString('pt-BR', {month:'long', year:'numeric'});
+    const mesAnteriorId = 'mes_' + mesAnterior.getFullYear() + '_' + String(mesAnterior.getMonth()+1).padStart(2,'0');
+    const mesAnteriorImportado = meses.some(m => m.id === mesAnteriorId);
+    if (!mesAnteriorImportado) {
+      mostrarLembrete = true;
+      mensagem = '⏰ O relatório de <strong>' + mesAnteriorLabel.charAt(0).toUpperCase() + mesAnteriorLabel.slice(1) + '</strong> ainda não foi importado. Já passou do dia 5 — hora de atualizar!';
+    }
+  } else if (hoje.getDate() >= 1 && hoje.getDate() < 5) {
+    // Primeiros dias do mês — aviso mais suave
+    const mesAnterior = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1);
+    const mesAnteriorLabel = mesAnterior.toLocaleDateString('pt-BR', {month:'long', year:'numeric'});
+    const mesAnteriorId = 'mes_' + mesAnterior.getFullYear() + '_' + String(mesAnterior.getMonth()+1).padStart(2,'0');
+    const mesAnteriorImportado = meses.some(m => m.id === mesAnteriorId);
+    if (!mesAnteriorImportado) {
+      mostrarLembrete = true;
+      mensagem = '📅 O relatório de <strong>' + mesAnteriorLabel.charAt(0).toUpperCase() + mesAnteriorLabel.slice(1) + '</strong> ainda não foi importado.';
+    }
+  }
+
+  if (badge) badge.style.display = mostrarLembrete ? '' : 'none';
+  if (banner) {
+    banner.style.display = mostrarLembrete ? '' : 'none';
+    if (mostrarLembrete) banner.innerHTML = arlaLembreteBannerHTML(mensagem, hoje.getDate() >= 5 ? 'red' : 'yellow');
+  }
+}
+
+function arlaLembreteBannerHTML(msg, tipo) {
+  const cores = {
+    yellow: { bg: 'rgba(245,158,11,.1)', border: 'rgba(245,158,11,.4)', icon: '⏰', color: 'var(--yellow)' },
+    red:    { bg: 'rgba(239,68,68,.1)',  border: 'rgba(239,68,68,.4)',  icon: '🚨', color: 'var(--red)' }
+  };
+  const c = cores[tipo] || cores.yellow;
+  return '<div style="display:flex;align-items:center;gap:12px;justify-content:space-between;flex-wrap:wrap">' +
+    '<div style="display:flex;align-items:center;gap:10px">' +
+    '<span style="font-size:20px">' + c.icon + '</span>' +
+    '<div style="font-size:13px;color:var(--text);line-height:1.5">' + msg + '</div>' +
+    '</div>' +
+    '<button class="btn btn-primary btn-sm" onclick="arlaVerificarSenhaEMes()">⬆️ Importar agora</button>' +
+    '</div>';
+}
+
 function arlaOnShow() {
   arlaInit();
+  arlaChecarLembrete();
   arlaRenderBancoEGR();
   arlaRenderGrupos();
   if (window._arlaState.processados.length) {
@@ -3075,6 +3164,7 @@ function arlaProcessar(rows) {
   window._arlaState._pendingMesId = null;
   window._arlaState._pendingMesLabel = null;
   arlaExibirResultado();
+  arlaChecarLembrete();
   showToast('✅ ' + window._arlaState.processados.length + ' registros processados!', 'success');
 }
 
@@ -3595,6 +3685,11 @@ updateFilters();
 renderDashboard();
 loadState();
 onShowExcluir(); // Restaura alertas e badge ao carregar a página
+// Checa lembrete de importação Arla no carregamento
+setTimeout(() => {
+  arlaInit();
+  arlaChecarLembrete();
+}, 1500);
 </script>
 </body>
 </html>
