@@ -2993,11 +2993,11 @@ function arlaSetTab(tab, el) {
 
 // ── CARREGAR ARQUIVO ──────────────────────────────────────────────────────────
 function arlaAbrirCarregar() {
-  // Mostra modal de seleção de mês antes de abrir o arquivo
-  document.getElementById('arla-modal-mes').classList.add('open');
-  // Sugere mês atual
+  // Sempre mostra o modal de mês — não vai direto pro arquivo
   const now = new Date();
   document.getElementById('arla-input-mes').value = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
+  document.getElementById('arla-modal-mes').classList.add('open');
+  setTimeout(() => document.getElementById('arla-input-mes').focus(), 100);
 }
 
 function arlaConfirmarMes() {
