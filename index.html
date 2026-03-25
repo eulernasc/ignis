@@ -607,6 +607,14 @@ tr.selected-row td{background:rgba(79,142,247,.06);}
         <div class="sheets-config-title" style="color:var(--red)">⚠️ Zona de Perigo</div>
         <button class="btn btn-danger btn-sm" onclick="verificarSenha(limparTodosDados)">🗑️ Apagar todos os dados locais</button>
       </div>
+      <div class="sheets-config" style="margin-top:16px;border-color:rgba(245,158,11,.4)">
+        <div class="sheets-config-title">⛽ Preço do Diesel por Operação</div>
+        <div class="sheets-hint" style="margin-bottom:14px">Configure o preço por litro de cada operação para calcular o custo de ineficiência no Relatório Executivo.</div>
+        <div id="diesel-preco-lista" style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px;max-height:300px;overflow-y:auto"></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-primary btn-sm" onclick="dieselPopularOps()">🔄 Atualizar Operações</button>
+        </div>
+      </div>
       <div class="sheets-config" style="margin-top:16px;border-color:rgba(99,102,241,.4)">
         <div class="sheets-config-title">🔐 Controle de Acesso</div>
         <div class="sheets-hint" style="margin-bottom:12px">Defina uma senha para proteger importação, edição e exclusão de dados. Quem não tiver a senha só poderá visualizar.</div>
@@ -646,6 +654,7 @@ tr.selected-row td{background:rgba(79,142,247,.06);}
     <div class="arla-tab-group" style="margin-bottom:20px">
       <button class="arla-tab active" id="rel-tab-btn-analise" onclick="relSetTab('analise',this)">🔍 Análise</button>
       <button class="arla-tab" id="rel-tab-btn-grupos" onclick="relSetTab('grupos',this)">📧 Grupos de E-mail</button>
+      <button class="arla-tab" id="rel-tab-btn-executivo" onclick="relSetTab('executivo',this)">💰 Relatório Executivo</button>
     </div>
 
     <!-- ABA ANÁLISE -->
@@ -726,6 +735,32 @@ tr.selected-row td{background:rgba(79,142,247,.06);}
       <div id="relg-lista">
         <div class="empty" style="padding:40px"><div class="empty-icon">📧</div><div class="empty-text">Nenhum grupo criado ainda</div></div>
       </div>
+    </div>
+
+    <!-- ABA RELATÓRIO EXECUTIVO -->
+    <div id="rel-tab-executivo" style="display:none">
+      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:16px">
+        <div style="font-size:14px;font-weight:700;margin-bottom:6px">💰 Relatório Executivo de Economia</div>
+        <div style="font-size:13px;color:var(--text2);margin-bottom:16px">Selecione o período para calcular o custo de ineficiência. Configure os preços em ⚙️ Configurações.</div>
+        <div class="form-row" style="margin-bottom:12px">
+          <div class="form-group">
+            <label class="form-label">Data Inicial</label>
+            <input type="date" class="form-input" id="exec-data-ini">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Data Final</label>
+            <input type="date" class="form-input" id="exec-data-fim">
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+          <button class="btn btn-secondary btn-sm" onclick="execSetRange(7)">Últimos 7 dias</button>
+          <button class="btn btn-secondary btn-sm" onclick="execSetRange(15)">Últimos 15 dias</button>
+          <button class="btn btn-secondary btn-sm" onclick="execSetRange('mes')">Este mês</button>
+          <button class="btn btn-secondary btn-sm" onclick="execSetRange(30)">Últimos 30 dias</button>
+        </div>
+        <button class="btn btn-primary" style="width:100%;padding:12px" onclick="renderExecutivo()">💰 Calcular Relatório Executivo</button>
+      </div>
+      <div id="executivo-resultado"></div>
     </div>
   </div>
 
@@ -1179,6 +1214,7 @@ function showPage(page,el) {
   const renders = {dashboard:renderDashboard,comparativo:renderComparativo,abastecimentos:renderAbastecimentos,maquinas:renderMaquinas};
   if(renders[page]) renders[page]();
   if(page==='relatorio') { relPopularOps(); relgInit(); relChecarReincidencia(); }
+  if(page==='config') { dieselPopularOps(); }
   if(page==='excluir') { onShowExcluir(); }
   if(page==='arla') { arlaOnShow(); }
 }
@@ -3753,9 +3789,11 @@ function arlaEnviarEmail() {
 function relSetTab(tab, el) {
   document.getElementById('rel-tab-analise').style.display = tab === 'analise' ? '' : 'none';
   document.getElementById('rel-tab-grupos').style.display = tab === 'grupos' ? '' : 'none';
+  document.getElementById('rel-tab-executivo').style.display = tab === 'executivo' ? '' : 'none';
   document.querySelectorAll('#page-relatorio .arla-tab').forEach(b => b.classList.remove('active'));
   if (el) el.classList.add('active');
   if (tab === 'grupos') relgRender();
+  if (tab === 'executivo') { const hoje = new Date(); const fmt = d => d.toISOString().split('T')[0]; const ini = new Date(hoje.getFullYear(), hoje.getMonth(), 1); document.getElementById('exec-data-ini').value = fmt(ini); document.getElementById('exec-data-fim').value = fmt(hoje); }
 }
 
 // ── RELATÓRIO — GRUPOS DE E-MAIL ─────────────────────────────────────────────
@@ -4002,6 +4040,276 @@ function relChecarReincidencia() {
     });
     banner.innerHTML = html;
   }
+}
+
+// ── PREÇO DIESEL POR OPERAÇÃO ─────────────────────────────────────────────────
+function dieselGetPrecos() {
+  try { return JSON.parse(localStorage.getItem('diesel_precos') || '{}'); } catch(e) { return {}; }
+}
+function dieselSalvarPreco(op, val) {
+  const p = dieselGetPrecos();
+  if (val > 0) p[op] = val; else delete p[op];
+  localStorage.setItem('diesel_precos', JSON.stringify(p));
+}
+function dieselGetPreco(op) {
+  const p = dieselGetPrecos();
+  return p[op] || p['__default__'] || 0;
+}
+
+function dieselPopularOps() {
+  const ops = getOperacoes();
+  const precos = dieselGetPrecos();
+  const lista = document.getElementById('diesel-preco-lista');
+  if (!lista) return;
+  if (!ops.length) {
+    lista.innerHTML = '<div style="font-size:12px;color:var(--text3)">Importe um período para ver as operações</div>';
+    return;
+  }
+  lista.innerHTML = ops.map(op => {
+    const val = precos[op] || '';
+    return '<div style="display:flex;align-items:center;gap:10px;background:var(--bg3);border-radius:8px;padding:8px 12px">' +
+      '<div style="flex:1;font-size:13px;font-weight:500">' + op.replace(/_/g,' ') + '</div>' +
+      '<div style="display:flex;align-items:center;gap:6px">' +
+      '<span style="font-size:12px;color:var(--text2)">R$</span>' +
+      '<input type="number" step="0.01" min="0" placeholder="0,00" value="' + val + '" ' +
+      'style="width:80px;background:var(--bg2);border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:6px;font-size:13px;text-align:right;font-family:monospace" ' +
+      'oninput="dieselSalvarPreco(\'' + op.replace(/'/g,"\\'") + '\', parseFloat(this.value)||0)" ' +
+      'onchange="dieselSalvarPreco(\'' + op.replace(/'/g,"\\'") + '\', parseFloat(this.value)||0)">' +
+      '<span style="font-size:11px;color:var(--text3)">/L</span>' +
+      '</div></div>';
+  }).join('') +
+  '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:flex;align-items:center;gap:10px;background:var(--bg3);border-radius:8px;padding:8px 12px">' +
+  '<div style="flex:1;font-size:13px;font-weight:600;color:var(--accent)">🔧 Preço Padrão (operações sem preço)</div>' +
+  '<div style="display:flex;align-items:center;gap:6px">' +
+  '<span style="font-size:12px;color:var(--text2)">R$</span>' +
+  '<input type="number" step="0.01" min="0" placeholder="0,00" value="' + (precos['__default__']||'') + '" ' +
+  'style="width:80px;background:var(--bg2);border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:6px;font-size:13px;text-align:right;font-family:monospace" ' +
+  'oninput="dieselSalvarPreco(\'__default__\', parseFloat(this.value)||0)">' +
+  '<span style="font-size:11px;color:var(--text3)">/L</span>' +
+  '</div></div>';
+}
+
+// ── RELATÓRIO EXECUTIVO ───────────────────────────────────────────────────────
+function execSetRange(opt) {
+  const hoje = new Date();
+  const fmt = d => d.toISOString().split('T')[0];
+  let ini;
+  if (opt === 'mes') { ini = new Date(hoje.getFullYear(), hoje.getMonth(), 1); }
+  else { ini = new Date(hoje); ini.setDate(hoje.getDate() - opt + 1); }
+  document.getElementById('exec-data-ini').value = fmt(ini);
+  document.getElementById('exec-data-fim').value = fmt(hoje);
+}
+
+function renderExecutivo() {
+  const ini = document.getElementById('exec-data-ini').value;
+  const fim = document.getElementById('exec-data-fim').value;
+  const c = document.getElementById('executivo-resultado');
+  if (!ini || !fim) { showToast('Selecione o período', 'error'); return; }
+
+  const fmtBr = d => { const [y,m,dd] = d.split('-'); return dd+'/'+m+'/'+y; };
+  const labelPeriodo = fmtBr(ini) + ' a ' + fmtBr(fim);
+
+  const registros = state.abastecimentos.filter(a => a.data >= ini && a.data <= fim);
+  if (!registros.length) {
+    c.innerHTML = '<div class="empty"><div class="empty-icon">🔍</div><div class="empty-text">Nenhum registro no período</div></div>';
+    return;
+  }
+
+  // Agrupa por máquina
+  const byMaq = {};
+  registros.forEach(r => {
+    if (!byMaq[r.placa]) byMaq[r.placa] = { l: 0, h: 0 };
+    byMaq[r.placa].l += r.litros || 0;
+    byMaq[r.placa].h += r.horas || 0;
+  });
+
+  // Calcula por operação
+  const byOp = {};
+  const semPreco = new Set();
+  const semMeta = new Set();
+
+  Object.entries(byMaq).forEach(([placa, d]) => {
+    const maq = getMaquina(placa);
+    const op = (maq?.operacao || '').replace(/_/g,' ') || 'Sem Operação';
+    const meta = maq?.meta || 0;
+    const media = d.h > 0 ? d.l / d.h : 0;
+    const preco = dieselGetPreco(maq?.operacao || '');
+    if (!preco) semPreco.add(op);
+    if (!meta) semMeta.add(placa);
+    const efic = meta > 0 && media > 0 ? (meta / media) * 100 : null;
+    const desperdicadoL = meta > 0 && media > meta ? (media - meta) * d.h : 0;
+    const economiaL = meta > 0 && media > 0 ? ((media - meta) / media) * d.l : 0;
+    const desperdicadoR = desperdicadoL * preco;
+    if (!byOp[op]) byOp[op] = { maquinas: [], totalL: 0, totalH: 0, desperdicadoL: 0, desperdicadoR: 0, economiaL: 0, preco };
+    byOp[op].maquinas.push({ placa, meta, media, efic, desperdicadoL, desperdicadoR, economiaL, litros: d.l, horas: d.h });
+    byOp[op].totalL += d.l;
+    byOp[op].totalH += d.h;
+    byOp[op].desperdicadoL += desperdicadoL;
+    byOp[op].desperdicadoR += desperdicadoR;
+    byOp[op].economiaL += economiaL;
+  });
+
+  const totalDesperdicadoR = Object.values(byOp).reduce((s, o) => s + o.desperdicadoR, 0);
+  const totalDesperdicadoL = Object.values(byOp).reduce((s, o) => s + o.desperdicadoL, 0);
+  const totalL = Object.values(byOp).reduce((s, o) => s + o.totalL, 0);
+  const pctDesperdicio = totalL > 0 ? (totalDesperdicadoL / totalL * 100) : 0;
+
+  const fmtR = v => 'R$ ' + v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmtL = v => v.toFixed(0) + 'L';
+
+  // Ordena operações por desperdício R$ desc
+  const opsOrdenadas = Object.entries(byOp).sort((a, b) => b[1].desperdicadoR - a[1].desperdicadoR);
+
+  let html = '';
+
+  // Aviso se faltam preços
+  if (semPreco.size) {
+    html += '<div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.4);border-radius:10px;padding:12px 16px;margin-bottom:14px;font-size:13px">' +
+      '⚠️ <strong>Preço não configurado</strong> para: ' + [...semPreco].join(', ') + '. <a href="#" onclick="showPage(\'config\',null);return false" style="color:var(--accent)">Configurar em ⚙️</a>' +
+      '</div>';
+  }
+
+  // KPIs executivos
+  html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:20px">';
+  html += kpiExec('📅 Período', labelPeriodo, '', '#8b90a7');
+  html += kpiExec('💸 Custo de Ineficiência', fmtR(totalDesperdicadoR), 'Total no período', 'var(--red)');
+  html += kpiExec('⛽ Litros Desperdiçados', fmtL(totalDesperdicadoL), pctDesperdicio.toFixed(1) + '% do total consumido', 'var(--yellow)');
+  html += kpiExec('✅ Economia Potencial', fmtR(totalDesperdicadoR), 'se todas atingissem 98%', 'var(--green)');
+  html += '</div>';
+
+  // Ranking por operação
+  html += '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:16px">';
+  html += '<div style="padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">';
+  html += '<div style="font-size:15px;font-weight:700">📍 Custo de Ineficiência por Operação</div>';
+  html += '<button class="btn btn-secondary btn-sm" onclick="exportarExecutivoEmail()">📧 Copiar Relatório</button>';
+  html += '</div>';
+
+  opsOrdenadas.forEach(([op, d], i) => {
+    const pct = d.totalL > 0 ? (d.desperdicadoL / d.totalL * 100) : 0;
+    const mediaOp = d.totalH > 0 ? d.totalL / d.totalH : 0;
+    const barW = totalDesperdicadoR > 0 ? Math.max((d.desperdicadoR / totalDesperdicadoR) * 100, 2) : 0;
+    const cor = d.desperdicadoR > 0 ? 'var(--red)' : 'var(--green)';
+    html += '<div style="padding:14px 20px;border-bottom:1px solid rgba(42,47,69,.5)">';
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:6px">';
+    html += '<div style="display:flex;align-items:center;gap:10px">';
+    html += '<span style="font-size:16px;font-weight:700;color:var(--text3);font-family:monospace;width:24px">' + (i+1) + '</span>';
+    html += '<div><div style="font-size:14px;font-weight:700">' + op + '</div>';
+    html += '<div style="font-size:11px;color:var(--text2);margin-top:2px">' + d.maquinas.length + ' máquinas · ' + fmtL(d.totalL) + ' · R$' + (d.preco||0).toFixed(2) + '/L</div></div></div>';
+    html += '<div style="text-align:right"><div style="font-size:18px;font-weight:700;color:' + cor + '">' + fmtR(d.desperdicadoR) + '</div>';
+    html += '<div style="font-size:11px;color:var(--text2)">' + fmtL(d.desperdicadoL) + ' desperdiçados (' + pct.toFixed(1) + '%)</div></div></div>';
+    if (d.desperdicadoR > 0) {
+      html += '<div style="height:6px;background:var(--bg3);border-radius:3px;overflow:hidden">';
+      html += '<div style="height:100%;width:' + barW + '%;background:var(--red);border-radius:3px;transition:width .4s"></div></div>';
+    }
+    html += '</div>';
+  });
+  html += '</div>';
+
+  // Top 10 máquinas
+  const todasMaq = opsOrdenadas.flatMap(([op, d]) => d.maquinas.map(m => ({...m, op})))
+    .filter(m => m.desperdicadoR > 0)
+    .sort((a, b) => b.desperdicadoR - a.desperdicadoR)
+    .slice(0, 10);
+
+  if (todasMaq.length) {
+    html += '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:16px">';
+    html += '<div style="padding:14px 20px;border-bottom:1px solid var(--border);font-size:15px;font-weight:700">🚨 Top ' + todasMaq.length + ' Máquinas com Maior Custo</div>';
+    html += '<div style="overflow-x:auto"><table><thead><tr>';
+    html += '<th>#</th><th>Máquina</th><th>Operação</th><th style="text-align:center">Meta</th><th style="text-align:center">Real</th><th style="text-align:center">Efic.</th><th style="text-align:right">Desperdício L</th><th style="text-align:right">Custo R$</th>';
+    html += '</tr></thead><tbody>';
+    todasMaq.forEach((m, i) => {
+      const eficCor = !m.efic ? 'var(--text3)' : m.efic >= 98 ? 'var(--green)' : m.efic >= 90 ? 'var(--yellow)' : 'var(--red)';
+      html += '<tr>';
+      html += '<td style="color:var(--text3);font-weight:700">' + (i+1) + '</td>';
+      html += '<td><span class="placa-tag">' + m.placa + '</span></td>';
+      html += '<td style="font-size:12px;color:var(--text2)">' + m.op + '</td>';
+      html += '<td style="text-align:center;font-family:monospace;color:var(--accent)">' + (m.meta > 0 ? m.meta.toFixed(1) + ' L/h' : '—') + '</td>';
+      html += '<td style="text-align:center;font-family:monospace;color:' + eficCor + ';font-weight:700">' + m.media.toFixed(2) + ' L/h</td>';
+      html += '<td style="text-align:center"><span class="badge ' + (!m.efic ? '' : m.efic >= 98 ? 'badge-green' : m.efic >= 90 ? 'badge-yellow' : 'badge-red') + '">' + (m.efic ? m.efic.toFixed(1) + '%' : '—') + '</span></td>';
+      html += '<td style="text-align:right;font-family:monospace;color:var(--red)">' + fmtL(m.desperdicadoL) + '</td>';
+      html += '<td style="text-align:right;font-family:monospace;color:var(--red);font-weight:700">' + fmtR(m.desperdicadoR) + '</td>';
+      html += '</tr>';
+    });
+    html += '</tbody></table></div></div>';
+  }
+
+  c.innerHTML = html;
+
+  // Salva dados para exportação
+  window._execDados = { labelPeriodo, totalDesperdicadoR, totalDesperdicadoL, pctDesperdicio, opsOrdenadas, todasMaq, fmtR, fmtL };
+}
+
+function kpiExec(label, value, sub, cor) {
+  return '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px 18px">' +
+    '<div style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px">' + label + '</div>' +
+    '<div style="font-size:22px;font-weight:700;color:' + cor + ';font-family:monospace;letter-spacing:-0.5px">' + value + '</div>' +
+    (sub ? '<div style="font-size:11px;color:var(--text3);margin-top:4px">' + sub + '</div>' : '') +
+    '</div>';
+}
+
+function exportarExecutivoEmail() {
+  if (!window._execDados) return;
+  const { labelPeriodo, totalDesperdicadoR, totalDesperdicadoL, pctDesperdicio, opsOrdenadas, todasMaq, fmtR, fmtL } = window._execDados;
+
+  const linhasOps = opsOrdenadas.map(([op, d]) => {
+    const pct = d.totalL > 0 ? (d.desperdicadoL / d.totalL * 100) : 0;
+    return '<tr style="border-bottom:1px solid #e2e8f0">' +
+      '<td style="padding:10px 14px;font-weight:600;color:#1e293b">' + op + '</td>' +
+      '<td style="padding:10px 14px;text-align:center;color:#64748b;font-size:12px">' + d.maquinas.length + '</td>' +
+      '<td style="padding:10px 14px;text-align:center;font-family:monospace;color:#1e293b">' + fmtL(d.totalL) + '</td>' +
+      '<td style="padding:10px 14px;text-align:center;font-family:monospace;color:#64748b">' + fmtL(d.desperdicadoL) + ' (' + (d.totalL>0?(d.desperdicadoL/d.totalL*100).toFixed(1):0) + '%)</td>' +
+      '<td style="padding:10px 14px;text-align:right;font-weight:700;color:' + (d.desperdicadoR > 0 ? '#dc2626' : '#16a34a') + ';font-family:monospace">' + fmtR(d.desperdicadoR) + '</td>' +
+      '</tr>';
+  }).join('');
+
+  const linhasMaq = todasMaq.slice(0, 10).map((m, i) => {
+    const eficCor = !m.efic ? '#64748b' : m.efic >= 98 ? '#16a34a' : m.efic >= 90 ? '#d97706' : '#dc2626';
+    return '<tr style="background:' + (i%2===0?'#fff':'#f8fafc') + ';border-bottom:1px solid #e2e8f0">' +
+      '<td style="padding:9px 12px;font-weight:700;font-family:monospace;font-size:13px;color:#1e293b">' + m.placa + '</td>' +
+      '<td style="padding:9px 12px;font-size:12px;color:#64748b">' + m.op + '</td>' +
+      '<td style="padding:9px 12px;text-align:center;font-family:monospace;color:#2563eb">' + (m.meta>0?m.meta.toFixed(1)+' L/h':'—') + '</td>' +
+      '<td style="padding:9px 12px;text-align:center;font-weight:700;font-family:monospace;color:' + eficCor + '">' + m.media.toFixed(2) + ' L/h</td>' +
+      '<td style="padding:9px 12px;text-align:center;color:' + eficCor + ';font-weight:700">' + (m.efic?m.efic.toFixed(1)+'%':'—') + '</td>' +
+      '<td style="padding:9px 12px;text-align:right;font-weight:700;color:#dc2626;font-family:monospace">' + fmtR(m.desperdicadoR) + '</td>' +
+      '</tr>';
+  }).join('');
+
+  const html = '<!DOCTYPE html><html><body style="margin:0;padding:20px 0;font-family:Arial,sans-serif;background:#e2e8f0">' +
+    '<table width="680" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;border:1px solid #cbd5e1">' +
+    '<tr><td style="background:linear-gradient(135deg,#064e3b 0%,#065f46 100%);padding:24px 28px">' +
+    '<div style="font-size:20px;font-weight:700;color:#fff">⛽ FuelTracker Pro</div>' +
+    '<div style="font-size:13px;color:#6ee7b7;margin-top:4px">Relatório Executivo de Economia — ' + labelPeriodo + '</div>' +
+    '</td></tr>' +
+    '<tr><td style="padding:20px 28px">' +
+    '<table width="100%" cellpadding="0" cellspacing="8"><tr>' +
+    '<td style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:14px 16px;text-align:center;width:33%">' +
+    '<div style="font-size:11px;color:#dc2626;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">💸 Custo de Ineficiência</div>' +
+    '<div style="font-size:22px;font-weight:700;color:#dc2626;font-family:monospace">' + fmtR(totalDesperdicadoR) + '</div>' +
+    '</td><td style="width:8px"></td>' +
+    '<td style="background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:14px 16px;text-align:center;width:33%">' +
+    '<div style="font-size:11px;color:#d97706;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">⛽ Litros Desperdiçados</div>' +
+    '<div style="font-size:22px;font-weight:700;color:#d97706;font-family:monospace">' + fmtL(totalDesperdicadoL) + '</div>' +
+    '<div style="font-size:11px;color:#92400e;margin-top:3px">' + pctDesperdicio.toFixed(1) + '% do total consumido</div>' +
+    '</td><td style="width:8px"></td>' +
+    '<td style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:14px 16px;text-align:center;width:33%">' +
+    '<div style="font-size:11px;color:#16a34a;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">✅ Economia Potencial</div>' +
+    '<div style="font-size:22px;font-weight:700;color:#16a34a;font-family:monospace">' + fmtR(totalDesperdicadoR) + '</div>' +
+    '<div style="font-size:11px;color:#166534;margin-top:3px">se todas atingissem 98%</div>' +
+    '</td></tr></table></td></tr>' +
+    '<tr><td style="padding:0 28px 20px">' +
+    '<div style="font-size:14px;font-weight:700;color:#1e293b;margin-bottom:10px">📍 Custo por Operação</div>' +
+    '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">' +
+    '<thead><tr style="background:#f1f5f9"><th style="padding:9px 14px;text-align:left;font-size:11px;color:#64748b;text-transform:uppercase">Operação</th><th style="padding:9px 14px;text-align:center;font-size:11px;color:#64748b;text-transform:uppercase">Maq.</th><th style="padding:9px 14px;text-align:center;font-size:11px;color:#64748b;text-transform:uppercase">Consumido</th><th style="padding:9px 14px;text-align:center;font-size:11px;color:#64748b;text-transform:uppercase">Desperdiçado</th><th style="padding:9px 14px;text-align:right;font-size:11px;color:#64748b;text-transform:uppercase">Custo</th></tr></thead>' +
+    '<tbody>' + linhasOps + '</tbody></table></td></tr>' +
+    (todasMaq.length ? '<tr><td style="padding:0 28px 20px"><div style="font-size:14px;font-weight:700;color:#1e293b;margin-bottom:10px">🚨 Top ' + todasMaq.length + ' Máquinas</div><table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden"><thead><tr style="background:#f1f5f9"><th style="padding:9px 12px;text-align:left;font-size:11px;color:#64748b;text-transform:uppercase">Máquina</th><th style="padding:9px 12px;text-align:left;font-size:11px;color:#64748b;text-transform:uppercase">Operação</th><th style="padding:9px 12px;text-align:center;font-size:11px;color:#64748b;text-transform:uppercase">Meta</th><th style="padding:9px 12px;text-align:center;font-size:11px;color:#64748b;text-transform:uppercase">Real</th><th style="padding:9px 12px;text-align:center;font-size:11px;color:#64748b;text-transform:uppercase">Efic.</th><th style="padding:9px 12px;text-align:right;font-size:11px;color:#64748b;text-transform:uppercase">Custo</th></tr></thead><tbody>' + linhasMaq + '</tbody></table></td></tr>' : '') +
+    '<tr><td style="background:#f8fafc;padding:14px 28px;border-top:1px solid #e2e8f0;text-align:center;font-size:11px;color:#94a3b8">Gerado pelo FuelTracker Pro · eulernasc.github.io/fueltracker</td></tr>' +
+    '</table></body></html>';
+
+  navigator.clipboard.write([new ClipboardItem({'text/html': new Blob([html], {type:'text/html'})})]).then(() => {
+    showToast('✅ Relatório copiado! Cole no e-mail (Ctrl+V)', 'success');
+  }).catch(() => showToast('Erro ao copiar', 'error'));
+  const assunto = encodeURIComponent('FuelTracker — Relatório Executivo · ' + labelPeriodo);
+  setTimeout(() => window.open('mailto:?subject=' + assunto, '_blank'), 500);
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
