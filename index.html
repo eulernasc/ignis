@@ -758,6 +758,10 @@ tr.selected-row td{background:rgba(79,142,247,.06);}
           <button class="btn btn-secondary btn-sm" onclick="execSetRange('mes')">Este mês</button>
           <button class="btn btn-secondary btn-sm" onclick="execSetRange(30)">Últimos 30 dias</button>
         </div>
+        <div class="form-group">
+          <label class="form-label">Filtrar Operação (opcional)</label>
+          <select class="form-input" id="exec-op-filter"><option value="">Todas as Operações</option></select>
+        </div>
         <button class="btn btn-primary" style="width:100%;padding:12px" onclick="renderExecutivo()">💰 Calcular Relatório Executivo</button>
       </div>
       <div id="executivo-resultado"></div>
@@ -3793,7 +3797,7 @@ function relSetTab(tab, el) {
   document.querySelectorAll('#page-relatorio .arla-tab').forEach(b => b.classList.remove('active'));
   if (el) el.classList.add('active');
   if (tab === 'grupos') relgRender();
-  if (tab === 'executivo') { const hoje = new Date(); const fmt = d => d.toISOString().split('T')[0]; const ini = new Date(hoje.getFullYear(), hoje.getMonth(), 1); document.getElementById('exec-data-ini').value = fmt(ini); document.getElementById('exec-data-fim').value = fmt(hoje); }
+  if (tab === 'executivo') { const hoje = new Date(); const fmt = d => d.toISOString().split('T')[0]; const ini = new Date(hoje.getFullYear(), hoje.getMonth(), 1); document.getElementById('exec-data-ini').value = fmt(ini); document.getElementById('exec-data-fim').value = fmt(hoje); execPopularFiltroOp(); }
 }
 
 // ── RELATÓRIO — GRUPOS DE E-MAIL ─────────────────────────────────────────────
@@ -4100,16 +4104,26 @@ function execSetRange(opt) {
   document.getElementById('exec-data-fim').value = fmt(hoje);
 }
 
+function execPopularFiltroOp() {
+  const sel = document.getElementById('exec-op-filter');
+  if (!sel) return;
+  const ops = getOperacoes();
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">Todas as Operações</option>' + ops.map(o => '<option value="' + o + '"' + (o === cur ? ' selected' : '') + '>' + o.replace(/_/g,' ') + '</option>').join('');
+}
+
 function renderExecutivo() {
   const ini = document.getElementById('exec-data-ini').value;
   const fim = document.getElementById('exec-data-fim').value;
+  const opFiltro = document.getElementById('exec-op-filter')?.value || '';
   const c = document.getElementById('executivo-resultado');
   if (!ini || !fim) { showToast('Selecione o período', 'error'); return; }
 
   const fmtBr = d => { const [y,m,dd] = d.split('-'); return dd+'/'+m+'/'+y; };
   const labelPeriodo = fmtBr(ini) + ' a ' + fmtBr(fim);
 
-  const registros = state.abastecimentos.filter(a => a.data >= ini && a.data <= fim);
+  let registros = state.abastecimentos.filter(a => a.data >= ini && a.data <= fim);
+  if (opFiltro) registros = registros.filter(a => (getMaquina(a.placa)?.operacao || a.operacao || '') === opFiltro);
   if (!registros.length) {
     c.innerHTML = '<div class="empty"><div class="empty-icon">🔍</div><div class="empty-text">Nenhum registro no período</div></div>';
     return;
@@ -4185,12 +4199,14 @@ function renderExecutivo() {
   html += kpiExec('🎯 Economia Potencial', fmtR(totalDesperdicadoR), 'se todas atingissem 98%', 'var(--accent)');
   html += '</div>';
 
-  // Ranking por operação
+  // Ranking por operação (expansível)
   html += '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:16px">';
   html += '<div style="padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">';
-  html += '<div style="font-size:15px;font-weight:700">📍 Custo de Ineficiência por Operação</div>';
+  html += '<div style="font-size:15px;font-weight:700">📍 Resultado por Operação</div>';
+  html += '<div style="display:flex;gap:8px">';
+  html += '<span style="font-size:11px;color:var(--text3);align-self:center">Clique para ver as máquinas</span>';
   html += '<button class="btn btn-secondary btn-sm" onclick="exportarExecutivoEmail()">📧 Copiar Relatório</button>';
-  html += '</div>';
+  html += '</div></div>';
 
   opsOrdenadas.forEach(([op, d], i) => {
     const pct = d.totalL > 0 ? (d.desperdicadoL / d.totalL * 100) : 0;
@@ -4199,9 +4215,11 @@ function renderExecutivo() {
     const naMeta = d.desperdicadoL === 0 && d.maqNaMeta > 0;
     const semPrecoCfg = d.semPreco;
     const cor = d.desperdicadoR > 0 ? 'var(--red)' : naMeta ? 'var(--green)' : 'var(--text3)';
-    html += '<div style="padding:14px 20px;border-bottom:1px solid rgba(42,47,69,.5)">';
+    html += '<div>';
+    html += '<div id="exec-row-' + i + '" style="padding:14px 20px;border-bottom:1px solid rgba(42,47,69,.5);cursor:pointer;transition:.15s">';
     html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:6px">';
     html += '<div style="display:flex;align-items:center;gap:10px">';
+    html += '<span id="exec-arrow-' + i + '" style="font-size:11px;color:var(--text3);width:14px">▶</span>';
     html += '<span style="font-size:16px;font-weight:700;color:var(--text3);font-family:monospace;width:24px">' + (i+1) + '</span>';
     html += '<div><div style="display:flex;align-items:center;gap:8px">';
     html += '<span style="font-size:14px;font-weight:700">' + op + '</span>';
@@ -4229,39 +4247,47 @@ function renderExecutivo() {
       html += '<div style="height:6px;background:var(--bg3);border-radius:3px;overflow:hidden">';
       html += '<div style="height:100%;width:' + barWE + '%;background:var(--green);border-radius:3px;transition:width .4s"></div></div>';
     }
+    // Tabela expansível de máquinas desta operação
+    const opId = 'exec-op-' + i;
+    html += '<div id="' + opId + '" style="display:none;border-top:1px solid rgba(42,47,69,.4);overflow-x:auto">';
+    html += '<table style="width:100%"><thead><tr style="background:var(--bg3)">';
+    html += '<th>Máquina</th><th style="text-align:center">Meta</th><th style="text-align:center">Real</th><th style="text-align:center">Eficiência</th><th style="text-align:right">Desperdício L</th><th style="text-align:right">Custo R$</th><th style="text-align:right">Economizado</th>';
+    html += '</tr></thead><tbody>';
+    d.maquinas.sort((a,b) => b.desperdicadoR - a.desperdicadoR).forEach(m => {
+      const eficCor = !m.efic ? 'var(--text3)' : m.efic >= 98 ? 'var(--green)' : m.efic >= 90 ? 'var(--yellow)' : 'var(--red)';
+      const eficBadge = !m.efic ? '' : m.efic >= 98 ? 'badge-green' : m.efic >= 90 ? 'badge-yellow' : 'badge-red';
+      html += '<tr>';
+      html += '<td><span class="placa-tag">' + m.placa + '</span></td>';
+      html += '<td style="text-align:center;font-family:monospace;color:var(--accent)">' + (m.meta > 0 ? m.meta.toFixed(1) + ' L/h' : '—') + '</td>';
+      html += '<td style="text-align:center;font-family:monospace;font-weight:700;color:' + eficCor + '">' + m.media.toFixed(2) + ' L/h</td>';
+      html += '<td style="text-align:center"><span class="badge ' + eficBadge + '">' + (m.efic ? m.efic.toFixed(1) + '%' : '—') + '</span></td>';
+      html += '<td style="text-align:right;font-family:monospace;color:' + (m.desperdicadoL > 0 ? 'var(--red)' : 'var(--text3)') + '">' + (m.desperdicadoL > 0 ? fmtL(m.desperdicadoL) : '—') + '</td>';
+      html += '<td style="text-align:right;font-family:monospace;font-weight:700;color:' + (m.desperdicadoR > 0 ? 'var(--red)' : 'var(--text3)') + '">' + (m.desperdicadoR > 0 ? fmtR(m.desperdicadoR) : '—') + '</td>';
+      html += '<td style="text-align:right;font-family:monospace;color:' + (m.economiaR > 0 ? 'var(--green)' : 'var(--text3)') + '">' + (m.economiaR > 0 ? fmtR(m.economiaR) : '—') + '</td>';
+      html += '</tr>';
+    });
+    html += '</tbody></table></div>';
     html += '</div>';
   });
   html += '</div>';
 
-  // Top 10 máquinas
-  const todasMaq = opsOrdenadas.flatMap(([op, d]) => d.maquinas.map(m => ({...m, op})))
-    .filter(m => m.desperdicadoR > 0)
-    .sort((a, b) => b.desperdicadoR - a.desperdicadoR)
-    .slice(0, 10);
-
-  if (todasMaq.length) {
-    html += '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:16px">';
-    html += '<div style="padding:14px 20px;border-bottom:1px solid var(--border);font-size:15px;font-weight:700">🚨 Top ' + todasMaq.length + ' Máquinas com Maior Custo</div>';
-    html += '<div style="overflow-x:auto"><table><thead><tr>';
-    html += '<th>#</th><th>Máquina</th><th>Operação</th><th style="text-align:center">Meta</th><th style="text-align:center">Real</th><th style="text-align:center">Efic.</th><th style="text-align:right">Desperdício L</th><th style="text-align:right">Custo R$</th>';
-    html += '</tr></thead><tbody>';
-    todasMaq.forEach((m, i) => {
-      const eficCor = !m.efic ? 'var(--text3)' : m.efic >= 98 ? 'var(--green)' : m.efic >= 90 ? 'var(--yellow)' : 'var(--red)';
-      html += '<tr>';
-      html += '<td style="color:var(--text3);font-weight:700">' + (i+1) + '</td>';
-      html += '<td><span class="placa-tag">' + m.placa + '</span></td>';
-      html += '<td style="font-size:12px;color:var(--text2)">' + m.op + '</td>';
-      html += '<td style="text-align:center;font-family:monospace;color:var(--accent)">' + (m.meta > 0 ? m.meta.toFixed(1) + ' L/h' : '—') + '</td>';
-      html += '<td style="text-align:center;font-family:monospace;color:' + eficCor + ';font-weight:700">' + m.media.toFixed(2) + ' L/h</td>';
-      html += '<td style="text-align:center"><span class="badge ' + (!m.efic ? '' : m.efic >= 98 ? 'badge-green' : m.efic >= 90 ? 'badge-yellow' : 'badge-red') + '">' + (m.efic ? m.efic.toFixed(1) + '%' : '—') + '</span></td>';
-      html += '<td style="text-align:right;font-family:monospace;color:var(--red)">' + fmtL(m.desperdicadoL) + '</td>';
-      html += '<td style="text-align:right;font-family:monospace;color:var(--red);font-weight:700">' + fmtR(m.desperdicadoR) + '</td>';
-      html += '</tr>';
-    });
-    html += '</tbody></table></div></div>';
-  }
-
   c.innerHTML = html;
+
+  // Adiciona eventos de expansão (depois de inserir no DOM)
+  opsOrdenadas.forEach(([op, d], i) => {
+    const opId = 'exec-op-' + i;
+    const rowId = 'exec-row-' + i;
+    const row = document.getElementById(rowId);
+    const details = document.getElementById(opId);
+    if (row && details) {
+      row.addEventListener('click', () => {
+        const open = details.style.display !== 'none';
+        details.style.display = open ? 'none' : '';
+        const arrow = document.getElementById('exec-arrow-' + i);
+        if (arrow) arrow.textContent = open ? '▶' : '▼';
+      });
+    }
+  });
 
   // Salva dados para exportação
   window._execDados = { labelPeriodo, totalDesperdicadoR, totalDesperdicadoL, totalEconomiaR, totalEconomiaL, pctDesperdicio, opsOrdenadas, todasMaq, fmtR, fmtL };
