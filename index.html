@@ -519,12 +519,29 @@ tr.selected-row td{background:rgba(79,142,247,.06);}
         <select class="filter-select" id="comp-maq-filter" onchange="renderComparativo()" style="min-width:160px"><option value="">Todas (Consolidado)</option><option value="__tratores__">🚜 TRATORES</option><option value="__maquinas__">⚙️ MÁQUINAS</option></select>
       </div>
     </div>
-    <!-- Seletor de períodos -->
-    <div id="comp-periodo-selector" style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:16px;display:none">
-      <div style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px">Selecione até 5 períodos para comparar:</div>
-      <div id="comp-periodo-checkboxes" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+
+    <!-- Tabs do Comparativo -->
+    <div class="arla-tab-group" style="margin-bottom:16px">
+      <button class="arla-tab active" id="comp-tab-btn-periodos" onclick="compSetTab('periodos',this)">📊 Comparativo</button>
+      <button class="arla-tab" id="comp-tab-btn-financeiro" onclick="compSetTab('financeiro',this)">💰 Evolução Financeira</button>
     </div>
-    <div id="comparativo-content"></div>
+
+    <!-- ABA COMPARATIVO -->
+    <div id="comp-tab-periodos">
+      <!-- Seletor de períodos -->
+      <div id="comp-periodo-selector" style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:16px;display:none">
+        <div style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px">Selecione até 5 períodos para comparar:</div>
+        <div id="comp-periodo-checkboxes" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+      </div>
+      <div id="comparativo-content"></div>
+    </div>
+
+    <!-- ABA EVOLUÇÃO FINANCEIRA -->
+    <div id="comp-tab-financeiro" style="display:none">
+      <div id="comp-financeiro-content">
+        <div class="empty" style="padding:48px"><div class="empty-icon">💰</div><div class="empty-text">Acesse a aba Comparativo primeiro para carregar os dados</div></div>
+      </div>
+    </div>
   </div>
 
   <!-- ABASTECIMENTOS -->
@@ -1720,61 +1737,6 @@ function renderComparativo() {
     html+='</tr>';
   });
   html+='</tbody></table></div></div>';
-
-  // ── EVOLUÇÃO FINANCEIRA ──────────────────────────────────────────────────
-  // Só mostra se houver preços configurados
-  const precos = dieselGetPrecos();
-  const temPrecos = Object.keys(precos).length > 0;
-  if (temPrecos && todosPeriodos.length >= 1) {
-    // Calcula dados financeiros de TODOS os períodos (não só selecionados)
-    const dadosFinanc = todosPeriodos.map(([id, p]) => {
-      let rows = p.registros || [];
-      if (opF.size > 0) rows = rows.filter(r => opF.has(r.operacao));
-      if (maqCompF === '__tratores__') rows = rows.filter(r => r.placa && r.placa.toUpperCase().startsWith('TRA'));
-      else if (maqCompF === '__maquinas__') rows = rows.filter(r => r.placa && !r.placa.toUpperCase().startsWith('TRA'));
-      const byMaqF = {};
-      rows.forEach(r => {
-        if (!byMaqF[r.placa]) byMaqF[r.placa] = { l: 0, h: 0, op: r.operacao || getMaquina(r.placa)?.operacao || '' };
-        byMaqF[r.placa].l += r.litros || 0;
-        byMaqF[r.placa].h += r.horas || 0;
-      });
-      let despR = 0, econR = 0, despL = 0, econL = 0;
-      Object.entries(byMaqF).forEach(([placa, d]) => {
-        const maq = getMaquina(placa);
-        const meta = maq?.meta || 0;
-        const media = d.h > 0 ? d.l / d.h : 0;
-        const preco = dieselGetPreco(d.op);
-        if (!meta || !preco) return;
-        if (media > meta) { const dL = (media - meta) * d.h; despL += dL; despR += dL * preco; }
-        else if (media < meta) { const eL = (meta - media) * d.h; econL += eL; econR += eL * preco; }
-      });
-      // Agrupa por mês (ex: 2026-03)
-      const mesKey = id.match(/mes_(\d{4})_(\d{2})/) ? null : (() => {
-        // Tenta extrair mês da dataIni do período
-        const dataIni = p.dataIni || '';
-        return dataIni ? dataIni.substring(0, 7) : null;
-      })();
-      return { id, label: p.label || id, despR, econR, despL, econL, liquidoR: despR - econR, dataIni: p.dataIni || '', mes: p.dataIni ? p.dataIni.substring(0, 7) : null };
-    });
-
-    const fmtR = v => 'R$ ' + Math.abs(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-    html += '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-top:16px">';
-    html += '<div style="padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">';
-    html += '<div style="font-size:15px;font-weight:700">💰 Evolução Financeira</div>';
-    html += '<div style="display:flex;gap:6px">';
-    html += '<button id="comp-fin-tab-semanal" class="btn btn-primary btn-sm" onclick="compFinSetTab(\'semanal\')">Semanal</button>';
-    html += '<button id="comp-fin-tab-mensal" class="btn btn-secondary btn-sm" onclick="compFinSetTab(\'mensal\')">Mensal</button>';
-    html += '</div></div>';
-    html += '<div id="comp-fin-semanal" style="padding:16px 20px">';
-    html += compFinRenderSemanal(dadosFinanc, fmtR);
-    html += '</div>';
-    html += '<div id="comp-fin-mensal" style="padding:16px 20px;display:none">';
-    html += compFinRenderMensal(dadosFinanc, fmtR);
-    html += '</div>';
-    html += '</div>';
-  }
-
   c.innerHTML=html;
 
   // Adiciona toggle financeiro após render
@@ -1786,6 +1748,66 @@ function renderComparativo() {
     if (btnS) { btnS.className = 'btn btn-sm ' + (tab === 'semanal' ? 'btn-primary' : 'btn-secondary'); }
     if (btnM) { btnM.className = 'btn btn-sm ' + (tab === 'mensal' ? 'btn-primary' : 'btn-secondary'); }
   };
+}
+
+function compSetTab(tab, el) {
+  document.getElementById('comp-tab-periodos').style.display = tab === 'periodos' ? '' : 'none';
+  document.getElementById('comp-tab-financeiro').style.display = tab === 'financeiro' ? '' : 'none';
+  document.querySelectorAll('#page-comparativo .arla-tab').forEach(b => b.classList.remove('active'));
+  if (el) el.classList.add('active');
+  if (tab === 'financeiro') renderCompFinanceiro();
+}
+
+function renderCompFinanceiro() {
+  const c = document.getElementById('comp-financeiro-content');
+  const todosPeriodos = Object.entries(state.semanas).sort((a,b) => (a[1].importedAt||'').localeCompare(b[1].importedAt||''));
+  const precos = dieselGetPrecos();
+  const temPrecos = Object.keys(precos).length > 0;
+  const opF = getSelectedCompOps();
+  const maqCompF = document.getElementById('comp-maq-filter')?.value || '';
+
+  if (!temPrecos) {
+    c.innerHTML = '<div style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.4);border-radius:12px;padding:20px;text-align:center;font-size:13px">⚠️ Configure o preço do diesel por operação em <a href="#" onclick="showPage(\'config\',null);return false" style="color:var(--accent)">⚙️ Configurações</a> para ver a evolução financeira.</div>';
+    return;
+  }
+  if (!todosPeriodos.length) {
+    c.innerHTML = '<div class="empty" style="padding:48px"><div class="empty-icon">📊</div><div class="empty-text">Nenhum período importado ainda</div></div>';
+    return;
+  }
+
+  const fmtR = v => 'R$ ' + Math.abs(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  const dadosFinanc = todosPeriodos.map(([id, p]) => {
+    let rows = p.registros || [];
+    if (opF.size > 0) rows = rows.filter(r => opF.has(r.operacao));
+    if (maqCompF === '__tratores__') rows = rows.filter(r => r.placa && r.placa.toUpperCase().startsWith('TRA'));
+    else if (maqCompF === '__maquinas__') rows = rows.filter(r => r.placa && !r.placa.toUpperCase().startsWith('TRA'));
+    const byMaqF = {};
+    rows.forEach(r => {
+      if (!byMaqF[r.placa]) byMaqF[r.placa] = { l: 0, h: 0, op: r.operacao || getMaquina(r.placa)?.operacao || '' };
+      byMaqF[r.placa].l += r.litros || 0;
+      byMaqF[r.placa].h += r.horas || 0;
+    });
+    let despR = 0, econR = 0, despL = 0, econL = 0;
+    Object.entries(byMaqF).forEach(([placa, d]) => {
+      const maq = getMaquina(placa);
+      const meta = maq?.meta || 0;
+      const media = d.h > 0 ? d.l / d.h : 0;
+      const preco = dieselGetPreco(d.op);
+      if (!meta || !preco) return;
+      if (media > meta) { const dL = (media - meta) * d.h; despL += dL; despR += dL * preco; }
+      else if (media < meta) { const eL = (meta - media) * d.h; econL += eL; econR += eL * preco; }
+    });
+    return { id, label: p.label || id, despR, econR, despL, econL, liquidoR: despR - econR, mes: p.dataIni ? p.dataIni.substring(0, 7) : null };
+  });
+
+  let html = '<div style="display:flex;gap:6px;margin-bottom:16px">';
+  html += '<button id="comp-fin-tab-semanal" class="btn btn-primary btn-sm" onclick="compFinSetTab(\'semanal\')">📅 Semanal</button>';
+  html += '<button id="comp-fin-tab-mensal" class="btn btn-secondary btn-sm" onclick="compFinSetTab(\'mensal\')">📆 Mensal</button>';
+  html += '</div>';
+  html += '<div id="comp-fin-semanal">' + compFinRenderSemanal(dadosFinanc, fmtR) + '</div>';
+  html += '<div id="comp-fin-mensal" style="display:none">' + compFinRenderMensal(dadosFinanc, fmtR) + '</div>';
+  c.innerHTML = html;
 }
 
 function compFinRenderSemanal(dados, fmtR) {
