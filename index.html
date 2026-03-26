@@ -4191,11 +4191,12 @@ function renderExecutivo() {
   }
 
   // KPIs executivos
+  const totalLiquidoR = totalDesperdicadoR - totalEconomiaR;
   html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(185px,1fr));gap:12px;margin-bottom:20px">';
   html += kpiExec('📅 Período', labelPeriodo, '', '#8b90a7');
-  html += kpiExec('💸 Custo de Ineficiência', fmtR(totalDesperdicadoR), 'máquinas acima da meta', 'var(--red)');
-  html += kpiExec('⛽ Litros Desperdiçados', fmtL(totalDesperdicadoL), pctDesperdicio.toFixed(1) + '% do total consumido', 'var(--yellow)');
-  html += kpiExec('✅ Economia Realizada', fmtR(totalEconomiaR), fmtL(totalEconomiaL) + ' poupados vs meta', 'var(--green)');
+  html += kpiExec('🔴 Desperdiçado', fmtR(totalDesperdicadoR), fmtL(totalDesperdicadoL) + ' · ' + pctDesperdicio.toFixed(1) + '% do total', 'var(--red)');
+  html += kpiExec('🟢 Economizado', fmtR(totalEconomiaR), fmtL(totalEconomiaL) + ' poupados vs meta', 'var(--green)');
+  html += kpiExec(totalLiquidoR >= 0 ? '📉 Custo Líquido' : '📈 Saldo Líquido', fmtR(Math.abs(totalLiquidoR)), totalLiquidoR >= 0 ? 'após descontar economias' : 'economia supera o desperdício!', totalLiquidoR > 0 ? 'var(--red)' : 'var(--green)');
   html += kpiExec('🎯 Economia Potencial', fmtR(totalDesperdicadoR), 'se todas atingissem 98%', 'var(--accent)');
   html += '</div>';
 
@@ -4228,24 +4229,36 @@ function renderExecutivo() {
     html += '</div>';
     html += '<div style="font-size:11px;color:var(--text2);margin-top:2px">' + d.maquinas.length + ' máquinas · ' + fmtL(d.totalL) + (d.preco ? ' · R$' + d.preco.toFixed(2) + '/L' : '') + '</div></div></div>';
     html += '<div style="text-align:right">';
-    if (d.desperdicadoR > 0) {
-      html += '<div style="font-size:18px;font-weight:700;color:var(--red)">' + fmtR(d.desperdicadoR) + '</div>';
-      html += '<div style="font-size:11px;color:var(--text2)">' + fmtL(d.desperdicadoL) + ' desperdiçados (' + pct.toFixed(1) + '%)</div>';
-    } else if (naMeta) {
-      html += '<div style="font-size:18px;font-weight:700;color:var(--green)">✅ Meta atingida</div>';
-      if (d.economiaR > 0) html += '<div style="font-size:11px;color:var(--green)">' + fmtR(d.economiaR) + ' economizados (' + fmtL(d.economiaL) + ')</div>';
-      else html += '<div style="font-size:11px;color:var(--text2)">0L desperdiçados</div>';
-    } else {
+    if (semPrecoCfg) {
       html += '<div style="font-size:14px;color:var(--text3)">— sem preço configurado</div>';
+    } else {
+      const liquidoR = d.desperdicadoR - d.economiaR;
+      const liquidoCor = liquidoR > 0 ? 'var(--red)' : liquidoR < 0 ? 'var(--green)' : 'var(--text3)';
+      const liquidoSinal = liquidoR > 0 ? '📉 Líquido: ' : liquidoR < 0 ? '📈 Líquido: ' : '⚖️ Líquido: ';
+      // Linha principal: desperdício
+      if (d.desperdicadoR > 0) {
+        html += '<div style="font-size:13px;color:var(--red);font-weight:600">🔴 ' + fmtR(d.desperdicadoR) + ' desperdiçados <span style="font-weight:400;font-size:11px">(' + fmtL(d.desperdicadoL) + ' · ' + pct.toFixed(1) + '%)</span></div>';
+      } else {
+        html += '<div style="font-size:13px;color:var(--text3)">🔴 R$ 0,00 desperdiçados</div>';
+      }
+      // Linha economia
+      if (d.economiaR > 0) {
+        html += '<div style="font-size:13px;color:var(--green);font-weight:600;margin-top:3px">🟢 ' + fmtR(d.economiaR) + ' economizados <span style="font-weight:400;font-size:11px">(' + fmtL(d.economiaL) + ')</span></div>';
+      } else {
+        html += '<div style="font-size:13px;color:var(--text3);margin-top:3px">🟢 R$ 0,00 economizados</div>';
+      }
+      // Separador + líquido
+      html += '<div style="margin-top:6px;padding-top:5px;border-top:1px solid rgba(42,47,69,.6);font-size:15px;font-weight:700;color:' + liquidoCor + '">' + liquidoSinal + fmtR(Math.abs(liquidoR)) + '</div>';
     }
     html += '</div></div>';
-    if (d.desperdicadoR > 0) {
-      html += '<div style="height:6px;background:var(--bg3);border-radius:3px;overflow:hidden">';
-      html += '<div style="height:100%;width:' + barW + '%;background:var(--red);border-radius:3px;transition:width .4s"></div></div>';
-    } else if (naMeta && d.economiaR > 0 && totalEconomiaR > 0) {
-      const barWE = Math.max((d.economiaR / totalEconomiaR) * 100, 2);
-      html += '<div style="height:6px;background:var(--bg3);border-radius:3px;overflow:hidden">';
-      html += '<div style="height:100%;width:' + barWE + '%;background:var(--green);border-radius:3px;transition:width .4s"></div></div>';
+    if (d.desperdicadoR > 0 || d.economiaR > 0) {
+      const liquidoR = d.desperdicadoR - d.economiaR;
+      const barColor = liquidoR > 0 ? 'var(--red)' : 'var(--green)';
+      const barRef = liquidoR > 0 ? totalDesperdicadoR : totalEconomiaR;
+      const barVal = Math.abs(liquidoR);
+      const barWN = barRef > 0 ? Math.max((barVal / barRef) * 100, 2) : 0;
+      html += '<div style="height:6px;background:var(--bg3);border-radius:3px;overflow:hidden;margin-top:6px">';
+      html += '<div style="height:100%;width:' + barWN + '%;background:' + barColor + ';border-radius:3px;transition:width .4s"></div></div>';
     }
     // Tabela expansível de máquinas desta operação
     const opId = 'exec-op-' + i;
@@ -4290,7 +4303,7 @@ function renderExecutivo() {
   });
 
   // Salva dados para exportação
-  window._execDados = { labelPeriodo, totalDesperdicadoR, totalDesperdicadoL, totalEconomiaR, totalEconomiaL, pctDesperdicio, opsOrdenadas, todasMaq, fmtR, fmtL };
+  window._execDados = { labelPeriodo, totalDesperdicadoR, totalDesperdicadoL, totalEconomiaR, totalEconomiaL, totalLiquidoR, pctDesperdicio, opsOrdenadas, todasMaq: [], fmtR, fmtL };
 }
 
 function kpiExec(label, value, sub, cor) {
