@@ -1798,7 +1798,21 @@ function renderCompFinanceiro() {
       if (media > meta) { const dL = (media - meta) * d.h; despL += dL; despR += dL * preco; }
       else if (media < meta) { const eL = (meta - media) * d.h; econL += eL; econR += eL * preco; }
     });
-    return { id, label: p.label || id, despR, econR, despL, econL, liquidoR: despR - econR, mes: p.dataIni ? p.dataIni.substring(0, 7) : null };
+    // Tenta extrair mês da dataIni ou do label do período
+    let mes = p.dataIni ? p.dataIni.substring(0, 7) : null;
+    if (!mes && (p.label || id)) {
+      const label = (p.label || id).toLowerCase();
+      const meses = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+      const mesesPt = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+      let mesIdx = -1;
+      meses.forEach((m, i) => { if (label.includes(m)) mesIdx = i; });
+      if (mesIdx === -1) mesesPt.forEach((m, i) => { if (label.includes(m)) mesIdx = i; });
+      const anoMatch = label.match(/20\d{2}/);
+      if (mesIdx >= 0 && anoMatch) {
+        mes = anoMatch[0] + '-' + String(mesIdx + 1).padStart(2, '0');
+      }
+    }
+    return { id, label: p.label || id, despR, econR, despL, econL, liquidoR: despR - econR, mes };
   });
 
   let html = '<div style="display:flex;gap:6px;margin-bottom:16px">';
