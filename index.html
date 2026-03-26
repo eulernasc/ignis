@@ -1797,19 +1797,25 @@ function renderCompFinanceiro() {
     });
 
     let despR = 0, econR = 0, despL = 0, econL = 0;
-    const byOpFinanc = {}; // detalhes por operação
+    const byOpFinanc = {};
     Object.entries(byMaqF).forEach(([placa, d]) => {
       const maq = getMaquina(placa);
-      const meta = maq?.meta || 0;
+      const metaMaq = maq?.meta || 0;
       const media = d.h > 0 ? d.l / d.h : 0;
       const preco = dieselGetPreco(d.op);
       const op = (d.op || '').replace(/_/g,' ') || 'Sem Operação';
       if (!byOpFinanc[op]) byOpFinanc[op] = { despR: 0, econR: 0 };
+      // Usa meta cliente se configurada, senão meta da máquina
+      const metaCli = opGetMeta(d.op);
+      const meta = metaCli > 0 ? metaCli : metaMaq;
+      const limiteReal = opGetLimiteReal(d.op, meta); // meta + túnel
       if (!meta || !preco) return;
-      if (media > meta) {
-        const dL = (media - meta) * d.h; despL += dL; despR += dL * preco;
+      if (media > limiteReal && limiteReal > 0) {
+        // Desperdício: acima do limite (meta + túnel)
+        const dL = (media - limiteReal) * d.h; despL += dL; despR += dL * preco;
         byOpFinanc[op].despR += dL * preco;
       } else if (media < meta) {
+        // Economia: abaixo da meta base
         const eL = (meta - media) * d.h; econL += eL; econR += eL * preco;
         byOpFinanc[op].econR += eL * preco;
       }
@@ -4331,6 +4337,34 @@ function dieselGetPreco(op) {
   return p[op] || p['__default__'] || 0;
 }
 
+function opGetConfigs() {
+  try { return JSON.parse(localStorage.getItem('op_configs') || '{}'); } catch(e) { return {}; }
+}
+function opSalvarConfig(op, campo, val) {
+  const cfg = opGetConfigs();
+  if (!cfg[op]) cfg[op] = {};
+  if (val !== '' && parseFloat(val) > 0) cfg[op][campo] = parseFloat(val);
+  else delete cfg[op][campo];
+  if (!Object.keys(cfg[op]).length) delete cfg[op];
+  localStorage.setItem('op_configs', JSON.stringify(cfg));
+}
+function opGetMeta(op) {
+  const cfg = opGetConfigs();
+  return cfg[op]?.meta || cfg['__default__']?.meta || 0;
+}
+function opGetTunel(op) {
+  const cfg = opGetConfigs();
+  return cfg[op]?.tunel ?? cfg['__default__']?.tunel ?? 0;
+}
+// Retorna limite real com túnel: meta * (1 + tunel/100)
+// Menor = melhor, então limite real é o teto tolerado
+function opGetLimiteReal(op, metaMaquina) {
+  const metaOp = opGetMeta(op);
+  const tunel = opGetTunel(op);
+  const base = metaOp > 0 ? metaOp : metaMaquina;
+  return base > 0 ? base * (1 + tunel / 100) : 0;
+}
+
 function dieselPopularOps() {
   const ops = getOperacoes();
   const precos = dieselGetPrecos();
@@ -4421,13 +4455,17 @@ function renderExecutivo() {
     const preco = dieselGetPreco(maq?.operacao || '');
     if (!preco) semPreco.add(op);
     if (!meta) semMeta.add(placa);
-    const efic = meta > 0 && media > 0 ? (meta / media) * 100 : null;
-    const desperdicadoL = meta > 0 && media > meta ? (media - meta) * d.h : 0;
-    // Economia: litros poupados pelas máquinas que consomem ABAIXO da meta
-    const economiaL = meta > 0 && media > 0 && media < meta ? (meta - media) * d.h : 0;
+    // Usa meta cliente da operação se configurada
+    const metaCli = opGetMeta(maq?.operacao || '');
+    const metaFinal = metaCli > 0 ? metaCli : meta;
+    const limiteReal = opGetLimiteReal(maq?.operacao || '', metaFinal);
+    const efic = metaFinal > 0 && media > 0 ? (metaFinal / media) * 100 : null;
+    // Desperdício: acima do limite (meta + túnel). Menor = melhor.
+    const desperdicadoL = metaFinal > 0 && limiteReal > 0 && media > limiteReal ? (media - limiteReal) * d.h : 0;
+    const economiaL = metaFinal > 0 && media > 0 && media < metaFinal ? (metaFinal - media) * d.h : 0;
     const desperdicadoR = desperdicadoL * preco;
     const economiaR = economiaL * preco;
-    const metaBatida = meta > 0 && media > 0 && media <= meta; // está dentro da meta
+    const metaBatida = metaFinal > 0 && media > 0 && media <= limiteReal; // está dentro da meta
     if (!byOp[op]) byOp[op] = { maquinas: [], totalL: 0, totalH: 0, desperdicadoL: 0, desperdicadoR: 0, economiaL: 0, economiaR: 0, maqNaMeta: 0, preco, semPreco: !preco };
     byOp[op].maquinas.push({ placa, meta, media, efic, desperdicadoL, desperdicadoR, economiaL, economiaR, metaBatida, litros: d.l, horas: d.h });
     byOp[op].totalL += d.l;
