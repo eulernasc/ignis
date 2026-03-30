@@ -81,7 +81,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .logo-text{font-size:15px;font-weight:700;letter-spacing:-0.3px;}
 .logo-sub{font-size:11px;color:var(--text2);}
 .nav{padding:16px 12px;flex:1;}
-.nav-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;cursor:pointer;font-size:14px;font-weight:500;color:var(--text2);transition:all .2s;margin-bottom:4px;}
+.nav-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;cursor:pointer;font-size:14px;font-weight:500;color:var(--text2);transition:all .2s;margin-bottom:4px;position:relative;}
 .nav-item:hover{background:var(--bg3);color:var(--text);}
 .nav-item.active{background:linear-gradient(135deg,rgba(79,142,247,.15),rgba(124,92,252,.15));color:var(--accent);border:1px solid rgba(79,142,247,.2);}
 .nav-item .icon{font-size:18px;width:22px;text-align:center;}
@@ -405,6 +405,17 @@ body{overflow-x:hidden;}
 #bar-chart-container::-webkit-scrollbar-track{background:var(--bg3);border-radius:5px;}
 #bar-chart-container::-webkit-scrollbar-thumb{background:var(--border);border-radius:5px;}
 #bar-chart-container::-webkit-scrollbar-thumb:hover{background:var(--text3);}
+
+.sidebar.collapsed .excl-badge{
+  position:absolute;top:4px;right:4px;
+  margin:0;width:14px;height:14px;font-size:9px;
+}
+.sidebar.collapsed .nav-item span[style*="background:var(--yellow)"]{
+  position:absolute;top:4px;right:4px;
+  margin:0;font-size:8px;padding:1px 3px;
+}
+
+.nav-badge-abs{position:absolute;top:-5px;right:-6px;margin:0 !important;width:15px;height:15px;font-size:9px;}
 </style>
 </head>
 <body>
@@ -430,10 +441,10 @@ body{overflow-x:hidden;}
     <div class="nav-item" onclick="showPage('comparativo',this)"><span class="icon">📊</span><span class="nav-label">Comparativo</span></div>
     <div class="nav-item" onclick="showPage('abastecimentos',this)"><span class="icon">⛽</span><span class="nav-label">Abastecimentos</span></div>
     <div class="nav-item" onclick="showPage('maquinas',this)"><span class="icon">🚜</span><span class="nav-label">Máquinas</span></div>
-    <div class="nav-item" id="nav-relatorio" onclick="showPage('relatorio',this)"><span class="icon">📧</span><span class="nav-label">Relatório</span><span id="rel-reincidencia-badge" style="display:none" class="excl-badge">!</span></div>
-    <div class="nav-item" id="nav-excluir" onclick="showPage('excluir',this)"><span class="icon">🗑️</span><span class="nav-label">A Excluir</span><span id="excluir-nav-badge" style="display:none" class="excl-badge">0</span></div>
-    <div class="nav-item" id="nav-arla" onclick="showPage('arla',this)"><span class="icon">🧪</span><span class="nav-label">Controle Arla</span><span id="arla-nav-badge" style="display:none" class="excl-badge">0</span><span id="arla-lembrete-badge" style="display:none;background:var(--yellow);color:#000;font-size:9px;font-weight:700;padding:2px 5px;border-radius:8px;margin-left:4px">⏰</span></div>
-    <div class="nav-item" id="nav-kmcomp" onclick="showPage('kmcomp',this)"><span class="icon">📏</span><span class="nav-label">KM Comparativo</span><span id="kmcomp-nav-badge" style="display:none" class="excl-badge">!</span></div>
+    <div class="nav-item" id="nav-relatorio" onclick="showPage('relatorio',this)"><span class="icon-wrap" style="position:relative;display:inline-flex"><span class="icon">📧</span><span id="rel-reincidencia-badge" style="display:none" class="excl-badge nav-badge-abs">!</span></span><span class="nav-label">Relatório</span></div>
+    <div class="nav-item" id="nav-excluir" onclick="showPage('excluir',this)"><span class="icon-wrap" style="position:relative;display:inline-flex"><span class="icon">🗑️</span><span id="excluir-nav-badge" style="display:none" class="excl-badge nav-badge-abs">0</span></span><span class="nav-label">A Excluir</span></div>
+    <div class="nav-item" id="nav-arla" onclick="showPage('arla',this)"><span class="icon-wrap" style="position:relative;display:inline-flex"><span class="icon">🧪</span><span id="arla-nav-badge" style="display:none" class="excl-badge nav-badge-abs">0</span><span id="arla-lembrete-badge" style="display:none;background:var(--yellow);color:#000;font-size:9px;font-weight:700;padding:2px 5px;border-radius:8px;position:absolute;top:-4px;right:-4px">⏰</span></span><span class="nav-label">Controle Arla</span></div>
+    <div class="nav-item" id="nav-kmcomp" onclick="showPage('kmcomp',this)"><span class="icon-wrap" style="position:relative;display:inline-flex"><span class="icon">📏</span><span id="kmcomp-nav-badge" style="display:none" class="excl-badge nav-badge-abs">!</span></span><span class="nav-label">KM Comparativo</span></div>
     <div class="nav-item" onclick="showPage('config',this)"><span class="icon">⚙️</span><span class="nav-label">Configurações</span></div>
   </nav>
   <div class="sidebar-toggle" id="sidebar-toggle" onclick="toggleSidebarCollapse()" title="Recolher">&#8249;</div>
