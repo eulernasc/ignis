@@ -204,8 +204,8 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .tab-group{display:flex;background:var(--bg2);border:1px solid var(--border);border-radius:8px;overflow:hidden;}
 .tab-btn{padding:8px 16px;font-size:13px;font-weight:500;cursor:pointer;border:none;background:none;color:var(--text2);transition:all .2s;font-family:'DM Sans',sans-serif;}
 .tab-btn.active{background:var(--accent);color:#fff;}
-.kpi-grid{display:flex;flex-wrap:wrap;justify-content:center;gap:10px;margin-bottom:18px;}
-.kpi-card{min-width:155px;flex:1;max-width:220px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:12px 16px;position:relative;overflow:hidden;}
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:10px;margin-bottom:18px;}
+.kpi-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:12px 16px;position:relative;overflow:hidden;}
 .kpi-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--accent),var(--accent2));opacity:0;transition:.3s;}
 .kpi-card:hover::before{opacity:1;}
 .kpi-label{font-size:10px;font-weight:600;letter-spacing:.8px;text-transform:uppercase;color:var(--text2);margin-bottom:4px;}
@@ -346,7 +346,7 @@ tr.selected-row td{background:rgba(79,142,247,.06);}
 ::-webkit-scrollbar-thumb:hover{background:var(--text3);}
 body{overflow-x:hidden;}
 .main{overflow-x:hidden;}
-.kpi-grid{display:flex;flex-wrap:wrap;justify-content:center;gap:10px;margin-bottom:18px;}
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:10px;margin-bottom:18px;}
 .charts-grid{display:grid;grid-template-columns:1fr;gap:16px;margin-bottom:18px;}
 @keyframes spin{to{transform:rotate(360deg)}}
 /* ── A EXCLUIR ── */
@@ -384,6 +384,10 @@ body{overflow-x:hidden;}
 @media(max-width:768px){.arla-kpi-grid{grid-template-columns:1fr 1fr;}.arla-row{grid-template-columns:1fr 80px 80px 90px;}.arla-row>*:nth-child(2){display:none;}}
 
 /* Thick scrollbar for bar chart */
+#op-chart-container::-webkit-scrollbar{height:10px;}
+#op-chart-container::-webkit-scrollbar-track{background:var(--bg3);border-radius:5px;}
+#op-chart-container::-webkit-scrollbar-thumb{background:var(--border);border-radius:5px;}
+#op-chart-container::-webkit-scrollbar-thumb:hover{background:var(--text3);}
 #bar-chart-container::-webkit-scrollbar{height:10px;}
 #bar-chart-container::-webkit-scrollbar-track{background:var(--bg3);border-radius:5px;}
 #bar-chart-container::-webkit-scrollbar-thumb{background:var(--border);border-radius:5px;}
@@ -506,10 +510,10 @@ body{overflow-x:hidden;}
     <!-- Consumo por Operação (linha 1, largura total) -->
     <div class="chart-card" style="margin-bottom:16px;height:280px;display:flex;flex-direction:column;min-height:0;overflow:hidden">
       <div class="chart-title" style="flex-shrink:0">Consumo por Operação — <span id="chart-period-label2">Semanal</span></div>
-      <div id="op-chart-container" style="flex:1;min-height:0;overflow:hidden"><div class="empty"><div class="empty-icon">🏭</div><div class="empty-text">Sem dados</div></div></div>
+      <div id="op-chart-container" style="flex:1;min-height:0;overflow-x:auto;overflow-y:hidden;padding-bottom:12px"><div class="empty"><div class="empty-icon">🏭</div><div class="empty-text">Sem dados</div></div></div>
     </div>
     <!-- Consumo por Máquina (largura total) -->
-    <div class="chart-card" style="margin-bottom:16px;overflow:hidden">
+    <div class="chart-card" style="margin-bottom:16px">
       <div class="chart-title">Consumo por Máquina — <span id="chart-period-label">Semanal</span></div>
       <div id="bar-chart-container" style="overflow-x:auto;overflow-y:hidden;padding-bottom:12px;width:100%"><div class="empty"><div class="empty-icon">📊</div><div class="empty-text">Sem dados</div><div class="empty-sub">Importe um relatório para começar</div></div></div>
       <div class="chart-legend"><div class="legend-item"><div class="legend-dot" style="background:var(--accent)"></div>Litros</div><div class="legend-item"><div class="legend-dot" style="background:var(--yellow)"></div>Média L/h</div></div>
@@ -1597,7 +1601,7 @@ function renderOpChart(list) {
   const maxM=Math.max(...ops.map(o=>byOp[o].horas>0?byOp[o].litros/byOp[o].horas:0));
   const H=120;
 
-  c.innerHTML=`<div style="display:flex;flex-wrap:wrap;justify-content:center;gap:12px;padding:8px 0;width:100%">`+
+  c.innerHTML=`<div style="display:inline-flex;gap:12px;padding:8px 4px 4px;min-width:max-content">`+
     ops.map(op=>{
     const d=byOp[op];
     const l=d.litros, m=d.horas>0?d.litros/d.horas:0;
