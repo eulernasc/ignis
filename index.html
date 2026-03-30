@@ -1650,8 +1650,8 @@ function renderBarChart(list) {
   const H=120;
   const barW=22;
   c.style.height='';
-  c.style.overflowX='';
-  c.style.overflowY='';
+  c.style.overflowX='auto';
+  c.style.overflowY='hidden';
   c.innerHTML=`<div style="display:inline-flex;align-items:flex-end;gap:18px;padding-top:28px;min-width:max-content;padding-bottom:4px">`+pl.map(p=>{
     const l=byMaq[p].litros,m=byMaq[p].horas>0?byMaq[p].litros/byMaq[p].horas:0;
     const maq=getMaquina(p);
