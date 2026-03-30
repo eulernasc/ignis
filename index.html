@@ -50,13 +50,32 @@ window.dispatchEvent(new Event('firebaseReady'));
 }
 *{margin:0;padding:0;box-sizing:border-box;}
 body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;display:flex;}
-.sidebar{width:220px;min-height:100vh;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;position:fixed;left:0;top:0;bottom:0;z-index:100;transition:width .25s ease;overflow:hidden;}
-.sidebar.collapsed{width:0;border-right:none;}
-.sidebar.collapsed .logo,.sidebar.collapsed .nav,.sidebar.collapsed .sync-status{opacity:0;pointer-events:none;}
-.sidebar-toggle{position:fixed;top:50%;left:220px;transform:translateY(-50%);width:18px;height:48px;background:var(--bg2);border:1px solid var(--border);border-radius:0 8px 8px 0;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:11px;z-index:101;transition:left .25s ease,background .2s;color:var(--text2);}
-.sidebar-toggle:hover{background:var(--accent);color:#fff;border-color:var(--accent);}
-.sidebar.collapsed ~ * .sidebar-toggle,.sidebar.collapsed + .sidebar-toggle{left:0;}
-.sidebar.collapsed .sidebar-toggle{left:0;}
+.sidebar{width:220px;min-height:100vh;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;position:fixed;left:0;top:0;bottom:0;z-index:100;transition:width .3s cubic-bezier(.4,0,.2,1);overflow:hidden;will-change:width;}
+.sidebar.collapsed{width:64px;}
+.sidebar.collapsed .logo-text,.sidebar.collapsed .logo-sub{display:none;}
+.sidebar.collapsed .logo{padding:12px 10px;justify-content:center;}
+.sidebar.collapsed .logo-icon{margin:0;flex-shrink:0;}
+.sidebar.collapsed .nav{padding:10px 8px;}
+.sidebar.collapsed .nav-label{display:none;}
+.sidebar.collapsed .nav-item{padding:10px;justify-content:center;gap:0;}
+.sidebar.collapsed .nav-item .icon{width:auto;font-size:20px;}
+.sidebar.collapsed .sync-status{display:none;}
+.sidebar.collapsed .sync-label{display:none;}
+.sidebar-toggle{
+  position:fixed;top:50%;left:220px;transform:translateY(-50%);
+  width:16px;height:52px;
+  background:linear-gradient(180deg,var(--bg3),var(--bg2));
+  border:1px solid var(--border);border-left:none;
+  border-radius:0 10px 10px 0;
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;font-size:10px;z-index:200;
+  transition:left .3s cubic-bezier(.4,0,.2,1),background .2s,box-shadow .2s;
+  color:var(--text3);box-shadow:3px 0 12px rgba(0,0,0,.3);
+}
+.sidebar-toggle::after{content:'';position:absolute;inset:0;border-radius:0 10px 10px 0;background:linear-gradient(to right,rgba(79,142,247,0),rgba(79,142,247,.06));opacity:0;transition:.2s;}
+.sidebar-toggle:hover{color:var(--accent);box-shadow:3px 0 18px rgba(79,142,247,.25);}
+.sidebar-toggle:hover::after{opacity:1;}
+.sidebar.collapsed .sidebar-toggle{left:64px;}
 .logo{padding:24px 20px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border);}
 .logo-icon{width:38px;height:38px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;}
 .logo-text{font-size:15px;font-weight:700;letter-spacing:-0.3px;}
@@ -72,8 +91,8 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .sync-dot.syncing{background:var(--yellow);animation:pulse 1s infinite;}
 .sync-dot.error{background:var(--red);}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
-.main{margin-left:220px;flex:1;padding:22px 28px;min-height:100vh;transition:margin-left .25s ease;}
-.main.collapsed{margin-left:56px;}
+.main{margin-left:220px;flex:1;padding:22px 28px;min-height:100vh;transition:margin-left .3s cubic-bezier(.4,0,.2,1);will-change:margin-left;}
+.main.collapsed{margin-left:64px;}
 /* ── MOBILE TOPBAR ── */
 .mob-topbar{display:none;position:fixed;top:0;left:0;right:0;height:54px;background:var(--bg2);border-bottom:1px solid var(--border);z-index:200;align-items:center;padding:0 16px;gap:12px;}
 .mob-logo{display:flex;align-items:center;gap:8px;flex:1;}
@@ -417,7 +436,7 @@ body{overflow-x:hidden;}
     <div class="nav-item" id="nav-kmcomp" onclick="showPage('kmcomp',this)"><span class="icon">📏</span><span class="nav-label">KM Comparativo</span><span id="kmcomp-nav-badge" style="display:none" class="excl-badge">!</span></div>
     <div class="nav-item" onclick="showPage('config',this)"><span class="icon">⚙️</span><span class="nav-label">Configurações</span></div>
   </nav>
-  <div class="sidebar-toggle" id="sidebar-toggle" onclick="toggleSidebarCollapse()" title="Recolher/Expandir">◀</div>
+  <div class="sidebar-toggle" id="sidebar-toggle" onclick="toggleSidebarCollapse()" title="Recolher">&#8249;</div>
   <div class="sync-status">
     <div class="sync-dot" id="sync-dot"></div>
     <span id="sync-label" class="sync-label"><span class="sync-label-text" id="sync-label-text" style="color:var(--text2)">Sem sincronização</span></span>
@@ -5288,8 +5307,8 @@ function toggleSidebarCollapse() {
   const btn = document.getElementById('sidebar-toggle');
   const collapsed = sidebar.classList.toggle('collapsed');
   main.classList.toggle('collapsed', collapsed);
-  btn.style.left = collapsed ? '0px' : '220px';
-  btn.textContent = collapsed ? '▶' : '◀';
+  btn.style.left = collapsed ? '64px' : '220px';
+  btn.innerHTML = collapsed ? '&#8250;' : '&#8249;';
   btn.title = collapsed ? 'Expandir' : 'Recolher';
   localStorage.setItem('sidebar_collapsed', collapsed ? '1' : '0');
 }
@@ -5302,7 +5321,7 @@ function toggleSidebarCollapse() {
     const btn = document.getElementById('sidebar-toggle');
     if (sidebar) sidebar.classList.add('collapsed');
     if (main) main.classList.add('collapsed');
-    if (btn) { btn.style.left = '0px'; btn.textContent = '▶'; btn.title = 'Expandir'; }
+    if (btn) { btn.style.left = '64px'; btn.innerHTML = '&#8250;'; btn.title = 'Expandir'; }
   }
 })();
 
