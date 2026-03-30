@@ -382,6 +382,12 @@ body{overflow-x:hidden;}
 .arla-op-header{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:12px 16px;margin-bottom:4px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;}
 .arla-egr-tag{display:inline-block;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:3px 8px;font-size:11px;font-family:monospace;margin:3px;}
 @media(max-width:768px){.arla-kpi-grid{grid-template-columns:1fr 1fr;}.arla-row{grid-template-columns:1fr 80px 80px 90px;}.arla-row>*:nth-child(2){display:none;}}
+
+/* Thick scrollbar for bar chart */
+#bar-chart-container::-webkit-scrollbar{height:10px;}
+#bar-chart-container::-webkit-scrollbar-track{background:var(--bg3);border-radius:5px;}
+#bar-chart-container::-webkit-scrollbar-thumb{background:var(--border);border-radius:5px;}
+#bar-chart-container::-webkit-scrollbar-thumb:hover{background:var(--text3);}
 </style>
 </head>
 <body>
@@ -505,7 +511,7 @@ body{overflow-x:hidden;}
     <!-- Consumo por Máquina (largura total) -->
     <div class="chart-card" style="margin-bottom:16px">
       <div class="chart-title">Consumo por Máquina — <span id="chart-period-label">Semanal</span></div>
-      <div id="bar-chart-container" style="overflow-x:hidden"><div class="empty"><div class="empty-icon">📊</div><div class="empty-text">Sem dados</div><div class="empty-sub">Importe um relatório para começar</div></div></div>
+      <div id="bar-chart-container" style="overflow-x:auto;overflow-y:hidden;padding-bottom:4px"><div class="empty"><div class="empty-icon">📊</div><div class="empty-text">Sem dados</div><div class="empty-sub">Importe um relatório para começar</div></div></div>
       <div class="chart-legend"><div class="legend-item"><div class="legend-dot" style="background:var(--accent)"></div>Litros</div><div class="legend-item"><div class="legend-dot" style="background:var(--yellow)"></div>Média L/h</div></div>
     </div>
     <!-- Ranking abaixo -->
@@ -1591,7 +1597,7 @@ function renderOpChart(list) {
   const maxM=Math.max(...ops.map(o=>byOp[o].horas>0?byOp[o].litros/byOp[o].horas:0));
   const H=120;
 
-  c.innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;padding:8px 0;width:100%">`+
+  c.innerHTML=`<div style="display:flex;flex-wrap:wrap;justify-content:center;gap:12px;padding:8px 0;width:100%">`+
     ops.map(op=>{
     const d=byOp[op];
     const l=d.litros, m=d.horas>0?d.litros/d.horas:0;
@@ -1642,7 +1648,7 @@ function renderBarChart(list) {
   c.style.height='';
   c.style.overflowX='';
   c.style.overflowY='';
-  c.innerHTML=`<div style="display:flex;flex-wrap:wrap;align-items:flex-end;gap:14px;padding-top:20px;width:100%">`+pl.map(p=>{
+  c.innerHTML=`<div style="display:inline-flex;align-items:flex-end;gap:18px;padding-top:28px;min-width:max-content">`+pl.map(p=>{
     const l=byMaq[p].litros,m=byMaq[p].horas>0?byMaq[p].litros/byMaq[p].horas:0;
     const maq=getMaquina(p);
     const meta=maq?.meta||0;
