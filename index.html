@@ -392,6 +392,7 @@ tr.selected-row td{background:rgba(79,142,247,.06);}
     <div class="nav-item" id="nav-relatorio" onclick="showPage('relatorio',this)"><span class="icon">📧</span>Relatório<span id="rel-reincidencia-badge" style="display:none" class="excl-badge">!</span></div>
     <div class="nav-item" id="nav-excluir" onclick="showPage('excluir',this)"><span class="icon">🗑️</span>A Excluir<span id="excluir-nav-badge" style="display:none" class="excl-badge">0</span></div>
     <div class="nav-item" id="nav-arla" onclick="showPage('arla',this)"><span class="icon">🧪</span>Controle Arla<span id="arla-nav-badge" style="display:none" class="excl-badge">0</span><span id="arla-lembrete-badge" style="display:none;background:var(--yellow);color:#000;font-size:9px;font-weight:700;padding:2px 5px;border-radius:8px;margin-left:4px">⏰</span></div>
+    <div class="nav-item" id="nav-kmcomp" onclick="showPage('kmcomp',this)"><span class="icon">📏</span>KM Comparativo<span id="kmcomp-nav-badge" style="display:none" class="excl-badge">!</span></div>
     <div class="nav-item" onclick="showPage('config',this)"><span class="icon">⚙️</span>Configurações</div>
   </nav>
   <div class="sync-status">
@@ -423,6 +424,9 @@ tr.selected-row td{background:rgba(79,142,247,.06);}
     </div>
     <div class="mob-nav-item" id="mob-nav-arla" onclick="showPage('arla',this);updateMobNav('arla')">
       <span class="mob-icon">🧪</span>Arla
+    </div>
+    <div class="mob-nav-item" id="mob-nav-kmcomp" onclick="showPage('kmcomp',this);updateMobNav('kmcomp')">
+      <span class="mob-icon">📏</span>KM
     </div>
     <div class="mob-nav-item" id="mob-nav-config" onclick="showPage('config',this);updateMobNav('config')">
       <span class="mob-icon">⚙️</span>Config
@@ -969,6 +973,96 @@ tr.selected-row td{background:rgba(79,142,247,.06);}
 
 </main>
 
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<!-- KM COMPARATIVO PAGE -->
+<!-- ═══════════════════════════════════════════════════════════════════════ -->
+<style>
+.km-upload-box{border:2px dashed var(--border);border-radius:12px;padding:28px;text-align:center;cursor:pointer;transition:.2s;background:var(--bg3);}
+.km-upload-box:hover{border-color:var(--accent);background:rgba(79,142,247,.04);}
+.km-upload-box.loaded{border-color:var(--green);border-style:solid;background:rgba(34,197,94,.04);}
+.km-status-ok{background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.3);color:var(--green);}
+.km-status-atencao{background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.3);color:var(--yellow);}
+.km-status-alerta{background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);color:var(--red);}
+.km-status-sem{background:rgba(124,92,252,.12);border:1px solid rgba(124,92,252,.3);color:var(--accent2);}
+</style>
+
+<div id="page-kmcomp" class="page" style="display:none">
+  <div class="page-header">
+    <div class="page-header-title">
+      <div class="page-title">📏 KM Comparativo</div>
+      <div class="page-sub">Cruza o KM produtivo do cliente com o KM do nosso sistema</div>
+    </div>
+    <div class="header-actions">
+      <button class="btn btn-secondary btn-sm" onclick="kmReset()">🔄 Novo Comparativo</button>
+      <button class="btn btn-secondary btn-sm" id="btn-km-export" style="display:none" onclick="kmExportarExcel()">⬇️ Exportar Excel</button>
+      <button class="btn btn-primary btn-sm" id="btn-km-email" style="display:none" onclick="kmCopiarEmail()">📧 Copiar E-mail de Alerta</button>
+    </div>
+  </div>
+
+  <!-- Config de margem -->
+  <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px 20px;margin-bottom:16px;display:flex;align-items:center;gap:20px;flex-wrap:wrap">
+    <div style="display:flex;align-items:center;gap:10px">
+      <label style="font-size:13px;font-weight:600;color:var(--text2)">Margem mínima obrigatória:</label>
+      <input type="number" id="km-margem-min" value="0" min="0" max="50" step="0.5"
+        style="width:70px;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:8px;font-size:13px;text-align:center;font-family:monospace">
+      <span style="font-size:13px;color:var(--text2)">% acima do cliente</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <label style="font-size:13px;font-weight:600;color:var(--text2)">Zona de atenção:</label>
+      <input type="number" id="km-margem-atencao" value="5" min="0" max="50" step="0.5"
+        style="width:70px;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:8px;font-size:13px;text-align:center;font-family:monospace">
+      <span style="font-size:13px;color:var(--text2)">% acima (abaixo disso = ⚠️)</span>
+    </div>
+    <div style="font-size:11px;color:var(--text3);flex:1">💡 Deixe 0% até definir a margem com seus chefes</div>
+  </div>
+
+  <!-- Upload dos dois arquivos -->
+  <div id="km-upload-section">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+
+      <!-- Nosso sistema -->
+      <div>
+        <div style="font-size:13px;font-weight:700;margin-bottom:10px;color:var(--accent)">📂 Nosso Sistema</div>
+        <div class="km-upload-box" id="km-box-sistema" onclick="document.getElementById('km-file-sistema').click()">
+          <div style="font-size:28px;margin-bottom:8px">🗂️</div>
+          <div style="font-size:14px;font-weight:600;margin-bottom:4px">Carregar relatório do sistema</div>
+          <div style="font-size:12px;color:var(--text2)">Planilha ExportProcess (.xlsx)</div>
+          <div id="km-sistema-label" style="font-size:12px;color:var(--green);margin-top:8px;display:none"></div>
+        </div>
+        <input type="file" id="km-file-sistema" accept=".xlsx,.xls" style="display:none" onchange="kmCarregarSistema(this)">
+      </div>
+
+      <!-- Cliente -->
+      <div>
+        <div style="font-size:13px;font-weight:700;margin-bottom:10px;color:var(--accent2)">📋 Planilha do Cliente</div>
+        <div class="km-upload-box" id="km-box-cliente" onclick="document.getElementById('km-file-cliente').click()">
+          <div style="font-size:28px;margin-bottom:8px">📊</div>
+          <div style="font-size:14px;font-weight:600;margin-bottom:4px">Carregar planilha padrão do cliente</div>
+          <div style="font-size:12px;color:var(--text2)">Colunas: Placa | KM Produtivo</div>
+          <div id="km-cliente-label" style="font-size:12px;color:var(--green);margin-top:8px;display:none"></div>
+        </div>
+        <input type="file" id="km-file-cliente" accept=".xlsx,.xls" style="display:none" onchange="kmCarregarCliente(this)">
+        <div style="margin-top:8px;display:flex;gap:8px">
+          <button class="btn btn-secondary btn-sm" style="width:100%" onclick="kmBaixarModeloCliente()">⬇️ Baixar planilha modelo do cliente</button>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-bottom:16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+      <div class="form-group" style="margin:0;flex:1;min-width:200px">
+        <label class="form-label">Identificação do comparativo</label>
+        <input type="text" class="form-input" id="km-label" placeholder="Ex: CENIBRA — Março 2026">
+      </div>
+      <button class="btn btn-primary" id="btn-km-comparar" style="margin-top:18px;padding:12px 28px" onclick="kmComparar()" disabled>
+        🔍 Comparar
+      </button>
+    </div>
+  </div>
+
+  <!-- Resultado -->
+  <div id="km-resultado" style="display:none"></div>
+</div>
+
 <!-- MODAL SENHA -->
 <div class="modal-overlay" id="modal-senha">
   <div class="modal" style="max-width:360px">
@@ -1238,6 +1332,7 @@ function showPage(page,el) {
   if(page==='config') { dieselPopularOps(); }
   if(page==='excluir') { onShowExcluir(); }
   if(page==='arla') { arlaOnShow(); }
+  if(page==='kmcomp') { /* nothing extra needed on show */ }
 }
 
 function setTab(tab) {
@@ -4737,6 +4832,408 @@ function exportarExecutivoEmail() {
   }).catch(() => showToast('Erro ao copiar', 'error'));
   const assunto = encodeURIComponent('FuelTracker — Relatório Executivo · ' + labelPeriodo);
   setTimeout(() => window.open('mailto:?subject=' + assunto, '_blank'), 500);
+}
+
+// ── KM COMPARATIVO ───────────────────────────────────────────────────────────
+window._kmState = { sistema: null, cliente: null };
+
+function kmCheckReady() {
+  const ok = window._kmState.sistema && window._kmState.cliente;
+  document.getElementById('btn-km-comparar').disabled = !ok;
+  if (ok) kmMostrarMargensOps();
+}
+
+function kmMostrarMargensOps() {
+  const sistema = window._kmState.sistema || {};
+  const cliente = window._kmState.cliente || {};
+  // Coleta operações de ambas as fontes
+  const ops = new Set();
+  Object.values(sistema).forEach(d => { if (d.operacao) ops.add(d.operacao.replace(/_/g,' ')); });
+  Object.values(cliente).forEach(d => { if (d.operacao) ops.add(d.operacao); });
+  if (!ops.size) return; // sem operações identificadas — usa margem global
+  const existing = window._kmState.margensOp || {};
+  let html = '<div style="background:var(--bg2);border:1px solid rgba(245,158,11,.4);border-radius:12px;padding:16px 20px;margin-bottom:16px">';
+  html += '<div style="font-size:14px;font-weight:700;margin-bottom:4px">⚙️ Margem por Operação</div>';
+  html += '<div style="font-size:12px;color:var(--text2);margin-bottom:14px">' + ops.size + ' operação(ões) identificada(s). Defina a margem mínima para cada uma (0% = sem margem definida).</div>';
+  html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:10px">';
+  [...ops].sort().forEach(op => {
+    const prev = existing[op] || { min: 0, atencao: 5 };
+    html += '<div style="background:var(--bg3);border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">';
+    html += '<span style="flex:1;font-size:13px;font-weight:600;min-width:150px">' + op + '</span>';
+    html += '<div style="display:flex;align-items:center;gap:6px">';
+    html += '<span style="font-size:11px;color:var(--text3)">Mínima</span>';
+    html += '<input type="number" class="km-op-margem-min" data-op="' + op + '" value="' + prev.min + '" min="0" max="50" step="0.5" style="width:60px;background:var(--bg2);border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:6px;font-size:12px;text-align:center;font-family:monospace">';
+    html += '<span style="font-size:11px;color:var(--text3)">%</span>';
+    html += '</div>';
+    html += '<div style="display:flex;align-items:center;gap:6px">';
+    html += '<span style="font-size:11px;color:var(--text3)">Atenção</span>';
+    html += '<input type="number" class="km-op-margem-atencao" data-op="' + op + '" value="' + prev.atencao + '" min="0" max="50" step="0.5" style="width:60px;background:var(--bg2);border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:6px;font-size:12px;text-align:center;font-family:monospace">';
+    html += '<span style="font-size:11px;color:var(--text3)">%</span>';
+    html += '</div>';
+    html += '</div>';
+  });
+  html += '</div></div>';
+  
+  let el = document.getElementById('km-margem-ops-container');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'km-margem-ops-container';
+    const uploadSection = document.getElementById('km-upload-section');
+    const btn = uploadSection.querySelector('#btn-km-comparar').parentElement;
+    uploadSection.insertBefore(el, btn);
+  }
+  el.innerHTML = html;
+  window._kmState._ops = [...ops];
+}
+
+function kmCarregarSistema(input) {
+  const file = input.files[0]; if (!file) return;
+  const r = new FileReader();
+  r.onload = e => {
+    try {
+      const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const raw = XLSX.utils.sheet_to_json(ws, { defval: '' });
+      // Agrupa por placa somando KM (horas = km neste contexto)
+      const byPlaca = {};
+      raw.forEach(row => {
+        const placa = String(row['Placa'] || row['placa'] || '').trim().toUpperCase();
+        const km = parseFloat(row['Km Real'] || row['km_real'] || row['KM Real'] || row['Horas'] || row['horas'] || 0);
+        const op = String(row['Operação'] || row['operacao'] || row['Operacao'] || '').trim();
+        if (!placa || !placa.match(/[A-Z]{2,}/)) return;
+        if (!byPlaca[placa]) byPlaca[placa] = { km: 0, operacao: op };
+        byPlaca[placa].km += km;
+        if (!byPlaca[placa].operacao && op) byPlaca[placa].operacao = op;
+      });
+      window._kmState.sistema = byPlaca;
+      const count = Object.keys(byPlaca).length;
+      const box = document.getElementById('km-box-sistema');
+      const lbl = document.getElementById('km-sistema-label');
+      box.classList.add('loaded');
+      lbl.style.display = '';
+      lbl.textContent = '✅ ' + count + ' placas carregadas — ' + file.name;
+      showToast('Sistema carregado: ' + count + ' placas', 'success');
+      kmCheckReady();
+    } catch(e) { showToast('Erro ao ler arquivo do sistema', 'error'); console.error(e); }
+  };
+  r.readAsArrayBuffer(file);
+  input.value = '';
+}
+
+function kmCarregarCliente(input) {
+  const file = input.files[0]; if (!file) return;
+  const r = new FileReader();
+  r.onload = e => {
+    try {
+      const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const raw = XLSX.utils.sheet_to_json(ws, { defval: '' });
+      const byPlaca = {};
+      raw.forEach(row => {
+        const placa = String(row['Placa'] || row['PLACA'] || row['placa'] || '').trim().toUpperCase();
+        const km = parseFloat(row['KM Produtivo'] || row['km_produtivo'] || row['KM'] || row['km'] || row['Km'] || 0);
+        const op = String(row['Operação'] || row['Operacao'] || row['operacao'] || row['OPERAÇÃO'] || '').trim();
+        if (!placa || placa.length < 4) return;
+        if (!byPlaca[placa]) byPlaca[placa] = { km: 0, operacao: op };
+        byPlaca[placa].km += km;
+        if (!byPlaca[placa].operacao && op) byPlaca[placa].operacao = op;
+      });
+      window._kmState.cliente = byPlaca;
+      const count = Object.keys(byPlaca).length;
+      const box = document.getElementById('km-box-cliente');
+      const lbl = document.getElementById('km-cliente-label');
+      box.classList.add('loaded');
+      lbl.style.display = '';
+      lbl.textContent = '✅ ' + count + ' placas carregadas — ' + file.name;
+      showToast('Cliente carregado: ' + count + ' placas', 'success');
+      kmCheckReady();
+    } catch(e) { showToast('Erro ao ler planilha do cliente', 'error'); console.error(e); }
+  };
+  r.readAsArrayBuffer(file);
+  input.value = '';
+}
+
+function kmBaixarModeloCliente() {
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet([
+    ['Placa', 'KM Produtivo', 'Operação'],
+    ['ABC1D23', 1250.5, 'CENIBRA COCAIS'],
+    ['DEF4E56', 980.0, 'CENIBRA COCAIS'],
+    ['GHI7F89', 1540.0, 'SUZANO ARACRUZ'],
+  ]);
+  ws['!cols'] = [{ wch: 15 }, { wch: 18 }, { wch: 28 }];
+  XLSX.utils.book_append_sheet(wb, ws, 'KM Cliente');
+  XLSX.writeFile(wb, 'modelo_km_cliente.xlsx');
+  showToast('Modelo baixado!', 'success');
+}
+
+function kmComparar() {
+  const sistema = window._kmState.sistema;
+  const cliente = window._kmState.cliente;
+  if (!sistema || !cliente) return;
+
+  // Lê margens por operação dos inputs dinâmicos
+  const margensOp = {};
+  document.querySelectorAll('.km-op-margem-min').forEach(inp => {
+    const op = inp.dataset.op;
+    if (!margensOp[op]) margensOp[op] = {};
+    margensOp[op].min = parseFloat(inp.value) || 0;
+  });
+  document.querySelectorAll('.km-op-margem-atencao').forEach(inp => {
+    const op = inp.dataset.op;
+    if (!margensOp[op]) margensOp[op] = {};
+    margensOp[op].atencao = parseFloat(inp.value) || 5;
+  });
+  window._kmState.margensOp = margensOp;
+  // Fallback global (se não houver operações identificadas)
+  const margemMinGlobal = parseFloat(document.getElementById('km-margem-min').value) || 0;
+  const margemAtencaoGlobal = parseFloat(document.getElementById('km-margem-atencao').value) || 5;
+  const label = document.getElementById('km-label').value.trim() || new Date().toLocaleDateString('pt-BR');
+  const fmtKm = v => v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
+  // Todas as placas únicas
+  const todasPlacas = new Set([...Object.keys(sistema), ...Object.keys(cliente)]);
+
+  const resultados = [];
+  const semNoSistema = []; // tem no cliente mas não no sistema
+  const semNoCliente = []; // tem no sistema mas não no cliente
+
+  todasPlacas.forEach(placa => {
+    const temSistema = sistema[placa] !== undefined;
+    const temCliente = cliente[placa] !== undefined;
+
+    if (!temSistema) { const kmC = typeof cliente[placa] === 'object' ? cliente[placa].km : cliente[placa]; semNoSistema.push({ placa, kmCliente: kmC }); return; }
+    if (!temCliente) { semNoCliente.push({ placa, kmSistema: sistema[placa].km, operacao: (sistema[placa].operacao || '').replace(/_/g,' ') }); return; }
+
+    const kmS = sistema[placa].km;
+    const kmC = typeof cliente[placa] === 'object' ? cliente[placa].km : cliente[placa];
+    // Operação: prioridade sistema > cliente
+    const op = (sistema[placa].operacao || (typeof cliente[placa] === 'object' ? cliente[placa].operacao : '') || '').replace(/_/g,' ');
+    const diff = kmS - kmC;
+    const pct = kmC > 0 ? ((kmS - kmC) / kmC * 100) : null;
+    // Usa margem da operação ou fallback global
+    const mOp = margensOp[op] || {};
+    const margemMin = mOp.min !== undefined ? mOp.min : margemMinGlobal;
+    const margemAtencao = mOp.atencao !== undefined ? mOp.atencao : margemAtencaoGlobal;
+
+    let status;
+    if (pct === null) { status = 'sem_base'; }
+    else if (pct < margemMin) { status = 'alerta'; }
+    else if (pct < margemAtencao) { status = 'atencao'; }
+    else { status = 'ok'; }
+
+    resultados.push({ placa, kmSistema: kmS, kmCliente: kmC, diff, pct, status, operacao: op });
+  });
+
+  // Salva para exportação e e-mail
+  window._kmResultado = { resultados, semNoSistema, semNoCliente, label, margemMin, margemAtencao };
+
+  // Ordena: alertas primeiro, depois atenção, ok, sem_base
+  const ordem = { alerta: 0, atencao: 1, sem_base: 2, ok: 3 };
+  resultados.sort((a, b) => (ordem[a.status] ?? 4) - (ordem[b.status] ?? 4) || a.placa.localeCompare(b.placa));
+
+  const alertas = resultados.filter(r => r.status === 'alerta');
+  const atencao = resultados.filter(r => r.status === 'atencao');
+  const ok = resultados.filter(r => r.status === 'ok');
+
+  // Badge nav
+  const totalProblemas = alertas.length + semNoSistema.length;
+  const badge = document.getElementById('kmcomp-nav-badge');
+  if (badge) { badge.textContent = totalProblemas; badge.style.display = totalProblemas ? '' : 'none'; }
+
+  // KPIs
+  let html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:20px">';
+  html += kpiExec('📅 Comparativo', label, new Date().toLocaleDateString('pt-BR'), '#8b90a7');
+  html += kpiExec('✅ OK', ok.length + '', 'acima da margem de atenção', 'var(--green)');
+  const opsComMargem = Object.keys(margensOp).length; html += kpiExec('⚠️ Atenção', atencao.length + '', opsComMargem ? 'margem por operação configurada' : 'margem baixa (' + margemMinGlobal + '–' + margemAtencaoGlobal + '%)', 'var(--yellow)');
+  html += kpiExec('🔴 Alerta', alertas.length + '', 'nosso KM menor que o cliente', 'var(--red)');
+  html += kpiExec('🔍 Sem Correspondência', (semNoSistema.length + semNoCliente.length) + '', semNoSistema.length + ' só no cliente · ' + semNoCliente.length + ' só no sistema', 'var(--accent2)');
+  html += '</div>';
+
+  // Alertas de placas sem correspondência
+  if (semNoSistema.length || semNoCliente.length) {
+    html += '<div style="background:rgba(124,92,252,.1);border:1px solid rgba(124,92,252,.4);border-radius:12px;padding:16px 20px;margin-bottom:16px">';
+    html += '<div style="font-size:14px;font-weight:700;color:var(--accent2);margin-bottom:12px">🔍 Placas sem correspondência</div>';
+    if (semNoSistema.length) {
+      html += '<div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:6px">📋 Presentes no cliente mas NÃO no nosso sistema (' + semNoSistema.length + '):</div>';
+      html += '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">';
+      semNoSistema.forEach(r => {
+        html += '<span style="background:rgba(239,68,68,.15);color:var(--red);border:1px solid rgba(239,68,68,.3);border-radius:6px;padding:3px 9px;font-family:monospace;font-size:12px;font-weight:700">' + r.placa + ' <span style="font-weight:400;font-size:10px">' + fmtKm(r.kmCliente) + ' km</span></span>';
+      });
+      html += '</div>';
+    }
+    if (semNoCliente.length) {
+      html += '<div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:6px">🗂️ Presentes no nosso sistema mas NÃO na planilha do cliente (' + semNoCliente.length + '):</div>';
+      html += '<div style="display:flex;flex-wrap:wrap;gap:6px">';
+      semNoCliente.forEach(r => {
+        html += '<span style="background:rgba(79,142,247,.15);color:var(--accent);border:1px solid rgba(79,142,247,.3);border-radius:6px;padding:3px 9px;font-family:monospace;font-size:12px;font-weight:700">' + r.placa + ' <span style="font-weight:400;font-size:10px">' + fmtKm(r.kmSistema) + ' km</span></span>';
+      });
+      html += '</div>';
+    }
+    html += '</div>';
+  }
+
+  // Tabela de resultados
+  html += '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;overflow:hidden">';
+  html += '<div style="padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">';
+  html += '<div style="font-size:15px;font-weight:700">📊 Resultado por Placa</div>';
+  html += '<div style="display:flex;gap:8px;align-items:center">';
+  html += '<input type="text" class="filter-input" id="km-busca" placeholder="🔍 Buscar placa..." oninput="kmFiltrarTabela()" style="padding:6px 12px;font-size:13px">';
+  html += '<select class="filter-select" id="km-filtro-status" onchange="kmFiltrarTabela()" style="font-size:13px">';
+  html += '<option value="">Todos</option><option value="alerta">🔴 Alerta</option><option value="atencao">⚠️ Atenção</option><option value="ok">✅ OK</option></select>';
+  html += '</div></div>';
+  html += '<div style="overflow-x:auto"><table id="km-tabela"><thead><tr>';
+  html += '<th>Placa</th><th>Operação</th><th style="text-align:center">KM Sistema</th><th style="text-align:center">KM Cliente</th><th style="text-align:center">Diferença</th><th style="text-align:center">Variação %</th><th style="text-align:center">Status</th>';
+  html += '</tr></thead><tbody id="km-tbody">';
+
+  resultados.forEach(r => {
+    const statusMap = {
+      ok: ['km-status-ok', '✅ OK'],
+      atencao: ['km-status-atencao', '⚠️ Atenção'],
+      alerta: ['km-status-alerta', '🔴 Alerta'],
+      sem_base: ['km-status-sem', '— Sem base']
+    };
+    const [cls, txt] = statusMap[r.status] || ['', '—'];
+    const diffCor = r.diff >= 0 ? 'var(--green)' : 'var(--red)';
+    const pctTxt = r.pct !== null ? (r.pct >= 0 ? '+' : '') + r.pct.toFixed(1) + '%' : '—';
+    const pctCor = r.pct === null ? 'var(--text3)' : r.pct >= margemAtencao ? 'var(--green)' : r.pct >= margemMin ? 'var(--yellow)' : 'var(--red)';
+    html += '<tr data-status="' + r.status + '" data-placa="' + r.placa + '">';
+    html += '<td><span class="placa-tag">' + r.placa + '</span></td>';
+    html += '<td style="font-size:12px;color:var(--text2)">' + (r.operacao || '—') + '</td>';
+    html += '<td style="text-align:center;font-family:monospace;color:var(--accent);font-weight:600">' + fmtKm(r.kmSistema) + '</td>';
+    html += '<td style="text-align:center;font-family:monospace;color:var(--accent2)">' + fmtKm(r.kmCliente) + '</td>';
+    html += '<td style="text-align:center;font-family:monospace;font-weight:700;color:' + diffCor + '">' + (r.diff >= 0 ? '+' : '') + fmtKm(r.diff) + '</td>';
+    html += '<td style="text-align:center;font-family:monospace;font-weight:700;color:' + pctCor + '">' + pctTxt + '</td>';
+    html += '<td style="text-align:center"><span style="display:inline-block;padding:3px 12px;border-radius:20px;font-size:11px;font-weight:700" class="' + cls + '">' + txt + '</span></td>';
+    html += '</tr>';
+  });
+
+  html += '</tbody></table></div></div>';
+
+  document.getElementById('km-resultado').innerHTML = html;
+  document.getElementById('km-resultado').style.display = '';
+  document.getElementById('btn-km-export').style.display = '';
+  document.getElementById('btn-km-email').style.display = alertas.length ? '' : 'none';
+}
+
+function kmFiltrarTabela() {
+  const busca = (document.getElementById('km-busca')?.value || '').toLowerCase();
+  const filtroStatus = document.getElementById('km-filtro-status')?.value || '';
+  const rows = document.querySelectorAll('#km-tbody tr');
+  rows.forEach(tr => {
+    const placa = (tr.dataset.placa || '').toLowerCase();
+    const status = tr.dataset.status || '';
+    const visPlaca = !busca || placa.includes(busca);
+    const visStatus = !filtroStatus || status === filtroStatus;
+    tr.style.display = visPlaca && visStatus ? '' : 'none';
+  });
+}
+
+function kmExportarExcel() {
+  const { resultados, semNoSistema, semNoCliente, label, margemMin, margemAtencao } = window._kmResultado || {};
+  if (!resultados) return;
+
+  const wb = XLSX.utils.book_new();
+  const fmtKm = v => parseFloat(v.toFixed(1));
+
+  // Aba principal
+  const rows = [['Placa', 'Operação', 'KM Sistema', 'KM Cliente', 'Diferença', 'Variação %', 'Status']];
+  resultados.forEach(r => {
+    const statusMap = { ok: '✅ OK', atencao: '⚠️ Atenção', alerta: '🔴 Alerta', sem_base: '— Sem base' };
+    rows.push([r.placa, r.operacao || '', fmtKm(r.kmSistema), fmtKm(r.kmCliente), fmtKm(r.diff), r.pct !== null ? parseFloat(r.pct.toFixed(1)) : '', statusMap[r.status] || '']);
+  });
+  const wsMain = XLSX.utils.aoa_to_sheet(rows);
+  wsMain['!cols'] = [{ wch: 14 }, { wch: 28 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 16 }];
+  XLSX.utils.book_append_sheet(wb, wsMain, 'Comparativo');
+
+  // Aba alertas
+  if (resultados.filter(r => r.status === 'alerta').length) {
+    const alertas = resultados.filter(r => r.status === 'alerta');
+    const rowsA = [['Placa', 'Operação', 'KM Sistema', 'KM Cliente', 'Diferença', 'Variação %']];
+    alertas.forEach(r => rowsA.push([r.placa, r.operacao || '', fmtKm(r.kmSistema), fmtKm(r.kmCliente), fmtKm(r.diff), r.pct !== null ? parseFloat(r.pct.toFixed(1)) : '']));
+    const wsAl = XLSX.utils.aoa_to_sheet(rowsA);
+    wsAl['!cols'] = [{ wch: 14 }, { wch: 28 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }];
+    XLSX.utils.book_append_sheet(wb, wsAl, '🔴 Alertas');
+  }
+
+  // Aba sem correspondência
+  if (semNoSistema.length || semNoCliente.length) {
+    const rowsS = [['Placa', 'Situação', 'KM']];
+    semNoSistema.forEach(r => rowsS.push([r.placa, 'Só no cliente (não está no sistema)', fmtKm(r.kmCliente)]));
+    semNoCliente.forEach(r => rowsS.push([r.placa, 'Só no sistema (não está no cliente)', fmtKm(r.kmSistema)]));
+    const wsS = XLSX.utils.aoa_to_sheet(rowsS);
+    wsS['!cols'] = [{ wch: 14 }, { wch: 40 }, { wch: 14 }];
+    XLSX.utils.book_append_sheet(wb, wsS, '🔍 Sem Correspondência');
+  }
+
+  const dataHoje = new Date().toISOString().split('T')[0];
+  XLSX.writeFile(wb, 'km_comparativo_' + dataHoje + '.xlsx');
+  showToast('Excel exportado!', 'success');
+}
+
+function kmCopiarEmail() {
+  const { resultados, semNoSistema, label, margemMin } = window._kmResultado || {};
+  if (!resultados) return;
+  const alertas = resultados.filter(r => r.status === 'alerta');
+  const atencao = resultados.filter(r => r.status === 'atencao');
+  const fmtKm = v => v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
+  let linhasAlertas = alertas.map(r =>
+    '<tr style="background:#fef2f2;border-bottom:1px solid #fecaca">' +
+    '<td style="padding:9px 14px;font-family:monospace;font-weight:700;color:#1e293b">' + r.placa + '</td>' +
+    '<td style="padding:9px 14px;color:#64748b;font-size:12px">' + (r.operacao || '—') + '</td>' +
+    '<td style="padding:9px 14px;text-align:center;font-family:monospace;color:#2563eb">' + fmtKm(r.kmSistema) + '</td>' +
+    '<td style="padding:9px 14px;text-align:center;font-family:monospace;color:#7c3aed">' + fmtKm(r.kmCliente) + '</td>' +
+    '<td style="padding:9px 14px;text-align:center;font-family:monospace;font-weight:700;color:#dc2626">' + fmtKm(r.diff) + '</td>' +
+    '<td style="padding:9px 14px;text-align:center;font-weight:700;color:#dc2626">' + (r.pct !== null ? r.pct.toFixed(1) + '%' : '—') + '</td>' +
+    '</tr>'
+  ).join('');
+
+  let linhasSemSistema = semNoSistema.map(r =>
+    '<tr style="border-bottom:1px solid #e2e8f0"><td style="padding:8px 14px;font-family:monospace;font-weight:700;color:#dc2626">' + r.placa + '</td><td colspan="5" style="padding:8px 14px;color:#64748b;font-size:12px">Placa presente no cliente mas não encontrada no nosso sistema — KM cliente: ' + fmtKm(r.kmCliente) + '</td></tr>'
+  ).join('');
+
+  const html = '<!DOCTYPE html><html><body style="margin:0;padding:20px 0;font-family:Arial,sans-serif;background:#e2e8f0">' +
+    '<table width="680" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;border:1px solid #cbd5e1">' +
+    '<tr><td style="background:linear-gradient(135deg,#7f1d1d,#dc2626);padding:24px 28px">' +
+    '<div style="font-size:20px;font-weight:700;color:#fff">📏 FuelTracker Pro — Alerta KM</div>' +
+    '<div style="font-size:13px;color:#fca5a5;margin-top:4px">Comparativo KM Sistema × KM Produtivo Cliente · ' + label + '</div>' +
+    '</td></tr>' +
+    '<tr><td style="background:#fef2f2;padding:14px 28px;border-bottom:1px solid #fecaca;font-size:13px;color:#dc2626">' +
+    '⚠️ <strong>' + alertas.length + ' placa(s)</strong> com KM do sistema abaixo do KM produtivo do cliente. Verificar imediatamente.' +
+    (semNoSistema.length ? ' · <strong>' + semNoSistema.length + ' placa(s)</strong> presentes no cliente mas ausentes no sistema.' : '') +
+    '</td></tr>' +
+    (alertas.length ? '<tr><td style="padding:20px 28px 8px">' +
+    '<div style="font-size:14px;font-weight:700;color:#1e293b;margin-bottom:12px">🔴 Placas com KM abaixo do cliente</div>' +
+    '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #fecaca;border-radius:8px;overflow:hidden">' +
+    '<thead><tr style="background:#fef2f2"><th style="padding:9px 14px;text-align:left;font-size:11px;color:#64748b;text-transform:uppercase">Placa</th><th style="padding:9px 14px;text-align:left;font-size:11px;color:#64748b;text-transform:uppercase">Operação</th><th style="padding:9px 14px;text-align:center;font-size:11px;color:#2563eb;text-transform:uppercase">KM Sistema</th><th style="padding:9px 14px;text-align:center;font-size:11px;color:#7c3aed;text-transform:uppercase">KM Cliente</th><th style="padding:9px 14px;text-align:center;font-size:11px;color:#64748b;text-transform:uppercase">Diferença</th><th style="padding:9px 14px;text-align:center;font-size:11px;color:#64748b;text-transform:uppercase">Variação</th></tr></thead>' +
+    '<tbody>' + linhasAlertas + '</tbody></table></td></tr>' : '') +
+    (semNoSistema.length ? '<tr><td style="padding:16px 28px 8px">' +
+    '<div style="font-size:14px;font-weight:700;color:#1e293b;margin-bottom:10px">🔍 Placas sem correspondência no sistema</div>' +
+    '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">' +
+    '<tbody>' + linhasSemSistema + '</tbody></table></td></tr>' : '') +
+    '<tr><td style="background:#f8fafc;padding:14px 28px;border-top:1px solid #e2e8f0;text-align:center;font-size:11px;color:#94a3b8">Gerado pelo FuelTracker Pro · eulernasc.github.io/fueltracker</td></tr>' +
+    '</table></body></html>';
+
+  navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }) })]).then(() => {
+    showToast('✅ E-mail copiado! Cole no corpo do e-mail (Ctrl+V)', 'success');
+  }).catch(() => showToast('Erro ao copiar', 'error'));
+  const assunto = encodeURIComponent('FuelTracker — Alerta KM Comparativo · ' + label);
+  setTimeout(() => window.open('mailto:?subject=' + assunto, '_blank'), 500);
+}
+
+function kmReset() {
+  window._kmState = { sistema: null, cliente: null };
+  ['km-box-sistema','km-box-cliente'].forEach(id => document.getElementById(id)?.classList.remove('loaded'));
+  ['km-sistema-label','km-cliente-label'].forEach(id => { const el = document.getElementById(id); if (el) { el.style.display = 'none'; el.textContent = ''; } });
+  document.getElementById('km-resultado').style.display = 'none';
+  document.getElementById('btn-km-export').style.display = 'none';
+  document.getElementById('btn-km-email').style.display = 'none';
+  document.getElementById('btn-km-comparar').disabled = true;
+  document.getElementById('km-label').value = '';
+  const badge = document.getElementById('kmcomp-nav-badge');
+  if (badge) badge.style.display = 'none';
+  showToast('Pronto para novo comparativo', 'success');
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
