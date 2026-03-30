@@ -50,7 +50,19 @@ window.dispatchEvent(new Event('firebaseReady'));
 }
 *{margin:0;padding:0;box-sizing:border-box;}
 body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;display:flex;}
-.sidebar{width:220px;min-height:100vh;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;position:fixed;left:0;top:0;bottom:0;z-index:100;}
+.sidebar{width:220px;min-height:100vh;background:var(--bg2);border-right:1px solid var(--border);display:flex;flex-direction:column;position:fixed;left:0;top:0;bottom:0;z-index:100;transition:width .25s ease;overflow:hidden;}
+.sidebar.collapsed{width:56px;}
+.sidebar.collapsed .logo-text,.sidebar.collapsed .logo-sub,.sidebar.collapsed .nav-label,.sidebar.collapsed .sync-label-text{display:none;}
+.sidebar.collapsed .logo{padding:14px;justify-content:center;}
+.sidebar.collapsed .logo-icon{margin:0;}
+.sidebar.collapsed .nav{padding:10px 8px;}
+.sidebar.collapsed .nav-item{padding:10px;justify-content:center;gap:0;}
+.sidebar.collapsed .nav-item .icon{width:auto;font-size:20px;}
+.sidebar.collapsed .sync-status{justify-content:center;padding:12px 8px;}
+.sidebar.collapsed .sync-label{display:none;}
+.sidebar-toggle{position:absolute;bottom:52px;right:-12px;width:24px;height:24px;background:var(--bg2);border:1px solid var(--border);border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:12px;z-index:101;transition:.2s;color:var(--text2);}
+.sidebar-toggle:hover{background:var(--accent);color:#fff;border-color:var(--accent);}
+.sidebar.collapsed .sidebar-toggle{right:-12px;}
 .logo{padding:24px 20px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border);}
 .logo-icon{width:38px;height:38px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;}
 .logo-text{font-size:15px;font-weight:700;letter-spacing:-0.3px;}
@@ -66,7 +78,8 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .sync-dot.syncing{background:var(--yellow);animation:pulse 1s infinite;}
 .sync-dot.error{background:var(--red);}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
-.main{margin-left:220px;flex:1;padding:22px 28px;min-height:100vh;}
+.main{margin-left:220px;flex:1;padding:22px 28px;min-height:100vh;transition:margin-left .25s ease;}
+.main.collapsed{margin-left:56px;}
 /* ── MOBILE TOPBAR ── */
 .mob-topbar{display:none;position:fixed;top:0;left:0;right:0;height:54px;background:var(--bg2);border-bottom:1px solid var(--border);z-index:200;align-items:center;padding:0 16px;gap:12px;}
 .mob-logo{display:flex;align-items:center;gap:8px;flex:1;}
@@ -385,19 +398,20 @@ tr.selected-row td{background:rgba(79,142,247,.06);}
     <div><div class="logo-text">FuelTracker</div><div class="logo-sub">Gestão de Combustível</div></div>
   </div>
   <nav class="nav">
-    <div class="nav-item active" onclick="showPage('dashboard',this)"><span class="icon">⊞</span>Dashboard</div>
-    <div class="nav-item" onclick="showPage('comparativo',this)"><span class="icon">📊</span>Comparativo</div>
-    <div class="nav-item" onclick="showPage('abastecimentos',this)"><span class="icon">⛽</span>Abastecimentos</div>
-    <div class="nav-item" onclick="showPage('maquinas',this)"><span class="icon">🚜</span>Máquinas</div>
-    <div class="nav-item" id="nav-relatorio" onclick="showPage('relatorio',this)"><span class="icon">📧</span>Relatório<span id="rel-reincidencia-badge" style="display:none" class="excl-badge">!</span></div>
-    <div class="nav-item" id="nav-excluir" onclick="showPage('excluir',this)"><span class="icon">🗑️</span>A Excluir<span id="excluir-nav-badge" style="display:none" class="excl-badge">0</span></div>
-    <div class="nav-item" id="nav-arla" onclick="showPage('arla',this)"><span class="icon">🧪</span>Controle Arla<span id="arla-nav-badge" style="display:none" class="excl-badge">0</span><span id="arla-lembrete-badge" style="display:none;background:var(--yellow);color:#000;font-size:9px;font-weight:700;padding:2px 5px;border-radius:8px;margin-left:4px">⏰</span></div>
-    <div class="nav-item" id="nav-kmcomp" onclick="showPage('kmcomp',this)"><span class="icon">📏</span>KM Comparativo<span id="kmcomp-nav-badge" style="display:none" class="excl-badge">!</span></div>
-    <div class="nav-item" onclick="showPage('config',this)"><span class="icon">⚙️</span>Configurações</div>
+    <div class="nav-item active" onclick="showPage('dashboard',this)"><span class="icon">⊞</span><span class="nav-label">Dashboard</span></div>
+    <div class="nav-item" onclick="showPage('comparativo',this)"><span class="icon">📊</span><span class="nav-label">Comparativo</span></div>
+    <div class="nav-item" onclick="showPage('abastecimentos',this)"><span class="icon">⛽</span><span class="nav-label">Abastecimentos</span></div>
+    <div class="nav-item" onclick="showPage('maquinas',this)"><span class="icon">🚜</span><span class="nav-label">Máquinas</span></div>
+    <div class="nav-item" id="nav-relatorio" onclick="showPage('relatorio',this)"><span class="icon">📧</span><span class="nav-label">Relatório</span><span id="rel-reincidencia-badge" style="display:none" class="excl-badge">!</span></div>
+    <div class="nav-item" id="nav-excluir" onclick="showPage('excluir',this)"><span class="icon">🗑️</span><span class="nav-label">A Excluir</span><span id="excluir-nav-badge" style="display:none" class="excl-badge">0</span></div>
+    <div class="nav-item" id="nav-arla" onclick="showPage('arla',this)"><span class="icon">🧪</span><span class="nav-label">Controle Arla</span><span id="arla-nav-badge" style="display:none" class="excl-badge">0</span><span id="arla-lembrete-badge" style="display:none;background:var(--yellow);color:#000;font-size:9px;font-weight:700;padding:2px 5px;border-radius:8px;margin-left:4px">⏰</span></div>
+    <div class="nav-item" id="nav-kmcomp" onclick="showPage('kmcomp',this)"><span class="icon">📏</span><span class="nav-label">KM Comparativo</span><span id="kmcomp-nav-badge" style="display:none" class="excl-badge">!</span></div>
+    <div class="nav-item" onclick="showPage('config',this)"><span class="icon">⚙️</span><span class="nav-label">Configurações</span></div>
   </nav>
+  <div class="sidebar-toggle" id="sidebar-toggle" onclick="toggleSidebarCollapse()" title="Recolher/Expandir">◀</div>
   <div class="sync-status">
     <div class="sync-dot" id="sync-dot"></div>
-    <span id="sync-label" style="color:var(--text2)">Sem sincronização</span>
+    <span id="sync-label" class="sync-label"><span class="sync-label-text" id="sync-label-text" style="color:var(--text2)">Sem sincronização</span></span>
   </div>
 </aside>
 
@@ -5255,6 +5269,30 @@ function kmReset() {
   if (badge) badge.style.display = 'none';
   showToast('Pronto para novo comparativo', 'success');
 }
+
+
+function toggleSidebarCollapse() {
+  const sidebar = document.getElementById('sidebar');
+  const main = document.querySelector('.main');
+  const btn = document.getElementById('sidebar-toggle');
+  const collapsed = sidebar.classList.toggle('collapsed');
+  main.classList.toggle('collapsed', collapsed);
+  btn.textContent = collapsed ? '▶' : '◀';
+  btn.title = collapsed ? 'Expandir' : 'Recolher';
+  localStorage.setItem('sidebar_collapsed', collapsed ? '1' : '0');
+}
+
+// Restore sidebar state on load
+(function() {
+  if (localStorage.getItem('sidebar_collapsed') === '1') {
+    const sidebar = document.getElementById('sidebar');
+    const main = document.querySelector('.main');
+    const btn = document.getElementById('sidebar-toggle');
+    if (sidebar) sidebar.classList.add('collapsed');
+    if (main) main.classList.add('collapsed');
+    if (btn) { btn.textContent = '▶'; btn.title = 'Expandir'; }
+  }
+})();
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
 updateFilters();
