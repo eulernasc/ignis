@@ -4454,19 +4454,32 @@ function relgRender() {
 function relgGetBlocosSalvos(operacoes) {
   relgInit();
   if (!window._relGrupos.length) return null; // usa lógica antiga
+
+  // Normaliza nomes para comparação robusta (trim + espaços duplos + uppercase)
+  const norm = s => s.trim().replace(/\s+/g, ' ').toUpperCase();
+  const operacoesNorm = operacoes.map(norm);
+
   const blocos = [];
   const usadas = new Set();
   for (const g of window._relGrupos) {
-    const opsGrupo = g.ops.filter(o => operacoes.includes(o));
+    const opsGrupo = [];
+    g.ops.forEach(savedOp => {
+      const idx = operacoesNorm.indexOf(norm(savedOp));
+      if (idx >= 0 && !usadas.has(operacoes[idx])) {
+        usadas.add(operacoes[idx]);
+        opsGrupo.push(operacoes[idx]); // usa o nome original de operacoes (chave de byOp)
+      }
+    });
     if (!opsGrupo.length) continue;
-    opsGrupo.forEach(o => usadas.add(o));
     blocos.push({ id: g.id, label: g.nome, ops: opsGrupo, emails: g.emails, isGrupo: true });
   }
   // Operações não cobertas por nenhum grupo
   operacoes.filter(o => !usadas.has(o)).forEach(o => {
     blocos.push({ id: o, label: o, ops: [o], emails: '', isGrupo: false });
   });
-  return blocos;
+
+  // Se nenhum grupo foi aplicado (nenhuma op bateu), retorna null para usar fallback
+  return blocos.some(b => b.isGrupo) ? blocos : null;
 }
 
 // ── ALERTAS DE REINCIDÊNCIA ───────────────────────────────────────────────────
