@@ -813,6 +813,15 @@ body{overflow-x:hidden;}
 
     <!-- ABA GRUPOS E-MAIL -->
     <div id="rel-tab-grupos" style="display:none">
+      <!-- Explicação -->
+      <div style="background:rgba(79,142,247,.08);border:1px solid rgba(79,142,247,.25);border-radius:12px;padding:14px 18px;margin-bottom:16px;font-size:13px;line-height:1.7">
+        <div style="font-weight:700;margin-bottom:6px;color:var(--accent)">💡 Como funciona os Grupos de E-mail?</div>
+        <div style="color:var(--text2)">
+          Crie um grupo com um <strong style="color:var(--text)">nome</strong>, os <strong style="color:var(--text)">e-mails dos destinatários</strong> e as <strong style="color:var(--text)">operações</strong> que pertencem a ele.<br>
+          Quando você gerar um relatório de análise e clicar em <em>"Enviar Alertas por E-mail"</em>, o sistema agrupa automaticamente as operações do grupo e o campo de e-mail já vem <strong style="color:var(--green)">pré-preenchido</strong>.<br>
+          <span style="color:var(--yellow)">⚡ Exemplo:</span> As 3 operações CENIBRA (Santa Bárbara, Cocais, Nova Era) vão para os mesmos gestores → crie <strong style="color:var(--text)">um único grupo "CENIBRA"</strong> com os 3 selecionados e o e-mail dos gestores.
+        </div>
+      </div>
       <div style="background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:16px">
         <div style="font-size:14px;font-weight:700;margin-bottom:16px">➕ Novo Grupo de E-mail</div>
         <div class="form-group">
@@ -2780,6 +2789,7 @@ function relSetTipo(el, tipo) {
   el.style.background = 'var(--accent)';
   el.style.color = '#fff';
   el.style.borderColor = 'var(--accent)';
+  relPopularOps(true); // reseta seleção de operações ao mudar tipo
   renderRelatorio();
 }
 
@@ -2831,11 +2841,28 @@ function getRelOpSelecionadas() {
   const sel = checks.filter(c => c.checked).map(c => c.value);
   return sel.length === checks.length || sel.length === 0 ? [] : sel;
 }
-function relPopularOps() {
+function relGetOpsByTipo(tipo) {
+  if (!tipo) return getOperacoes().map(o => o.replace(/_/g,' '));
+  const isEmp = tipo === '__empilhadeiras__';
+  const placas = new Set(
+    state.abastecimentos
+      .filter(a => a.placa && (isEmp ? a.placa.toUpperCase().startsWith('EMP') : !a.placa.toUpperCase().startsWith('EMP')))
+      .map(a => a.placa)
+  );
+  const opSet = new Set();
+  state.abastecimentos.forEach(a => {
+    if (!placas.has(a.placa)) return;
+    const op = (getMaquina(a.placa)?.operacao || a.operacao || '').replace(/_/g,' ');
+    if (op) opSet.add(op);
+  });
+  return [...opSet].sort();
+}
+function relPopularOps(resetarSelecao) {
   const cont = document.getElementById('rel-op-checks');
   if (!cont) return;
-  const ops = getOperacoes().map(o => o.replace(/_/g,' ')); // normaliza para espaços
-  const jaExiste = cont.children.length > 0;
+  const tipo = document.querySelector('.rel-tipo-btn.active')?.dataset?.tipo || '';
+  const ops = relGetOpsByTipo(tipo);
+  const jaExiste = !resetarSelecao && cont.children.length > 0;
   const atuais = new Set([...document.querySelectorAll('.rel-op-check:checked')].map(c => c.value));
   cont.innerHTML = ops.map(o =>
     '<label style="display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:7px;cursor:pointer;font-size:13px" onmouseover="this.style.background=\'var(--bg3)\'" onmouseout="this.style.background=\'\'">' +
