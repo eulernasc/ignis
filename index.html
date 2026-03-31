@@ -813,15 +813,6 @@ body{overflow-x:hidden;}
 
     <!-- ABA GRUPOS E-MAIL -->
     <div id="rel-tab-grupos" style="display:none">
-      <!-- Explicação -->
-      <div style="background:rgba(79,142,247,.08);border:1px solid rgba(79,142,247,.25);border-radius:12px;padding:14px 18px;margin-bottom:16px;font-size:13px;line-height:1.7">
-        <div style="font-weight:700;margin-bottom:6px;color:var(--accent)">💡 Como funciona os Grupos de E-mail?</div>
-        <div style="color:var(--text2)">
-          Crie um grupo com um <strong style="color:var(--text)">nome</strong>, os <strong style="color:var(--text)">e-mails dos destinatários</strong> e as <strong style="color:var(--text)">operações</strong> que pertencem a ele.<br>
-          Quando você gerar um relatório de análise e clicar em <em>"Enviar Alertas por E-mail"</em>, o sistema agrupa automaticamente as operações do grupo e o campo de e-mail já vem <strong style="color:var(--green)">pré-preenchido</strong>.<br>
-          <span style="color:var(--yellow)">⚡ Exemplo:</span> As 3 operações CENIBRA (Santa Bárbara, Cocais, Nova Era) vão para os mesmos gestores → crie <strong style="color:var(--text)">um único grupo "CENIBRA"</strong> com os 3 selecionados e o e-mail dos gestores.
-        </div>
-      </div>
       <div style="background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:16px">
         <div style="font-size:14px;font-weight:700;margin-bottom:16px">➕ Novo Grupo de E-mail</div>
         <div class="form-group">
@@ -2789,7 +2780,7 @@ function relSetTipo(el, tipo) {
   el.style.background = 'var(--accent)';
   el.style.color = '#fff';
   el.style.borderColor = 'var(--accent)';
-  relPopularOps(true); // reseta seleção de operações ao mudar tipo
+  relPopularOps(true); // reseta operações ao mudar tipo
   renderRelatorio();
 }
 
@@ -3026,7 +3017,6 @@ function renderRelEmailBloco(operacoes) {
   if (!bloco) return;
   if (!operacoes.length) { bloco.innerHTML = ''; return; }
   const dica = '<div style="font-size:11px;color:var(--text3);margin-bottom:12px">💡 Configure grupos em <strong>📧 Grupos de E-mail</strong> para reusar toda semana!</div>';
-  // Usa grupos salvos se existirem, senão usa lógica de REL_GRUPOS
   const blocosSalvos = relgGetBlocosSalvos(operacoes);
   const blocos = blocosSalvos || relGetBlocos(operacoes);
   bloco.innerHTML = '<div class="chart-card">' +
@@ -3049,7 +3039,7 @@ function renderRelEmailBloco(operacoes) {
     (blocos.length > 1 ? '<div style="margin-top:6px"><button class="btn btn-primary" onclick="enviarTodosEmails()">📧 Enviar Todos</button></div>' : '') +
   '</div>';
   window._relBlocos = blocos;
-  // Preenche os e-mails via JS após criar o DOM (mais confiável que value= no innerHTML)
+  // Preenche e-mails via JS (mais confiável que value= no innerHTML)
   blocos.forEach(b => {
     if (b.emails) {
       const input = document.getElementById('rel-email-bloco-' + encodeURIComponent(b.id));
@@ -4344,14 +4334,24 @@ function relSetTab(tab, el) {
 window._relGrupos = [];
 
 function relgInit() {
-  const saved = localStorage.getItem('rel_grupos');
-  if (saved) { try { window._relGrupos = JSON.parse(saved); } catch(e) {} }
+  // Sempre recarrega do localStorage para garantir dados atualizados
+  try {
+    const saved = localStorage.getItem('rel_grupos');
+    window._relGrupos = saved ? JSON.parse(saved) : [];
+  } catch(e) {
+    window._relGrupos = [];
+  }
 }
 
 function relgGetOpsDisponiveis() {
-  // Usa mesma fonte que getOperacoes(), normalizando underscores p/ espaços
-  const ops = getOperacoes().map(o => o.replace(/_/g,' '));
-  return [...new Set(ops)].filter(Boolean).sort();
+  // Usa todas as fontes + normaliza underscores p/ espaços
+  const opSet = new Set();
+  state.maquinas.forEach(m => { if (m.operacao) opSet.add(m.operacao.replace(/_/g,' ').trim()); });
+  state.abastecimentos.forEach(a => {
+    const op = (getMaquina(a.placa)?.operacao || a.operacao || '').replace(/_/g,' ').trim();
+    if (op) opSet.add(op);
+  });
+  return [...opSet].filter(Boolean).sort();
 }
 
 function relgPopularOps(opsChecked) {
@@ -4394,7 +4394,6 @@ function relgSalvar() {
   relgLimpar();
   relgRender();
   showToast('✅ Grupo salvo!', 'success');
-  // Rola para a lista de grupos para o usuário ver o grupo salvo
   setTimeout(() => {
     const lista = document.getElementById('relg-lista');
     if (lista) lista.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -4467,10 +4466,10 @@ function relgRender() {
 // Integra grupos na renderRelEmailBloco
 function relgGetBlocosSalvos(operacoes) {
   relgInit();
-  if (!window._relGrupos.length) return null; // usa lógica antiga
+  if (!window._relGrupos.length) return null;
 
-  // Normaliza nomes para comparação robusta (trim + underscores→espaços + espaços duplos + uppercase)
-  const norm = s => s.trim().replace(/_/g,' ').replace(/\s+/g, ' ').toUpperCase();
+  // Normaliza: trim + underscore→espaço + espaços duplos + uppercase
+  const norm = s => s.trim().replace(/_/g,' ').replace(/\s+/g,' ').toUpperCase();
   const operacoesNorm = operacoes.map(norm);
 
   const blocos = [];
@@ -4481,7 +4480,7 @@ function relgGetBlocosSalvos(operacoes) {
       const idx = operacoesNorm.indexOf(norm(savedOp));
       if (idx >= 0 && !usadas.has(operacoes[idx])) {
         usadas.add(operacoes[idx]);
-        opsGrupo.push(operacoes[idx]); // usa o nome original de operacoes (chave de byOp)
+        opsGrupo.push(operacoes[idx]); // nome original da análise (chave de byOp)
       }
     });
     if (!opsGrupo.length) continue;
@@ -4491,8 +4490,7 @@ function relgGetBlocosSalvos(operacoes) {
   operacoes.filter(o => !usadas.has(o)).forEach(o => {
     blocos.push({ id: o, label: o, ops: [o], emails: '', isGrupo: false });
   });
-
-  // Se nenhum grupo foi aplicado (nenhuma op bateu), retorna null para usar fallback
+  // Só retorna se pelo menos 1 grupo bateu; senão usa fallback
   return blocos.some(b => b.isGrupo) ? blocos : null;
 }
 
@@ -4586,46 +4584,58 @@ function relChecarReincidencia() {
       if (!byOp[op]) byOp[op] = [];
       byOp[op].push(r);
     });
-    let html = '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">' +
-      '<span style="font-size:22px">🔴</span>' +
-      '<div><div style="font-size:14px;font-weight:700;color:var(--red)">' + reincidentes.length + ' máquina' + (reincidentes.length > 1 ? 's' : '') + ' reincidente' + (reincidentes.length > 1 ? 's' : '') + ' abaixo de 98%</div>' +
-      '<div style="font-size:12px;color:var(--text2);margin-top:2px">Abaixo da meta em 2 ou mais períodos consecutivos</div></div>' +
-      '</div>';
+
+    // Cabeçalho clicável (sempre visível)
+    let detalhesHTML = '';
     Object.entries(byOp).forEach(([op, maquinas]) => {
-      html += '<div style="font-size:12px;font-weight:700;color:var(--text2);margin:10px 0 6px">' + op + '</div>';
-      html += '<div style="display:flex;flex-wrap:wrap;gap:8px">';
+      detalhesHTML += '<div style="font-size:12px;font-weight:700;color:var(--text2);margin:10px 0 6px">' + op + '</div>';
+      detalhesHTML += '<div style="display:flex;flex-wrap:wrap;gap:8px">';
       maquinas.forEach(r => {
         const maq = getMaquina(r.placa);
         const meta = maq?.meta || 0;
-        // Calcula média e eficiência geral da máquina com todos os abastecimentos
         const todosDados = state.abastecimentos.filter(a => a.placa === r.placa);
         const totalL = todosDados.reduce((s, a) => s + (a.litros || 0), 0);
         const totalH = todosDados.reduce((s, a) => s + (a.horas || 0), 0);
         const mediaGeral = totalH > 0 ? totalL / totalH : 0;
         const eficGeral = meta > 0 && mediaGeral > 0 ? (meta / mediaGeral) * 100 : null;
         const eficCor = !eficGeral ? 'var(--text3)' : eficGeral >= 98 ? 'var(--green)' : eficGeral >= 90 ? 'var(--yellow)' : 'var(--red)';
-
         const periodsHTML = r.detalhesPeriodos.map(p =>
           '<div style="display:flex;justify-content:space-between;gap:12px;padding:3px 0;border-bottom:1px solid rgba(239,68,68,.15)">' +
           '<span style="color:var(--text3);font-size:10px">' + p.label + '</span>' +
           '<span style="font-family:monospace;font-size:11px;font-weight:600;color:var(--red)">' + p.media.toFixed(2) + ' L/h <span style="color:var(--text3);font-weight:400">(' + p.efic.toFixed(1) + '%)</span></span>' +
           '</div>'
         ).join('');
-
-        html += '<div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:10px 12px;font-size:12px;min-width:200px">' +
+        detalhesHTML += '<div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:10px 12px;font-size:12px;min-width:200px">' +
           '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">' +
           '<span style="font-family:monospace;font-weight:700">' + r.placa + '</span>' +
           '<div style="text-align:right">' +
           '<span style="font-family:monospace;font-weight:700;color:' + eficCor + ';font-size:12px">' + (mediaGeral > 0 ? mediaGeral.toFixed(2) + ' L/h' : '—') + '</span>' +
           (eficGeral ? '<span style="color:' + eficCor + ';font-size:10px;margin-left:5px">(' + eficGeral.toFixed(1) + '%)</span>' : '') +
-          '</div>' +
-          '</div>' +
+          '</div></div>' +
           periodsHTML +
           '</div>';
       });
-      html += '</div>';
+      detalhesHTML += '</div>';
     });
-    banner.innerHTML = html;
+
+    banner.innerHTML =
+      // Cabeçalho clicável — sempre visível, collapsed por padrão
+      '<div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none" onclick="' +
+        'var d=this.nextSibling;var icon=this.querySelector(\'.rein-icon\');' +
+        'if(d.style.display===\'none\'){d.style.display=\'\';icon.textContent=\'▲ Recolher\';}' +
+        'else{d.style.display=\'none\';icon.textContent=\'▼ Expandir\';}' +
+      '">' +
+        '<div style="display:flex;align-items:center;gap:10px">' +
+          '<span style="font-size:20px">🔴</span>' +
+          '<div>' +
+            '<div style="font-size:14px;font-weight:700;color:var(--red)">' + reincidentes.length + ' máquina' + (reincidentes.length > 1 ? 's' : '') + ' reincidente' + (reincidentes.length > 1 ? 's' : '') + ' abaixo de 98%</div>' +
+            '<div style="font-size:12px;color:var(--text2);margin-top:2px">Abaixo da meta em 2+ períodos · ' + reincidentes.map(r => r.placa).slice(0,5).join(', ') + (reincidentes.length > 5 ? ' e mais ' + (reincidentes.length - 5) : '') + '</div>' +
+          '</div>' +
+        '</div>' +
+        '<span class="rein-icon" style="font-size:12px;color:var(--accent);font-weight:600;white-space:nowrap">▼ Expandir</span>' +
+      '</div>' +
+      // Detalhes — ocultos por padrão
+      '<div style="display:none;margin-top:12px">' + detalhesHTML + '</div>';
   }
 }
 
