@@ -1457,16 +1457,17 @@ function updateFilters() {
   // Popular multi-select do Comparativo
   const compCb=document.getElementById('comp-op-checkboxes');
   if(compCb){
-    const hasExisting=document.querySelectorAll('.comp-op-check').length>0;
+    const existingOps=new Set([...document.querySelectorAll('.comp-op-check')].map(c=>c.value));
+    const hasExisting=existingOps.size>0;
     const currentChecked=new Set([...document.querySelectorAll('.comp-op-check:checked')].map(c=>c.value));
     compCb.innerHTML=ops.map(o=>`
       <label style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:13px">
-        <input type="checkbox" class="comp-op-check" value="${o}" ${!hasExisting||currentChecked.has(o)?'checked':''} onchange="onCompOpCheckChange()">
+        <input type="checkbox" class="comp-op-check" value="${o}" ${!hasExisting||currentChecked.has(o)||!existingOps.has(o)?'checked':''} onchange="onCompOpCheckChange()">
         ${o.replace(/_/g,' ')}
       </label>`).join('');
     const allCheck=document.getElementById('comp-op-all-check');
     if(allCheck){
-      const nChecked=hasExisting?currentChecked.size:ops.length;
+      const nChecked=hasExisting?[...document.querySelectorAll('.comp-op-check:checked')].length:ops.length;
       allCheck.checked=nChecked===ops.length;
       allCheck.indeterminate=nChecked>0&&nChecked<ops.length;
     }
@@ -1474,9 +1475,10 @@ function updateFilters() {
   ['dash-maq-filter','abast-maq-filter'].forEach(id=>{
     const sel=document.getElementById(id); if(!sel) return;
     const val=sel.value;
-    sel.innerHTML='<option value="">Todas (Consolidado)</option>' +
+    sel.innerHTML='<option value="">Consolidado (sem EMP)</option>' +
       '<option value="__tratores__">🚜 TRATORES</option>' +
       '<option value="__maquinas__">⚙️ MÁQUINAS</option>' +
+      '<option value="__empilhadeiras__">🚛 EMPILHADEIRAS</option>' +
       '<option disabled style="color:var(--text3);font-size:11px">──────────────</option>' +
       state.maquinas.map(m=>`<option value="${m.placa}">${m.placa}</option>`).join('');
     sel.value=val;
