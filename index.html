@@ -4349,7 +4349,9 @@ function relgInit() {
 }
 
 function relgGetOpsDisponiveis() {
-  return [...new Set(state.abastecimentos.map(a => getMaquina(a.placa)?.operacao || a.operacao || '').filter(Boolean))].sort();
+  // Usa mesma fonte que getOperacoes(), normalizando underscores p/ espaços
+  const ops = getOperacoes().map(o => o.replace(/_/g,' '));
+  return [...new Set(ops)].filter(Boolean).sort();
 }
 
 function relgPopularOps(opsChecked) {
@@ -4392,6 +4394,11 @@ function relgSalvar() {
   relgLimpar();
   relgRender();
   showToast('✅ Grupo salvo!', 'success');
+  // Rola para a lista de grupos para o usuário ver o grupo salvo
+  setTimeout(() => {
+    const lista = document.getElementById('relg-lista');
+    if (lista) lista.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 100);
 }
 
 function relgLimpar() {
@@ -4462,8 +4469,8 @@ function relgGetBlocosSalvos(operacoes) {
   relgInit();
   if (!window._relGrupos.length) return null; // usa lógica antiga
 
-  // Normaliza nomes para comparação robusta (trim + espaços duplos + uppercase)
-  const norm = s => s.trim().replace(/\s+/g, ' ').toUpperCase();
+  // Normaliza nomes para comparação robusta (trim + underscores→espaços + espaços duplos + uppercase)
+  const norm = s => s.trim().replace(/_/g,' ').replace(/\s+/g, ' ').toUpperCase();
   const operacoesNorm = operacoes.map(norm);
 
   const blocos = [];
