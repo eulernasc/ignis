@@ -5046,7 +5046,7 @@ function kmMostrarMargensOps() {
   const cliente = window._kmState.cliente || {};
   // Coleta operações de ambas as fontes
   const ops = new Set();
-  Object.values(sistema).forEach(d => { if (d.operacao) ops.add(d.operacao.replace(/_/g,' ')); });
+  Object.values(sistema).forEach(d => { if (d.operacao) ops.add(d.operacao); });
   Object.values(cliente).forEach(d => { if (d.operacao) ops.add(d.operacao); });
   if (!ops.size) return; // sem operações identificadas — usa margem global
   const existing = window._kmState.margensOp || {};
@@ -5084,6 +5084,13 @@ function kmMostrarMargensOps() {
   window._kmState._ops = [...ops];
 }
 
+function kmNormalizarOp(op) {
+  // Normaliza underscores → espaços e consolida CENIBRA* → CENIBRA
+  const s = op.replace(/_/g,' ').trim();
+  if (s.startsWith('CENIBRA')) return 'CENIBRA';
+  return s;
+}
+
 function kmCarregarSistema(input) {
   const file = input.files[0]; if (!file) return;
   const r = new FileReader();
@@ -5097,7 +5104,7 @@ function kmCarregarSistema(input) {
       raw.forEach(row => {
         const placa = String(row['Placa'] || row['placa'] || '').trim().toUpperCase();
         const km = parseFloat(row['Km Real'] || row['km_real'] || row['KM Real'] || row['Horas'] || row['horas'] || 0);
-        const op = String(row['Operação'] || row['operacao'] || row['Operacao'] || '').trim();
+        const op = kmNormalizarOp(String(row['Operação'] || row['operacao'] || row['Operacao'] || '').trim());
         if (!placa || !placa.match(/[A-Z]{2,}/)) return;
         if (!byPlaca[placa]) byPlaca[placa] = { km: 0, operacao: op };
         byPlaca[placa].km += km;
@@ -5130,7 +5137,7 @@ function kmCarregarCliente(input) {
       raw.forEach(row => {
         const placa = String(row['Placa'] || row['PLACA'] || row['placa'] || '').trim().toUpperCase();
         const km = parseFloat(row['KM Produtivo'] || row['km_produtivo'] || row['KM'] || row['km'] || row['Km'] || 0);
-        const op = String(row['Operação'] || row['Operacao'] || row['operacao'] || row['OPERAÇÃO'] || '').trim();
+        const op = kmNormalizarOp(String(row['Operação'] || row['Operacao'] || row['operacao'] || row['OPERAÇÃO'] || '').trim());
         if (!placa || placa.length < 4) return;
         if (!byPlaca[placa]) byPlaca[placa] = { km: 0, operacao: op };
         byPlaca[placa].km += km;
@@ -5223,8 +5230,8 @@ function kmComparar() {
     resultados.push({ placa, kmSistema: kmS, kmCliente: kmC, diff, pct, status, operacao: op });
   });
 
-  // Salva para exportação e e-mail
-  window._kmResultado = { resultados, semNoSistema, semNoCliente, label, margemMin, margemAtencao };
+  // Salva para exportação e e-mail (usa valores globais para evitar ReferenceError)
+  window._kmResultado = { resultados, semNoSistema, semNoCliente, label, margemMin: margemMinGlobal, margemAtencao: margemAtencaoGlobal };
 
   // Ordena: alertas primeiro, depois atenção, ok, sem_base
   const ordem = { alerta: 0, atencao: 1, sem_base: 2, ok: 3 };
@@ -5294,7 +5301,8 @@ function kmComparar() {
     const [cls, txt] = statusMap[r.status] || ['', '—'];
     const diffCor = r.diff >= 0 ? 'var(--green)' : 'var(--red)';
     const pctTxt = r.pct !== null ? (r.pct >= 0 ? '+' : '') + r.pct.toFixed(1) + '%' : '—';
-    const pctCor = r.pct === null ? 'var(--text3)' : r.pct >= margemAtencao ? 'var(--green)' : r.pct >= margemMin ? 'var(--yellow)' : 'var(--red)';
+    // Usa o status já calculado para a cor (evita referenciar variáveis fora do escopo)
+    const pctCor = r.pct === null ? 'var(--text3)' : r.status === 'ok' ? 'var(--green)' : r.status === 'atencao' ? 'var(--yellow)' : 'var(--red)';
     html += '<tr data-status="' + r.status + '" data-placa="' + r.placa + '">';
     html += '<td><span class="placa-tag">' + r.placa + '</span></td>';
     html += '<td style="font-size:12px;color:var(--text2)">' + (r.operacao || '—') + '</td>';
@@ -5312,6 +5320,10 @@ function kmComparar() {
   document.getElementById('km-resultado').style.display = '';
   document.getElementById('btn-km-export').style.display = '';
   document.getElementById('btn-km-email').style.display = alertas.length ? '' : 'none';
+  // Rola para os resultados automaticamente
+  setTimeout(() => {
+    document.getElementById('km-resultado').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, 100);
 }
 
 function kmFiltrarTabela() {
