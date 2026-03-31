@@ -797,8 +797,7 @@ body{overflow-x:hidden;}
         <label class="form-label">Tipo de Máquina</label>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-secondary btn-sm rel-tipo-btn active" data-tipo="" onclick="relSetTipo(this,'')">⊞ Todos</button>
-          <button class="btn btn-secondary btn-sm rel-tipo-btn" data-tipo="__maquinas__" onclick="relSetTipo(this,'__maquinas__')">⚙️ Máquinas</button>
-          <button class="btn btn-secondary btn-sm rel-tipo-btn" data-tipo="__tratores__" onclick="relSetTipo(this,'__tratores__')">🚜 Tratores</button>
+          <button class="btn btn-secondary btn-sm rel-tipo-btn" data-tipo="__maq_tra__" onclick="relSetTipo(this,'__maq_tra__')">⚙️🚜 Máquinas e Tratores</button>
           <button class="btn btn-secondary btn-sm rel-tipo-btn" data-tipo="__empilhadeiras__" onclick="relSetTipo(this,'__empilhadeiras__')">🏗 Empilhadeiras</button>
         </div>
       </div>
@@ -1383,6 +1382,8 @@ let abastFiltrados = [];
 
 async function loadState() {
   try { const s=localStorage.getItem('fueltracker_v3'); if(s) state=JSON.parse(s); } catch(e){}
+  // Checar reincidência com dados locais imediatamente (sem esperar Firebase)
+  relChecarReincidencia();
   // Tentar carregar do Firebase
   if (window.firebaseReady) {
     await syncFromFirebase();
@@ -2871,8 +2872,7 @@ function renderRelatorio() {
   // Filtra abastecimentos
   let registros = state.abastecimentos.filter(a => a.data >= ini && a.data <= fim);
   if (opsFiltro.length) registros = registros.filter(a => { const op = (getMaquina(a.placa)?.operacao || a.operacao || '').replace(/_/g,' '); return opsFiltro.includes(op); });
-  if (relTipo === '__tratores__') registros = registros.filter(a => a.placa && a.placa.toUpperCase().startsWith('TRA'));
-  else if (relTipo === '__maquinas__') registros = registros.filter(a => a.placa && !a.placa.toUpperCase().startsWith('TRA') && !a.placa.toUpperCase().startsWith('EMP'));
+  if (relTipo === '__maq_tra__') registros = registros.filter(a => a.placa && !a.placa.toUpperCase().startsWith('EMP'));
   else if (relTipo === '__empilhadeiras__') registros = registros.filter(a => a.placa && a.placa.toUpperCase().startsWith('EMP'));
 
   if (!registros.length) {
