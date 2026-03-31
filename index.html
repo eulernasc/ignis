@@ -5278,15 +5278,56 @@ function kmComparar() {
     html += '</div>';
   }
 
-  // Tabela de resultados
+  // ── Resumo por Operação ──────────────────────────────────────────────────
+  const byOpResumo = {};
+  resultados.forEach(r => {
+    const op = r.operacao || 'Sem Operação';
+    if (!byOpResumo[op]) byOpResumo[op] = { kmS: 0, kmC: 0, alertas: 0, atencao: 0, ok: 0, total: 0 };
+    byOpResumo[op].kmS   += r.kmSistema;
+    byOpResumo[op].kmC   += r.kmCliente;
+    byOpResumo[op].total++;
+    byOpResumo[op][r.status] = (byOpResumo[op][r.status] || 0) + 1;
+  });
+
+  html += '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:16px">';
+  html += '<div style="padding:14px 20px;border-bottom:1px solid var(--border);font-size:15px;font-weight:700">📍 Resumo por Operação</div>';
+  html += '<div style="overflow-x:auto"><table><thead><tr>';
+  html += '<th>Operação</th><th style="text-align:center">Placas</th><th style="text-align:center">KM Sistema</th><th style="text-align:center">KM Cliente</th><th style="text-align:center">Diferença Total</th><th style="text-align:center">🔴 Alerta</th><th style="text-align:center">⚠️ Atenção</th><th style="text-align:center">✅ OK</th>';
+  html += '</tr></thead><tbody>';
+  Object.entries(byOpResumo).sort((a,b) => (b[1].alertas - a[1].alertas) || a[0].localeCompare(b[0])).forEach(([op, d]) => {
+    const diff = d.kmS - d.kmC;
+    const diffCor = diff >= 0 ? 'var(--green)' : 'var(--red)';
+    html += '<tr>';
+    html += '<td style="font-weight:600">' + op + '</td>';
+    html += '<td style="text-align:center;color:var(--text2)">' + d.total + '</td>';
+    html += '<td style="text-align:center;font-family:monospace;color:var(--accent)">' + fmtKm(d.kmS) + '</td>';
+    html += '<td style="text-align:center;font-family:monospace;color:var(--accent2)">' + fmtKm(d.kmC) + '</td>';
+    html += '<td style="text-align:center;font-family:monospace;font-weight:700;color:' + diffCor + '">' + (diff >= 0 ? '+' : '') + fmtKm(diff) + '</td>';
+    html += '<td style="text-align:center">' + (d.alertas ? '<span style="background:rgba(239,68,68,.15);color:var(--red);border-radius:99px;padding:2px 10px;font-size:12px;font-weight:700">' + d.alertas + '</span>' : '<span style="color:var(--text3)">—</span>') + '</td>';
+    html += '<td style="text-align:center">' + (d.atencao  ? '<span style="background:rgba(245,158,11,.15);color:var(--yellow);border-radius:99px;padding:2px 10px;font-size:12px;font-weight:700">' + d.atencao + '</span>' : '<span style="color:var(--text3)">—</span>') + '</td>';
+    html += '<td style="text-align:center">' + (d.ok       ? '<span style="background:rgba(34,197,94,.15);color:var(--green);border-radius:99px;padding:2px 10px;font-size:12px;font-weight:700">' + d.ok + '</span>' : '<span style="color:var(--text3)">—</span>') + '</td>';
+    html += '</tr>';
+  });
+  html += '</tbody></table></div></div>';
+
+  // ── Tabela de resultados ─────────────────────────────────────────────────
+  const opsDisponiveis = [...new Set(resultados.map(r => r.operacao || 'Sem Operação'))].sort();
+
   html += '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;overflow:hidden">';
   html += '<div style="padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">';
   html += '<div style="font-size:15px;font-weight:700">📊 Resultado por Placa</div>';
-  html += '<div style="display:flex;gap:8px;align-items:center">';
-  html += '<input type="text" class="filter-input" id="km-busca" placeholder="🔍 Buscar placa..." oninput="kmFiltrarTabela()" style="padding:6px 12px;font-size:13px">';
+  html += '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">';
+  html += '<input type="text" class="filter-input" id="km-busca" placeholder="🔍 Buscar placa..." oninput="kmFiltrarTabela()" style="padding:6px 12px;font-size:13px;min-width:160px">';
+  // Filtro por operação
+  html += '<select class="filter-select" id="km-filtro-op" onchange="kmFiltrarTabela()" style="font-size:13px">';
+  html += '<option value="">Todas as Operações</option>';
+  opsDisponiveis.forEach(op => { html += '<option value="' + op + '">' + op + '</option>'; });
+  html += '</select>';
+  // Filtro por status (inclui "sem correspondência")
   html += '<select class="filter-select" id="km-filtro-status" onchange="kmFiltrarTabela()" style="font-size:13px">';
-  html += '<option value="">Todos</option><option value="alerta">🔴 Alerta</option><option value="atencao">⚠️ Atenção</option><option value="ok">✅ OK</option></select>';
+  html += '<option value="">Todos</option><option value="alerta">🔴 Alerta</option><option value="atencao">⚠️ Atenção</option><option value="ok">✅ OK</option><option value="sem_corr">🔍 Sem Correspondência</option></select>';
   html += '</div></div>';
+
   html += '<div style="overflow-x:auto"><table id="km-tabela"><thead><tr>';
   html += '<th>Placa</th><th>Operação</th><th style="text-align:center">KM Sistema</th><th style="text-align:center">KM Cliente</th><th style="text-align:center">Diferença</th><th style="text-align:center">Variação %</th><th style="text-align:center">Status</th>';
   html += '</tr></thead><tbody id="km-tbody">';
@@ -5301,9 +5342,8 @@ function kmComparar() {
     const [cls, txt] = statusMap[r.status] || ['', '—'];
     const diffCor = r.diff >= 0 ? 'var(--green)' : 'var(--red)';
     const pctTxt = r.pct !== null ? (r.pct >= 0 ? '+' : '') + r.pct.toFixed(1) + '%' : '—';
-    // Usa o status já calculado para a cor (evita referenciar variáveis fora do escopo)
     const pctCor = r.pct === null ? 'var(--text3)' : r.status === 'ok' ? 'var(--green)' : r.status === 'atencao' ? 'var(--yellow)' : 'var(--red)';
-    html += '<tr data-status="' + r.status + '" data-placa="' + r.placa + '">';
+    html += '<tr data-status="' + r.status + '" data-placa="' + r.placa + '" data-op="' + (r.operacao || '') + '">';
     html += '<td><span class="placa-tag">' + r.placa + '</span></td>';
     html += '<td style="font-size:12px;color:var(--text2)">' + (r.operacao || '—') + '</td>';
     html += '<td style="text-align:center;font-family:monospace;color:var(--accent);font-weight:600">' + fmtKm(r.kmSistema) + '</td>';
@@ -5311,6 +5351,26 @@ function kmComparar() {
     html += '<td style="text-align:center;font-family:monospace;font-weight:700;color:' + diffCor + '">' + (r.diff >= 0 ? '+' : '') + fmtKm(r.diff) + '</td>';
     html += '<td style="text-align:center;font-family:monospace;font-weight:700;color:' + pctCor + '">' + pctTxt + '</td>';
     html += '<td style="text-align:center"><span style="display:inline-block;padding:3px 12px;border-radius:20px;font-size:11px;font-weight:700" class="' + cls + '">' + txt + '</span></td>';
+    html += '</tr>';
+  });
+
+  // Linhas de sem correspondência (com data-status="sem_corr" para filtro)
+  semNoSistema.forEach(r => {
+    html += '<tr data-status="sem_corr" data-placa="' + r.placa + '" data-op="">';
+    html += '<td><span class="placa-tag" style="border-color:rgba(124,92,252,.4);color:var(--accent2)">' + r.placa + '</span></td>';
+    html += '<td style="font-size:12px;color:var(--text3)" colspan="5">Presente no cliente, não encontrada no sistema — KM cliente: <strong>' + fmtKm(r.kmCliente) + '</strong></td>';
+    html += '<td style="text-align:center"><span style="display:inline-block;padding:3px 12px;border-radius:20px;font-size:11px;font-weight:700" class="km-status-sem">🔍 Só cliente</span></td>';
+    html += '</tr>';
+  });
+  semNoCliente.forEach(r => {
+    html += '<tr data-status="sem_corr" data-placa="' + r.placa + '" data-op="' + (r.operacao || '') + '">';
+    html += '<td><span class="placa-tag" style="border-color:rgba(79,142,247,.4)">' + r.placa + '</span></td>';
+    html += '<td style="font-size:12px;color:var(--text2)">' + (r.operacao || '—') + '</td>';
+    html += '<td style="text-align:center;font-family:monospace;color:var(--accent)">' + fmtKm(r.kmSistema) + '</td>';
+    html += '<td style="text-align:center;color:var(--text3)">—</td>';
+    html += '<td style="text-align:center;color:var(--text3)">—</td>';
+    html += '<td style="text-align:center;color:var(--text3)">—</td>';
+    html += '<td style="text-align:center"><span style="display:inline-block;padding:3px 12px;border-radius:20px;font-size:11px;font-weight:700" class="km-status-sem">🔍 Só sistema</span></td>';
     html += '</tr>';
   });
 
@@ -5329,13 +5389,16 @@ function kmComparar() {
 function kmFiltrarTabela() {
   const busca = (document.getElementById('km-busca')?.value || '').toLowerCase();
   const filtroStatus = document.getElementById('km-filtro-status')?.value || '';
+  const filtroOp = document.getElementById('km-filtro-op')?.value || '';
   const rows = document.querySelectorAll('#km-tbody tr');
   rows.forEach(tr => {
     const placa = (tr.dataset.placa || '').toLowerCase();
     const status = tr.dataset.status || '';
+    const op = tr.dataset.op || '';
     const visPlaca = !busca || placa.includes(busca);
-    const visStatus = !filtroStatus || status === filtroStatus;
-    tr.style.display = visPlaca && visStatus ? '' : 'none';
+    const visStatus = !filtroStatus || status === filtroStatus || (filtroStatus === 'sem_corr' && status === 'sem_corr');
+    const visOp = !filtroOp || op === filtroOp;
+    tr.style.display = visPlaca && visStatus && visOp ? '' : 'none';
   });
 }
 
