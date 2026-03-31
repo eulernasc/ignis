@@ -5196,8 +5196,11 @@ function kmComparar() {
   const label = document.getElementById('km-label').value.trim() || new Date().toLocaleDateString('pt-BR');
   const fmtKm = v => v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
-  // Todas as placas únicas
-  const todasPlacas = new Set([...Object.keys(sistema), ...Object.keys(cliente)]);
+  // Todas as placas únicas — excluindo EMP, MAQ e TRA (empilhadeiras/máquinas/tratores internos)
+  const prefixosIgnorar = ['EMP', 'MAQ', 'TRA'];
+  const ignorarPlaca = p => prefixosIgnorar.some(pref => p.toUpperCase().startsWith(pref));
+
+  const todasPlacas = new Set([...Object.keys(sistema), ...Object.keys(cliente)].filter(p => !ignorarPlaca(p)));
 
   const resultados = [];
   const semNoSistema = []; // tem no cliente mas não no sistema
@@ -5207,8 +5210,12 @@ function kmComparar() {
     const temSistema = sistema[placa] !== undefined;
     const temCliente = cliente[placa] !== undefined;
 
-    if (!temSistema) { const kmC = typeof cliente[placa] === 'object' ? cliente[placa].km : cliente[placa]; semNoSistema.push({ placa, kmCliente: kmC }); return; }
-    if (!temCliente) { semNoCliente.push({ placa, kmSistema: sistema[placa].km, operacao: (sistema[placa].operacao || '').replace(/_/g,' ') }); return; }
+    if (!temSistema) {
+      const d = typeof cliente[placa] === 'object' ? cliente[placa] : { km: cliente[placa], operacao: '' };
+      semNoSistema.push({ placa, kmCliente: d.km, operacao: d.operacao || '' });
+      return;
+    }
+    if (!temCliente) { semNoCliente.push({ placa, kmSistema: sistema[placa].km, operacao: sistema[placa].operacao || '' }); return; }
 
     const kmS = sistema[placa].km;
     const kmC = typeof cliente[placa] === 'object' ? cliente[placa].km : cliente[placa];
@@ -5356,9 +5363,13 @@ function kmComparar() {
 
   // Linhas de sem correspondência (com data-status="sem_corr" para filtro)
   semNoSistema.forEach(r => {
-    html += '<tr data-status="sem_corr" data-placa="' + r.placa + '" data-op="">';
+    html += '<tr data-status="sem_corr" data-placa="' + r.placa + '" data-op="' + (r.operacao || '') + '">';
     html += '<td><span class="placa-tag" style="border-color:rgba(124,92,252,.4);color:var(--accent2)">' + r.placa + '</span></td>';
-    html += '<td style="font-size:12px;color:var(--text3)" colspan="5">Presente no cliente, não encontrada no sistema — KM cliente: <strong>' + fmtKm(r.kmCliente) + '</strong></td>';
+    html += '<td style="font-size:12px;color:var(--text2)">' + (r.operacao || '—') + '</td>';
+    html += '<td style="text-align:center;color:var(--text3)">—</td>';
+    html += '<td style="text-align:center;font-family:monospace;color:var(--accent2)">' + fmtKm(r.kmCliente) + '</td>';
+    html += '<td style="text-align:center;color:var(--text3)">—</td>';
+    html += '<td style="text-align:center;color:var(--text3)">—</td>';
     html += '<td style="text-align:center"><span style="display:inline-block;padding:3px 12px;border-radius:20px;font-size:11px;font-weight:700" class="km-status-sem">🔍 Só cliente</span></td>';
     html += '</tr>';
   });
