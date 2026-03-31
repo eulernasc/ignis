@@ -3041,7 +3041,7 @@ function renderRelEmailBloco(operacoes) {
           (b.isGrupo ? '<span style="font-size:10px;color:var(--text3);font-weight:400;margin-left:6px">(' + b.ops.join(', ') + ')</span>' : '') +
         '</div>' +
         '<div style="display:flex;gap:8px">' +
-          '<input type="text" class="form-input" style="flex:1" id="rel-email-bloco-' + encodeURIComponent(b.id) + '" placeholder="email1@empresa.com, email2@empresa.com" value="' + (b.emails || '') + '">' +
+          '<input type="text" class="form-input" style="flex:1" id="rel-email-bloco-' + encodeURIComponent(b.id) + '" placeholder="email1@empresa.com, email2@empresa.com">' +
           '<button class="btn btn-primary btn-sm" data-bloco-id="' + b.id.replace(/"/g,'&quot;') + '" onclick="enviarBloco(this.dataset.blocoId)">📧 Enviar</button>' +
         '</div>' +
       '</div>'
@@ -3049,6 +3049,13 @@ function renderRelEmailBloco(operacoes) {
     (blocos.length > 1 ? '<div style="margin-top:6px"><button class="btn btn-primary" onclick="enviarTodosEmails()">📧 Enviar Todos</button></div>' : '') +
   '</div>';
   window._relBlocos = blocos;
+  // Preenche os e-mails via JS após criar o DOM (mais confiável que value= no innerHTML)
+  blocos.forEach(b => {
+    if (b.emails) {
+      const input = document.getElementById('rel-email-bloco-' + encodeURIComponent(b.id));
+      if (input) input.value = b.emails;
+    }
+  });
 }
 
 function buildEmailHTML(blocoOps, byOp, labelPeriodo, limite, labelBloco) {
