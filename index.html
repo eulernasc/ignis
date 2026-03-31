@@ -793,6 +793,15 @@ body{overflow-x:hidden;}
           </div>
         </div>
       </div>
+      <div class="form-group" style="margin-top:14px">
+        <label class="form-label">Tipo de Máquina</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-secondary btn-sm rel-tipo-btn active" data-tipo="" onclick="relSetTipo(this,'')">⊞ Todos</button>
+          <button class="btn btn-secondary btn-sm rel-tipo-btn" data-tipo="__maquinas__" onclick="relSetTipo(this,'__maquinas__')">⚙️ Máquinas</button>
+          <button class="btn btn-secondary btn-sm rel-tipo-btn" data-tipo="__tratores__" onclick="relSetTipo(this,'__tratores__')">🚜 Tratores</button>
+          <button class="btn btn-secondary btn-sm rel-tipo-btn" data-tipo="__empilhadeiras__" onclick="relSetTipo(this,'__empilhadeiras__')">🏗 Empilhadeiras</button>
+        </div>
+      </div>
       <div style="margin-top:14px">
         <button class="btn btn-primary" style="width:100%;padding:12px" onclick="renderRelatorio()">🔍 Analisar Período</button>
       </div>
@@ -1394,6 +1403,7 @@ async function syncFromFirebase() {
       localStorage.setItem('fueltracker_v3', JSON.stringify(state));
       updateFilters();
       renderDashboard();
+      relChecarReincidencia();
       updateSyncStatus('connected');
       showToast('Dados sincronizados do Firebase! ☁️', 'success');
     } else {
@@ -2758,6 +2768,20 @@ function salvarSenha() {
 }
 
 // ── RELATÓRIO DE EFICIÊNCIA ───────────────────────────────────────────────────
+function relSetTipo(el, tipo) {
+  document.querySelectorAll('.rel-tipo-btn').forEach(b => {
+    b.classList.remove('active');
+    b.style.background = '';
+    b.style.color = '';
+    b.style.borderColor = '';
+  });
+  el.classList.add('active');
+  el.style.background = 'var(--accent)';
+  el.style.color = '#fff';
+  el.style.borderColor = 'var(--accent)';
+  renderRelatorio();
+}
+
 function relSetRange(opt) {
   const hoje = new Date();
   const fmt = d => d.toISOString().split('T')[0];
@@ -2842,9 +2866,14 @@ function renderRelatorio() {
   const fmtBr = d => { const [y,m,dd] = d.split('-'); return dd+'/'+m+'/'+y; };
   const labelPeriodo = fmtBr(ini) + ' a ' + fmtBr(fim);
 
+  // Filtra por tipo de máquina
+  const relTipo = document.querySelector('.rel-tipo-btn.active')?.dataset?.tipo || '';
   // Filtra abastecimentos
   let registros = state.abastecimentos.filter(a => a.data >= ini && a.data <= fim);
   if (opsFiltro.length) registros = registros.filter(a => { const op = (getMaquina(a.placa)?.operacao || a.operacao || '').replace(/_/g,' '); return opsFiltro.includes(op); });
+  if (relTipo === '__tratores__') registros = registros.filter(a => a.placa && a.placa.toUpperCase().startsWith('TRA'));
+  else if (relTipo === '__maquinas__') registros = registros.filter(a => a.placa && !a.placa.toUpperCase().startsWith('TRA') && !a.placa.toUpperCase().startsWith('EMP'));
+  else if (relTipo === '__empilhadeiras__') registros = registros.filter(a => a.placa && a.placa.toUpperCase().startsWith('EMP'));
 
   if (!registros.length) {
     c.innerHTML = '<div class="empty"><div class="empty-icon">🔍</div><div class="empty-text">Nenhum registro no período</div></div>';
