@@ -1066,6 +1066,7 @@ body{overflow-x:hidden;}
 .km-status-atencao{background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.3);color:var(--yellow);}
 .km-status-alerta{background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);color:var(--red);}
 .km-status-sem{background:rgba(124,92,252,.12);border:1px solid rgba(124,92,252,.3);color:var(--accent2);}
+.km-status-excesso{background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);color:var(--red);}
 </style>
 
 <div id="page-kmcomp" class="page">
@@ -1113,8 +1114,20 @@ body{overflow-x:hidden;}
         </div>
         <div style="font-size:11px;color:var(--text3);margin-top:6px">💡 Acima dessa % = ✅ OK. Deixe 0% para desativar a zona de atenção</div>
       </div>
-    </div>
-  </div>
+      <div style="flex:1;min-width:260px;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.25);border-radius:10px;padding:12px 16px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <span style="font-size:16px">🚨</span>
+          <span style="font-size:13px;font-weight:700;color:var(--red)">Excesso — KM muito acima</span>
+        </div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:10px">Nosso KM está excessivamente acima do cliente. Pode indicar erro de medição ou dados inconsistentes.</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:12px;color:var(--text2)">Acima de:</span>
+          <input type="number" id="km-margem-excesso" value="10" min="1" max="200" step="1"
+            style="width:64px;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:6px;font-size:13px;text-align:center;font-family:monospace">
+          <span style="font-size:12px;color:var(--text2)">% acima do cliente</span>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:6px">💡 Deixe vazio ou 0 para desativar. Ex: 10% = alerta quando nosso KM superar o cliente em mais de 10%</div>
+      </div>
 
   <!-- Upload dos dois arquivos -->
   <div id="km-upload-section">
@@ -5052,10 +5065,10 @@ function kmMostrarMargensOps() {
   const existing = window._kmState.margensOp || {};
   let html = '<div style="background:var(--bg2);border:1px solid rgba(245,158,11,.4);border-radius:12px;padding:16px 20px;margin-bottom:16px">';
   html += '<div style="font-size:14px;font-weight:700;margin-bottom:4px">⚙️ Margem por Operação</div>';
-  html += '<div style="font-size:12px;color:var(--text2);margin-bottom:14px">' + ops.size + ' operação(ões) identificada(s). Defina a margem mínima para cada uma (0% = sem margem definida).</div>';
+  html += '<div style="font-size:12px;color:var(--text2);margin-bottom:14px">' + ops.size + ' operação(ões) identificada(s). Mínima = alerta se abaixo · Atenção = zona intermediária · Excesso = alerta se muito acima.</div>';
   html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:10px">';
   [...ops].sort().forEach(op => {
-    const prev = existing[op] || { min: 0, atencao: 5 };
+    const prev = existing[op] || { min: 0, atencao: 5, excesso: 10 };
     html += '<div style="background:var(--bg3);border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">';
     html += '<span style="flex:1;font-size:13px;font-weight:600;min-width:150px">' + op + '</span>';
     html += '<div style="display:flex;align-items:center;gap:6px">';
@@ -5066,6 +5079,11 @@ function kmMostrarMargensOps() {
     html += '<div style="display:flex;align-items:center;gap:6px">';
     html += '<span style="font-size:11px;color:var(--text3)">Atenção</span>';
     html += '<input type="number" class="km-op-margem-atencao" data-op="' + op + '" value="' + prev.atencao + '" min="0" max="50" step="0.5" style="width:60px;background:var(--bg2);border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:6px;font-size:12px;text-align:center;font-family:monospace">';
+    html += '<span style="font-size:11px;color:var(--text3)">%</span>';
+    html += '</div>';
+    html += '<div style="display:flex;align-items:center;gap:6px">';
+    html += '<span style="font-size:11px;color:var(--red)">Excesso</span>';
+    html += '<input type="number" class="km-op-margem-excesso" data-op="' + op + '" value="' + (prev.excesso ?? 10) + '" min="0" max="200" step="1" style="width:60px;background:var(--bg2);border:1px solid rgba(239,68,68,.3);color:var(--text);padding:5px 8px;border-radius:6px;font-size:12px;text-align:center;font-family:monospace">';
     html += '<span style="font-size:11px;color:var(--text3)">%</span>';
     html += '</div>';
     html += '</div>';
@@ -5189,10 +5207,16 @@ function kmComparar() {
     if (!margensOp[op]) margensOp[op] = {};
     margensOp[op].atencao = parseFloat(inp.value) || 5;
   });
+  document.querySelectorAll('.km-op-margem-excesso').forEach(inp => {
+    const op = inp.dataset.op;
+    if (!margensOp[op]) margensOp[op] = {};
+    margensOp[op].excesso = parseFloat(inp.value) || 0;
+  });
   window._kmState.margensOp = margensOp;
   // Fallback global (se não houver operações identificadas)
   const margemMinGlobal = parseFloat(document.getElementById('km-margem-min').value) || 0;
   const margemAtencaoGlobal = parseFloat(document.getElementById('km-margem-atencao').value) || 5;
+  const margemExcessoGlobal = parseFloat(document.getElementById('km-margem-excesso').value) || 0;
   const label = document.getElementById('km-label').value.trim() || new Date().toLocaleDateString('pt-BR');
   const fmtKm = v => v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
@@ -5227,9 +5251,11 @@ function kmComparar() {
     const mOp = margensOp[op] || {};
     const margemMin = mOp.min !== undefined ? mOp.min : margemMinGlobal;
     const margemAtencao = mOp.atencao !== undefined ? mOp.atencao : margemAtencaoGlobal;
+    const margemExcesso = mOp.excesso !== undefined ? mOp.excesso : margemExcessoGlobal;
 
     let status;
     if (pct === null) { status = 'sem_base'; }
+    else if (margemExcesso > 0 && pct > margemExcesso) { status = 'excesso'; }
     else if (pct < margemMin) { status = 'alerta'; }
     else if (pct < margemAtencao) { status = 'atencao'; }
     else { status = 'ok'; }
@@ -5238,7 +5264,7 @@ function kmComparar() {
   });
 
   // Salva para exportação e e-mail (usa valores globais para evitar ReferenceError)
-  window._kmResultado = { resultados, semNoSistema, semNoCliente, label, margemMin: margemMinGlobal, margemAtencao: margemAtencaoGlobal };
+  window._kmResultado = { resultados, semNoSistema, semNoCliente, label, margemMin: margemMinGlobal, margemAtencao: margemAtencaoGlobal, margemExcesso: margemExcessoGlobal };
 
   // Ordena: alertas primeiro, depois atenção, ok, sem_base
   const ordem = { alerta: 0, atencao: 1, sem_base: 2, ok: 3 };
@@ -5247,18 +5273,20 @@ function kmComparar() {
   const alertas = resultados.filter(r => r.status === 'alerta');
   const atencao = resultados.filter(r => r.status === 'atencao');
   const ok = resultados.filter(r => r.status === 'ok');
+  const excessos = resultados.filter(r => r.status === 'excesso');
 
   // Badge nav
-  const totalProblemas = alertas.length + semNoSistema.length;
+  const totalProblemas = alertas.length + excessos.length + semNoSistema.length;
   const badge = document.getElementById('kmcomp-nav-badge');
   if (badge) { badge.textContent = totalProblemas; badge.style.display = totalProblemas ? '' : 'none'; }
 
   // KPIs
   let html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:20px">';
   html += kpiExec('📅 Comparativo', label, new Date().toLocaleDateString('pt-BR'), '#8b90a7');
-  html += kpiExec('✅ OK', ok.length + '', 'acima da margem de atenção', 'var(--green)');
+  html += kpiExec('✅ OK', ok.length + '', 'dentro dos limites', 'var(--green)');
   const opsComMargem = Object.keys(margensOp).length; html += kpiExec('⚠️ Atenção', atencao.length + '', opsComMargem ? 'margem por operação configurada' : 'margem baixa (' + margemMinGlobal + '–' + margemAtencaoGlobal + '%)', 'var(--yellow)');
-  html += kpiExec('🔴 Alerta', alertas.length + '', 'nosso KM menor que o cliente', 'var(--red)');
+  html += kpiExec('🔴 Alerta', alertas.length + '', 'KM abaixo do cliente', 'var(--red)');
+  html += kpiExec('🚨 Excesso', excessos.length + '', 'KM muito acima do cliente', excessos.length > 0 ? 'var(--red)' : 'var(--text3)');
   html += kpiExec('🔍 Sem Correspondência', (semNoSistema.length + semNoCliente.length) + '', semNoSistema.length + ' só no cliente · ' + semNoCliente.length + ' só no sistema', 'var(--accent2)');
   html += '</div>';
 
@@ -5332,7 +5360,7 @@ function kmComparar() {
   html += '</select>';
   // Filtro por status (inclui "sem correspondência")
   html += '<select class="filter-select" id="km-filtro-status" onchange="kmFiltrarTabela()" style="font-size:13px">';
-  html += '<option value="">Todos</option><option value="alerta">🔴 Alerta</option><option value="atencao">⚠️ Atenção</option><option value="ok">✅ OK</option><option value="sem_corr">🔍 Sem Correspondência</option></select>';
+  html += '<option value="">Todos</option><option value="alerta">🔴 Alerta</option><option value="excesso">🚨 Excesso</option><option value="atencao">⚠️ Atenção</option><option value="ok">✅ OK</option><option value="sem_corr">🔍 Sem Correspondência</option></select>';
   html += '</div></div>';
 
   html += '<div style="overflow-x:auto"><table id="km-tabela"><thead><tr>';
@@ -5344,12 +5372,13 @@ function kmComparar() {
       ok: ['km-status-ok', '✅ OK'],
       atencao: ['km-status-atencao', '⚠️ Atenção'],
       alerta: ['km-status-alerta', '🔴 Alerta'],
+      excesso: ['km-status-excesso', '🚨 Excesso'],
       sem_base: ['km-status-sem', '— Sem base']
     };
     const [cls, txt] = statusMap[r.status] || ['', '—'];
     const diffCor = r.diff >= 0 ? 'var(--green)' : 'var(--red)';
     const pctTxt = r.pct !== null ? (r.pct >= 0 ? '+' : '') + r.pct.toFixed(1) + '%' : '—';
-    const pctCor = r.pct === null ? 'var(--text3)' : r.status === 'ok' ? 'var(--green)' : r.status === 'atencao' ? 'var(--yellow)' : 'var(--red)';
+    const pctCor = r.pct === null ? 'var(--text3)' : r.status === 'ok' ? 'var(--green)' : r.status === 'atencao' ? 'var(--yellow)' : r.status === 'excesso' ? 'var(--red)' : 'var(--red)';
     html += '<tr data-status="' + r.status + '" data-placa="' + r.placa + '" data-op="' + (r.operacao || '') + '">';
     html += '<td><span class="placa-tag">' + r.placa + '</span></td>';
     html += '<td style="font-size:12px;color:var(--text2)">' + (r.operacao || '—') + '</td>';
