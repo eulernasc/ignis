@@ -1814,7 +1814,12 @@ function renderComparativo() {
 
   // Todos os períodos ordenados por data de importação
   const todosPeriodos = Object.entries(state.semanas)
-    .sort((a,b) => (a[1].importedAt||'').localeCompare(b[1].importedAt||''));
+    .sort((a,b) => {
+      // Ordena por dataIni (ISO AAAA-MM-DD) se disponível, senão pelo label
+      const aKey = a[1].dataIni || a[1].label || a[0];
+      const bKey = b[1].dataIni || b[1].label || b[0];
+      return aKey.localeCompare(bKey);
+    });
 
   if(!todosPeriodos.length) {
     selectorDiv.style.display='none';
@@ -2424,7 +2429,7 @@ function openImport() {
 
 function renderHistoricoPeriodos() {
   const c = document.getElementById('historico-periodos');
-  const periodos = Object.entries(state.semanas).sort((a,b) => (b[1].importedAt||'').localeCompare(a[1].importedAt||''));
+  const periodos = Object.entries(state.semanas).sort((a,b) => (b[1].dataIni||b[1].label||b[0]).localeCompare(a[1].dataIni||a[1].label||a[0]));
   if(!periodos.length){
     c.innerHTML='<div style="font-size:13px;color:var(--text3);text-align:center;padding:16px">Nenhum período importado ainda</div>';
     return;
@@ -3143,7 +3148,7 @@ async function enviarBloco(blocoId) {
   const { byOp, labelPeriodo, limite } = window._relDados;
   // Pré-computa set de reincidentes para o HTML do email
   const limite98 = 98;
-  const periodos = Object.entries(state.semanas).sort((a,b) => (a[1].importedAt||'').localeCompare(b[1].importedAt||''));
+  const periodos = Object.entries(state.semanas).sort((a,b) => (a[1].dataIni||a[1].label||a[0]).localeCompare(b[1].dataIni||b[1].label||b[0]));
   const maqHist = {};
   periodos.forEach(([id, p]) => {
     const byMaq = {};
@@ -4510,7 +4515,7 @@ function relgGetBlocosSalvos(operacoes) {
 // ── ALERTAS DE REINCIDÊNCIA ───────────────────────────────────────────────────
 function relChecarReincidencia() {
   const limite = 98;
-  const periodos = Object.entries(state.semanas).sort((a,b) => (a[1].importedAt||'').localeCompare(b[1].importedAt||''));
+  const periodos = Object.entries(state.semanas).sort((a,b) => (a[1].dataIni||a[1].label||a[0]).localeCompare(b[1].dataIni||b[1].label||b[0]));
   if (periodos.length < 2) {
     document.getElementById('rel-reincidencia-badge').style.display = 'none';
     const banner = document.getElementById('rel-reincidencia-banner');
