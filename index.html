@@ -1600,11 +1600,33 @@ function getSelectedCompOps() {
 }
 
 function getFilteredAbast(opF,maqF) {
-  const now=new Date();
   let list=[...state.abastecimentos];
-  if(state.tab==='semanal') { const w=new Date(now-7*24*60*60*1000); list=list.filter(a=>new Date(a.data)>=w); }
-  else if(state.tab==='mensal') { const m=new Date(now.getFullYear(),now.getMonth(),1); list=list.filter(a=>new Date(a.data)>=m); }
-  else {
+
+  if(state.tab==='semanal' || state.tab==='mensal') {
+    // Usa o período mais recente importado como referência
+    const periodos = Object.values(state.semanas)
+      .filter(p => p.dataIni)
+      .sort((a,b) => (b.dataIni||'').localeCompare(a.dataIni||''));
+    const ultimo = periodos[0];
+
+    if(ultimo && ultimo.dataIni) {
+      if(state.tab==='semanal') {
+        // Mostra só o período mais recente (pela dataIni/dataFim)
+        const ini = ultimo.dataIni;
+        const fim = ultimo.dataFim || ultimo.dataIni;
+        list = list.filter(a => a.data >= ini && a.data <= fim);
+      } else {
+        // Mensal: todos os períodos do mesmo mês/ano que o mais recente
+        const mes = ultimo.dataIni.substring(0, 7); // AAAA-MM
+        list = list.filter(a => a.data && a.data.substring(0, 7) === mes);
+      }
+    } else {
+      // Fallback: últimos 7 dias ou mês atual (comportamento antigo)
+      const now = new Date();
+      if(state.tab==='semanal') { const w=new Date(now-7*24*60*60*1000); list=list.filter(a=>new Date(a.data)>=w); }
+      else { const m=new Date(now.getFullYear(),now.getMonth(),1); list=list.filter(a=>new Date(a.data)>=m); }
+    }
+  } else {
     const ini=document.getElementById('dash-data-ini')?.value||'';
     const fim=document.getElementById('dash-data-fim')?.value||'';
     if(ini) list=list.filter(a=>a.data>=ini);
@@ -1647,7 +1669,19 @@ function renderDashboard() {
     const seta=desvio<=0?'✅':'⚠️';
     metaEl.innerHTML=`${seta} meta: <strong style="color:${cor}">${metaMedia.toFixed(2)} L/h</strong> <span style="color:${cor}">(${desvio>0?'+':''}${desvio.toFixed(1)}%)</span>`;
   } else { metaEl.innerHTML=''; }
-  const lbl=state.tab==='semanal'?'Semanal':state.tab==='mensal'?'Mensal':'Período';
+  // Label do gráfico: mostra o nome do período real quando semanal/mensal
+  let lbl;
+  if(state.tab==='semanal') {
+    const periodos = Object.values(state.semanas).filter(p=>p.dataIni).sort((a,b)=>(b.dataIni||'').localeCompare(a.dataIni||''));
+    lbl = periodos[0]?.label || 'Semanal';
+  } else if(state.tab==='mensal') {
+    const periodos = Object.values(state.semanas).filter(p=>p.dataIni).sort((a,b)=>(b.dataIni||'').localeCompare(a.dataIni||''));
+    const mes = periodos[0]?.dataIni?.substring(0,7);
+    lbl = mes ? new Date(mes+'-01').toLocaleDateString('pt-BR',{month:'long',year:'numeric'}) : 'Mensal';
+    lbl = lbl.charAt(0).toUpperCase() + lbl.slice(1);
+  } else {
+    lbl = 'Período';
+  }
   if(document.getElementById('chart-period-label2')) document.getElementById('chart-period-label2').textContent=lbl;
   renderOpChart(list); renderBarChart(list); renderRanking(list);
   relChecarReincidencia();
@@ -1847,16 +1881,21 @@ function renderComparativo() {
     );
   }
 
+  // Períodos a exibir nos checkboxes: se tem filtro de data → só os filtrados; senão → todos
+  const periodosVisiveis = (compDtIni || compDtFim)
+    ? todosPeriodos.filter(([id]) => _periodosSelec.has(id))
+    : todosPeriodos;
+
   // Mostrar seletor de períodos
-  selectorDiv.style.display='block';
+  selectorDiv.style.display = 'block';
 
   // Inicializar seleção com os 2 mais recentes se ainda vazia
-  if(_periodosSelec.size===0) {
-    todosPeriodos.slice(-2).forEach(([id])=>_periodosSelec.add(id));
+  if (_periodosSelec.size === 0) {
+    todosPeriodos.slice(-2).forEach(([id]) => _periodosSelec.add(id));
   }
 
-  // Renderizar checkboxes (todos os períodos disponíveis, marcados conforme seleção)
-  checkboxDiv.innerHTML = todosPeriodos.map(([id, p])=>`
+  // Renderizar checkboxes — só os períodos visíveis
+  checkboxDiv.innerHTML = periodosVisiveis.map(([id, p]) => `
     <label style="display:inline-flex;align-items:center;gap:7px;padding:7px 12px;background:${_periodosSelec.has(id)?'rgba(79,142,247,.15)':'var(--bg3)'};border:1px solid ${_periodosSelec.has(id)?'var(--accent)':'var(--border)'};border-radius:8px;cursor:pointer;font-size:12px;font-weight:500;transition:.2s">
       <input type="checkbox" style="accent-color:var(--accent)" ${_periodosSelec.has(id)?'checked':''} onchange="togglePeriodoComp('${id}',this)">
       ${p.label||id}
@@ -2568,8 +2607,9 @@ function importarRelatorio(input) {
           metaAtualizada++;
         }
         if(volReal>0&&kmReal>0){
-          const hoje=new Date().toISOString().split('T')[0];
-          const entry={placa,data:hoje,litros:volReal,horas:kmReal,operador:row['Gestor']||'',operacao,modelo,tipo,periodoId};
+          // Usa a data de referência do período (início) em vez da data de importação
+          const dataRef = document.getElementById('import-data-ini')?.value || new Date().toISOString().split('T')[0];
+          const entry={placa,data:dataRef,litros:volReal,horas:kmReal,operador:row['Gestor']||'',operacao,modelo,tipo,periodoId};
           dadosSemana.push(entry);
           state.abastecimentos.push(entry);
         }
