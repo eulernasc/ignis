@@ -1877,16 +1877,18 @@ function renderComparativo() {
   const clearBtn = document.getElementById('comp-date-clear');
   if(clearBtn) clearBtn.style.display = (compDtIni||compDtFim) ? 'inline-flex' : 'none';
 
-  // Se tem filtro de data → auto-seleciona períodos dentro do intervalo
+  // Se tem filtro de data → auto-seleciona APENAS períodos que realmente se sobrepõem ao intervalo
   if(compDtIni || compDtFim) {
     _periodosSelec = new Set(
       todosPeriodos
         .filter(([id, p]) => {
           const pIni = p.dataIni||'';
-          const pFim = p.dataFim||'';
-          if(!pIni && !pFim) return true; // sem data de ref: sempre inclui
-          if(compDtIni && pFim && pFim < compDtIni) return false;
-          if(compDtFim && pIni && pIni > compDtFim) return false;
+          const pFim = p.dataFim||p.dataIni||'';
+          // Se o período não tem datas de referência, não inclui quando há filtro ativo
+          if(!pIni) return false;
+          // Sobreposição real: período começa antes do fim do filtro E termina depois do início do filtro
+          if(compDtFim && pIni > compDtFim) return false; // período começa depois do fim do filtro
+          if(compDtIni && pFim && pFim < compDtIni) return false; // período termina antes do início do filtro
           return true;
         })
         .map(([id]) => id)
@@ -1901,10 +1903,17 @@ function renderComparativo() {
   // Mostrar seletor de períodos
   selectorDiv.style.display = 'block';
 
-  // Inicializar seleção com o período mais recente se ainda vazia
-  if (_periodosSelec.size === 0) {
+  // Sem filtro de data → inicializa com o mais recente se vazia
+  if (!compDtIni && !compDtFim && _periodosSelec.size === 0) {
     const maisRecente = todosPeriodos[todosPeriodos.length - 1];
     if (maisRecente) _periodosSelec.add(maisRecente[0]);
+  }
+
+  // Se tem filtro mas nenhum período bateu → avisa
+  if ((compDtIni || compDtFim) && _periodosSelec.size === 0) {
+    checkboxDiv.innerHTML = '<div style="font-size:13px;color:var(--text2);padding:8px 4px">Nenhum período importado para este intervalo</div>';
+    c.innerHTML = '<div class="empty"><div class="empty-icon">📅</div><div class="empty-text">Nenhum período no intervalo selecionado</div><div class="empty-sub">Importe dados referentes a este período ou ajuste as datas</div></div>';
+    return;
   }
 
   // Renderizar checkboxes — só os períodos visíveis
