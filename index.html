@@ -1815,7 +1815,6 @@ function renderComparativo() {
   // Todos os períodos ordenados por data de importação
   const todosPeriodos = Object.entries(state.semanas)
     .sort((a,b) => {
-      // Ordena por dataIni (ISO AAAA-MM-DD) se disponível, senão pelo label
       const aKey = a[1].dataIni || a[1].label || a[0];
       const bKey = b[1].dataIni || b[1].label || b[0];
       return aKey.localeCompare(bKey);
@@ -1827,15 +1826,36 @@ function renderComparativo() {
     return;
   }
 
+  const compDtIni = document.getElementById('comp-data-ini')?.value||'';
+  const compDtFim = document.getElementById('comp-data-fim')?.value||'';
+  const clearBtn = document.getElementById('comp-date-clear');
+  if(clearBtn) clearBtn.style.display = (compDtIni||compDtFim) ? 'inline-flex' : 'none';
+
+  // Se tem filtro de data → auto-seleciona períodos dentro do intervalo
+  if(compDtIni || compDtFim) {
+    _periodosSelec = new Set(
+      todosPeriodos
+        .filter(([id, p]) => {
+          const pIni = p.dataIni||'';
+          const pFim = p.dataFim||'';
+          if(!pIni && !pFim) return true; // sem data de ref: sempre inclui
+          if(compDtIni && pFim && pFim < compDtIni) return false;
+          if(compDtFim && pIni && pIni > compDtFim) return false;
+          return true;
+        })
+        .map(([id]) => id)
+    );
+  }
+
   // Mostrar seletor de períodos
   selectorDiv.style.display='block';
 
-  // Inicializar seleção com os 2 mais recentes se vazia
+  // Inicializar seleção com os 2 mais recentes se ainda vazia
   if(_periodosSelec.size===0) {
     todosPeriodos.slice(-2).forEach(([id])=>_periodosSelec.add(id));
   }
 
-  // Renderizar checkboxes
+  // Renderizar checkboxes (todos os períodos disponíveis, marcados conforme seleção)
   checkboxDiv.innerHTML = todosPeriodos.map(([id, p])=>`
     <label style="display:inline-flex;align-items:center;gap:7px;padding:7px 12px;background:${_periodosSelec.has(id)?'rgba(79,142,247,.15)':'var(--bg3)'};border:1px solid ${_periodosSelec.has(id)?'var(--accent)':'var(--border)'};border-radius:8px;cursor:pointer;font-size:12px;font-weight:500;transition:.2s">
       <input type="checkbox" style="accent-color:var(--accent)" ${_periodosSelec.has(id)?'checked':''} onchange="togglePeriodoComp('${id}',this)">
@@ -1843,34 +1863,11 @@ function renderComparativo() {
       <span style="color:var(--text3);font-size:10px">${(p.registros||[]).length} maq.</span>
     </label>`).join('');
 
-  // Períodos selecionados para comparar
-  const selecionados = todosPeriodos.filter(([id])=>_periodosSelec.has(id));
-
-  if(!selecionados.length) {
-    c.innerHTML='<div class="empty"><div class="empty-icon">☝️</div><div class="empty-text">Selecione períodos acima para comparar</div></div>';
-    return;
-  }
-
-  // Calcular dados por período
-  const compDtIni = document.getElementById('comp-data-ini')?.value||'';
-  const compDtFim = document.getElementById('comp-data-fim')?.value||'';
-  // Mostrar/esconder botão de limpar
-  const clearBtn = document.getElementById('comp-date-clear');
-  if(clearBtn) clearBtn.style.display = (compDtIni||compDtFim) ? 'inline-flex' : 'none';
-
-  // Filtrar períodos pela data de referência do período (não dos registros individuais)
-  const selecionadosFiltrados = selecionados.filter(([id, p])=>{
-    if(!compDtIni && !compDtFim) return true;
-    const pIni = p.dataIni||'';
-    const pFim = p.dataFim||'';
-    if(!pIni && !pFim) return true; // período sem data de ref: sempre mostra
-    if(compDtIni && pFim && pFim < compDtIni) return false;
-    if(compDtFim && pIni && pIni > compDtFim) return false;
-    return true;
-  });
+  // Períodos para comparar = selecionados (com ou sem filtro de data)
+  const selecionadosFiltrados = todosPeriodos.filter(([id])=>_periodosSelec.has(id));
 
   if(!selecionadosFiltrados.length) {
-    c.innerHTML='<div class="empty"><div class="empty-icon">📅</div><div class="empty-text">Nenhum período no intervalo selecionado</div><div class="empty-sub">Ajuste as datas ou limpe o filtro</div></div>';
+    c.innerHTML='<div class="empty"><div class="empty-icon">☝️</div><div class="empty-text">Selecione períodos acima para comparar</div></div>';
     return;
   }
 
@@ -2211,6 +2208,8 @@ function limparFiltroDataComp() {
   document.getElementById('comp-data-ini').value='';
   document.getElementById('comp-data-fim').value='';
   document.getElementById('comp-date-clear').style.display='none';
+  // Volta para os 2 mais recentes ao limpar o filtro
+  _periodosSelec = new Set();
   renderComparativo();
 }
 
