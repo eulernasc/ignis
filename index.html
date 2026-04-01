@@ -528,6 +528,8 @@ body{overflow-x:hidden;}
     <div class="kpi-grid">
       <div class="kpi-card"><div class="kpi-label">Total de Litros</div><div class="kpi-icon">🛢️</div><div><span class="kpi-value" id="kpi-litros">0</span><span class="kpi-unit">L</span></div><div class="kpi-delta" id="kpi-litros-delta"></div></div>
       <div class="kpi-card"><div class="kpi-label">Média L/H</div><div class="kpi-icon">📊</div><div><span class="kpi-value" id="kpi-media">0</span><span class="kpi-unit">L/h</span></div><div class="kpi-delta" id="kpi-media-delta"></div><div id="kpi-media-meta" style="font-size:11px;color:var(--text3);margin-top:4px"></div></div>
+      <div class="kpi-card"><div class="kpi-label">Meta Ideal L/H</div><div class="kpi-icon">🎯</div><div><span class="kpi-value" id="kpi-meta-ideal">—</span><span class="kpi-unit" id="kpi-meta-unit"></span></div><div id="kpi-meta-sub" style="font-size:11px;color:var(--text3);margin-top:4px"></div></div>
+      <div class="kpi-card"><div class="kpi-label">Eficiência Geral</div><div class="kpi-icon">⚡</div><div><span class="kpi-value" id="kpi-eficiencia">—</span><span class="kpi-unit">%</span></div><div id="kpi-efic-sub" style="font-size:11px;margin-top:4px"></div></div>
       <div class="kpi-card"><div class="kpi-label">Horas Trabalhadas</div><div class="kpi-icon">⏱️</div><div><span class="kpi-value" id="kpi-horas">0</span><span class="kpi-unit">h</span></div></div>
       <div class="kpi-card"><div class="kpi-label">Máquinas Ativas</div><div class="kpi-icon">🚜</div><div><span class="kpi-value" id="kpi-maquinas">0</span></div><div class="kpi-delta" id="kpi-maq-delta"></div></div>
     </div>
@@ -1674,15 +1676,44 @@ function renderDashboard() {
   document.getElementById('kpi-horas').textContent=totalH.toFixed(0);
   document.getElementById('kpi-maquinas').textContent=maqAtivas;
   document.getElementById('kpi-maq-delta').textContent=`${state.maquinas.length} total`;
+
+  // Meta ideal média e eficiência
   const maqsComMeta=list.map(a=>getMaquina(a.placa)).filter(m=>m&&m.meta>0);
   const metaMedia=maqsComMeta.length>0?(maqsComMeta.reduce((s,m)=>s+m.meta,0)/maqsComMeta.length):0;
+
+  // KPI Meta Ideal
   const metaEl=document.getElementById('kpi-media-meta');
+  const metaIdealEl=document.getElementById('kpi-meta-ideal');
+  const metaUnitEl=document.getElementById('kpi-meta-unit');
+  const metaSubEl=document.getElementById('kpi-meta-sub');
+  if(metaMedia>0){
+    metaIdealEl.textContent=metaMedia.toFixed(2);
+    metaUnitEl.textContent=' L/h';
+    metaSubEl.innerHTML=`<span style="color:var(--text3)">${maqsComMeta.length} máquinas c/ meta</span>`;
+    metaEl.innerHTML='';
+  } else {
+    metaIdealEl.textContent='—';
+    metaUnitEl.textContent='';
+    metaSubEl.innerHTML='<span style="color:var(--text3)">sem metas cadastradas</span>';
+    metaEl.innerHTML='';
+  }
+
+  // KPI Eficiência Geral (meta/media × 100, onde menor media = mais eficiente, ou seja efic = meta/real)
+  const eficEl=document.getElementById('kpi-eficiencia');
+  const eficSubEl=document.getElementById('kpi-efic-sub');
   if(metaMedia>0 && media>0){
+    const efic=(metaMedia/media)*100;
+    const cor=efic>=98?'var(--green)':efic>=90?'var(--yellow)':'var(--red)';
+    const icone=efic>=98?'✅':efic>=90?'⚠️':'🔴';
+    eficEl.textContent=efic.toFixed(1);
+    eficEl.style.color=cor;
     const desvio=((media-metaMedia)/metaMedia*100);
-    const cor=desvio<=0?'var(--green)':desvio<=10?'#f59e0b':'var(--red)';
-    const seta=desvio<=0?'✅':'⚠️';
-    metaEl.innerHTML=`${seta} meta: <strong style="color:${cor}">${metaMedia.toFixed(2)} L/h</strong> <span style="color:${cor}">(${desvio>0?'+':''}${desvio.toFixed(1)}%)</span>`;
-  } else { metaEl.innerHTML=''; }
+    eficSubEl.innerHTML=`<span style="color:${cor}">${icone} ${desvio>0?'+':''}${desvio.toFixed(1)}% vs meta</span>`;
+  } else {
+    eficEl.textContent='—';
+    eficEl.style.color='var(--text3)';
+    eficSubEl.innerHTML='<span style="color:var(--text3)">sem metas</span>';
+  }
   // Label do gráfico
   let lbl;
   if(state.tab==='semanal') {
@@ -1953,10 +1984,22 @@ function renderComparativo() {
     const prev=i>0?dadosPeriodo[selecionadosFiltrados[i-1][0]]:null;
     const dL=prev&&prev.totalL>0?((d.totalL-prev.totalL)/prev.totalL*100):null;
     const dM=prev&&prev.media>0?((d.media-prev.media)/prev.media*100):null;
+
+    // Calcula meta ideal média das máquinas que aparecem neste período
+    const placasPeriodo = new Set(d.rows.map(r=>r.placa));
+    const maqsP = [...placasPeriodo].map(p=>getMaquina(p)).filter(m=>m&&m.meta>0);
+    const metaP = maqsP.length>0?(maqsP.reduce((s,m)=>s+m.meta,0)/maqsP.length):0;
+    const eficP = metaP>0&&d.media>0?(metaP/d.media)*100:null;
+    const eficCor = eficP===null?'var(--text3)':eficP>=98?'var(--green)':eficP>=90?'var(--yellow)':'var(--red)';
+    const eficIcon = eficP===null?'':eficP>=98?'✅':eficP>=90?'⚠️':'🔴';
+    const desvioP = metaP>0&&d.media>0?((d.media-metaP)/metaP*100):null;
+
     html+=`<div class="comp-card">
       <div class="comp-card-title">${d.label}</div>
       <div class="comp-row"><span class="comp-semana">Litros</span><span class="comp-val">${d.totalL.toFixed(0)}L</span>${dL!==null?`<span class="comp-diff ${dL>0?'down':'up'}">${dL>0?'▲':'▼'}${Math.abs(dL).toFixed(1)}%</span>`:''}</div>
       <div class="comp-row"><span class="comp-semana">Média L/h</span><span class="comp-val">${d.media.toFixed(2)}</span>${dM!==null?`<span class="comp-diff ${dM>=0?'down':'up'}">${dM>=0?'▲':'▼'}${Math.abs(dM).toFixed(1)}%</span>`:''}</div>
+      <div class="comp-row"><span class="comp-semana">Meta Ideal</span><span class="comp-val" style="color:var(--accent)">${metaP>0?metaP.toFixed(2)+' L/h':'—'}</span></div>
+      <div class="comp-row"><span class="comp-semana">Eficiência</span><span class="comp-val" style="color:${eficCor}">${eficP!==null?eficIcon+' '+eficP.toFixed(1)+'%':'—'}</span>${desvioP!==null?`<span class="comp-diff" style="color:${eficCor}">${desvioP>0?'+':''}${desvioP.toFixed(1)}%</span>`:''}</div>
       <div class="comp-row"><span class="comp-semana">Máquinas</span><span class="comp-val">${d.maquinas}</span></div>
       <div class="comp-row"><span class="comp-semana">Horas</span><span class="comp-val">${d.totalH.toFixed(0)}h</span></div>
     </div>`;
