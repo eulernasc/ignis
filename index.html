@@ -574,6 +574,12 @@ body{overflow-x:hidden;}
           <input type="date" class="filter-input" id="comp-data-fim" onchange="renderComparativo()" style="font-size:13px;padding:8px 10px" title="Data final">
           <button class="btn btn-secondary btn-sm" onclick="limparFiltroDataComp()" id="comp-date-clear" style="display:none">✕</button>
         </div>
+        <!-- Atalhos de período -->
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn btn-secondary btn-sm" onclick="compSetRangePeriodo('ultima-semana')" title="Período mais recente importado">📅 Última semana</button>
+          <button class="btn btn-secondary btn-sm" onclick="compSetRangePeriodo('mes-recente')" title="Mês do período mais recente">📆 Mês recente</button>
+          <button class="btn btn-secondary btn-sm" onclick="compSetRangePeriodo('todos')" title="Mostrar todos os períodos">⊞ Todos</button>
+        </div>
         <button class="btn btn-secondary" onclick="verificarSenha(openImport)">⬆️ Importar Período</button>
         <div style="position:relative" id="comp-maq-dropdown-wrap">
   <button class="filter-select" id="comp-maq-btn" onclick="toggleCompMaqDropdown()" style="cursor:pointer;text-align:left;min-width:180px;display:flex;align-items:center;justify-content:space-between;gap:8px">
@@ -1895,9 +1901,10 @@ function renderComparativo() {
   // Mostrar seletor de períodos
   selectorDiv.style.display = 'block';
 
-  // Inicializar seleção com os 2 mais recentes se ainda vazia
+  // Inicializar seleção com o período mais recente se ainda vazia
   if (_periodosSelec.size === 0) {
-    todosPeriodos.slice(-2).forEach(([id]) => _periodosSelec.add(id));
+    const maisRecente = todosPeriodos[todosPeriodos.length - 1];
+    if (maisRecente) _periodosSelec.add(maisRecente[0]);
   }
 
   // Renderizar checkboxes — só os períodos visíveis
@@ -2249,11 +2256,44 @@ function togglePeriodoComp(id, checkbox) {
   renderComparativo();
 }
 
+function compSetRangePeriodo(opt) {
+  const periodos = Object.values(state.semanas)
+    .filter(p => p.dataIni)
+    .sort((a,b) => (b.dataIni||'').localeCompare(a.dataIni||''));
+  const ultimo = periodos[0];
+  if (!ultimo) return;
+
+  const ini = document.getElementById('comp-data-ini');
+  const fim = document.getElementById('comp-data-fim');
+  const clearBtn = document.getElementById('comp-date-clear');
+
+  if (opt === 'ultima-semana') {
+    ini.value = ultimo.dataIni;
+    fim.value = ultimo.dataFim || ultimo.dataIni;
+    if (clearBtn) clearBtn.style.display = 'inline-flex';
+  } else if (opt === 'mes-recente') {
+    const mes = ultimo.dataIni.substring(0,7);
+    // Pega todos os períodos do mesmo mês
+    const doMes = Object.values(state.semanas)
+      .filter(p => p.dataIni && p.dataIni.substring(0,7) === mes)
+      .sort((a,b)=>(a.dataIni||'').localeCompare(b.dataIni||''));
+    ini.value = doMes[0]?.dataIni || mes + '-01';
+    fim.value = doMes[doMes.length-1]?.dataFim || doMes[doMes.length-1]?.dataIni || mes + '-31';
+    if (clearBtn) clearBtn.style.display = 'inline-flex';
+  } else {
+    // Todos — limpa filtro
+    ini.value = '';
+    fim.value = '';
+    if (clearBtn) clearBtn.style.display = 'none';
+    _periodosSelec = new Set();
+  }
+  renderComparativo();
+}
+
 function limparFiltroDataComp() {
   document.getElementById('comp-data-ini').value='';
   document.getElementById('comp-data-fim').value='';
   document.getElementById('comp-date-clear').style.display='none';
-  // Volta para os 2 mais recentes ao limpar o filtro
   _periodosSelec = new Set();
   renderComparativo();
 }
