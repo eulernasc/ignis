@@ -1600,37 +1600,45 @@ function getSelectedCompOps() {
 }
 
 function getFilteredAbast(opF,maqF) {
+  const now = new Date();
+  const nowStr = now.toISOString().split('T')[0]; // AAAA-MM-DD
   let list=[...state.abastecimentos];
 
-  if(state.tab==='semanal' || state.tab==='mensal') {
-    // Usa o período mais recente importado como referência
-    const periodos = Object.values(state.semanas)
-      .filter(p => p.dataIni)
-      .sort((a,b) => (b.dataIni||'').localeCompare(a.dataIni||''));
-    const ultimo = periodos[0];
+  // Monta mapa periodoId → {dataIni, dataFim} para filtros baseados em período
+  const periodoMap = {};
+  Object.entries(state.semanas).forEach(([id, p]) => {
+    periodoMap[id] = { dataIni: p.dataIni||'', dataFim: p.dataFim||p.dataIni||'' };
+  });
 
-    if(ultimo && ultimo.dataIni) {
-      if(state.tab==='semanal') {
-        // Mostra só o período mais recente (pela dataIni/dataFim)
-        const ini = ultimo.dataIni;
-        const fim = ultimo.dataFim || ultimo.dataIni;
-        list = list.filter(a => a.data >= ini && a.data <= fim);
-      } else {
-        // Mensal: todos os períodos do mesmo mês/ano que o mais recente
-        const mes = ultimo.dataIni.substring(0, 7); // AAAA-MM
-        list = list.filter(a => a.data && a.data.substring(0, 7) === mes);
-      }
-    } else {
-      // Fallback: últimos 7 dias ou mês atual (comportamento antigo)
-      const now = new Date();
-      if(state.tab==='semanal') { const w=new Date(now-7*24*60*60*1000); list=list.filter(a=>new Date(a.data)>=w); }
-      else { const m=new Date(now.getFullYear(),now.getMonth(),1); list=list.filter(a=>new Date(a.data)>=m); }
-    }
+  // Função que retorna a data efetiva de um registro (usa período se disponível)
+  const getDataEfetiva = a => {
+    if (a.periodoId && periodoMap[a.periodoId]?.dataIni) return periodoMap[a.periodoId].dataIni;
+    return a.data || '';
+  };
+  const getDataFimEfetiva = a => {
+    if (a.periodoId && periodoMap[a.periodoId]?.dataFim) return periodoMap[a.periodoId].dataFim;
+    return a.data || '';
+  };
+
+  if(state.tab==='semanal') {
+    // Semana = últimos 7 dias baseado nas datas de referência do período
+    const w = new Date(now - 7*24*60*60*1000).toISOString().split('T')[0];
+    list = list.filter(a => getDataFimEfetiva(a) >= w && getDataEfetiva(a) <= nowStr);
+  } else if(state.tab==='mensal') {
+    const mesAtual = nowStr.substring(0,7); // AAAA-MM
+    list = list.filter(a => getDataEfetiva(a).substring(0,7) === mesAtual);
   } else {
     const ini=document.getElementById('dash-data-ini')?.value||'';
     const fim=document.getElementById('dash-data-fim')?.value||'';
-    if(ini) list=list.filter(a=>a.data>=ini);
-    if(fim) list=list.filter(a=>a.data<=fim);
+    if(ini || fim) {
+      list = list.filter(a => {
+        const pIni = getDataEfetiva(a);
+        const pFim = getDataFimEfetiva(a);
+        if(ini && pFim && pFim < ini) return false;
+        if(fim && pIni && pIni > fim) return false;
+        return true;
+      });
+    }
   }
   if(opF instanceof Set && opF.size>0) {
     list=list.filter(a=>opF.has(getMaquina(a.placa)?.operacao||a.operacao||''));
@@ -1669,15 +1677,13 @@ function renderDashboard() {
     const seta=desvio<=0?'✅':'⚠️';
     metaEl.innerHTML=`${seta} meta: <strong style="color:${cor}">${metaMedia.toFixed(2)} L/h</strong> <span style="color:${cor}">(${desvio>0?'+':''}${desvio.toFixed(1)}%)</span>`;
   } else { metaEl.innerHTML=''; }
-  // Label do gráfico: mostra o nome do período real quando semanal/mensal
+  // Label do gráfico
   let lbl;
   if(state.tab==='semanal') {
-    const periodos = Object.values(state.semanas).filter(p=>p.dataIni).sort((a,b)=>(b.dataIni||'').localeCompare(a.dataIni||''));
-    lbl = periodos[0]?.label || 'Semanal';
+    lbl = 'Últimos 7 dias';
   } else if(state.tab==='mensal') {
-    const periodos = Object.values(state.semanas).filter(p=>p.dataIni).sort((a,b)=>(b.dataIni||'').localeCompare(a.dataIni||''));
-    const mes = periodos[0]?.dataIni?.substring(0,7);
-    lbl = mes ? new Date(mes+'-01').toLocaleDateString('pt-BR',{month:'long',year:'numeric'}) : 'Mensal';
+    const now = new Date();
+    lbl = now.toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
     lbl = lbl.charAt(0).toUpperCase() + lbl.slice(1);
   } else {
     lbl = 'Período';
