@@ -1074,7 +1074,7 @@ body{overflow-x:hidden;}
 .km-status-atencao{background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.3);color:var(--yellow);}
 .km-status-alerta{background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);color:var(--red);}
 .km-status-sem{background:rgba(124,92,252,.12);border:1px solid rgba(124,92,252,.3);color:var(--accent2);}
-.km-status-excesso{background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);color:var(--red);}
+@keyframes kf-progress{0%{width:0%;margin-left:0}50%{width:60%;margin-left:20%}100%{width:0%;margin-left:100%}}
 </style>
 
 <div id="page-kmcomp" class="page">
@@ -2672,7 +2672,7 @@ function importarRelatorio(input) {
   const reader=new FileReader();
   reader.onload=function(e){
     try {
-      const wb=XLSX.read(e.target.result,{type:'array'});
+      const wb=XLSX.read(e.target.result,{type:'array', dense: true, cellDates: false});
       const ws=wb.Sheets[wb.SheetNames[0]];
       const data=XLSX.utils.sheet_to_json(ws,{defval:''});
       const rows=data.filter(r=>r['Operação']||r['Placa']||r['placa']);
@@ -3429,14 +3429,42 @@ async function buscarPlanilhaSP() {
 
 function excluirCarregarArquivo(input) {
   const file = input.files[0]; if (!file) return;
+
+  // Mostra loading imediato
+  const emptyEl = document.getElementById('excluir-empty');
+  if (emptyEl) {
+    emptyEl.style.display = '';
+    emptyEl.innerHTML = '<div style="font-size:32px;margin-bottom:12px">⏳</div>' +
+      '<div style="font-size:15px;font-weight:700;margin-bottom:6px">Carregando planilha...</div>' +
+      '<div style="font-size:13px;color:var(--text2)">Aguarde enquanto processamos os dados.</div>' +
+      '<div style="margin-top:16px;height:4px;background:var(--border);border-radius:2px;overflow:hidden">' +
+      '<div style="height:100%;background:var(--accent);border-radius:2px;animation:kf-progress 1.5s ease-in-out infinite" id="excl-progress-bar"></div>' +
+      '</div>';
+  }
+
   const r = new FileReader();
-  r.onload = e => { try { processarExcluirBuffer(e.target.result); } catch(err) { showToast('Erro ao ler arquivo','error'); } };
+  r.onload = e => {
+    // Defer para não bloquear — deixa o spinner aparecer primeiro
+    setTimeout(() => {
+      try {
+        processarExcluirBuffer(e.target.result);
+      } catch(err) {
+        if (emptyEl) {
+          emptyEl.style.display = '';
+          emptyEl.innerHTML = '<div style="font-size:32px;margin-bottom:12px">❌</div>' +
+            '<div style="font-size:15px;font-weight:700;margin-bottom:6px">Erro ao ler o arquivo</div>' +
+            '<div style="font-size:13px;color:var(--text2)">' + err.message + '</div>';
+        }
+        showToast('Erro ao ler arquivo: ' + err.message, 'error');
+      }
+    }, 50);
+  };
   r.readAsArrayBuffer(file);
   input.value = '';
 }
 
 function processarExcluirBuffer(buffer) {
-  const wb = XLSX.read(new Uint8Array(buffer), { type: 'array' });
+  const wb = XLSX.read(new Uint8Array(buffer), { type: 'array', dense: true, cellDates: false });
   const ws = wb.Sheets[wb.SheetNames[0]];
 
   // Cabeçalho na linha 3 (índice 2), dados a partir da linha 4
