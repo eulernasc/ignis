@@ -3531,10 +3531,16 @@ function processarExcluirBuffer(buffer) {
     const dataObj = parseData(dataVal);
     const dataStr = dataObj ? dataObj.toLocaleDateString('pt-BR') : String(dataVal||'').trim();
 
-    // Calcula horas passadas desde o abastecimento
+    // Calcula horas passadas desde o abastecimento (com hora precisa)
     let horasPassadas = null;
     if (dataObj && !isNaN(dataObj)) {
-      horasPassadas = (agora - dataObj) / (1000 * 60 * 60);
+      // Se temos hora separada (HH:MM), aplica para cálculo preciso
+      const dataComHora = new Date(dataObj);
+      if (horaStr) {
+        const hp = horaStr.match(/^(\d{1,2}):(\d{2})/);
+        if (hp) { dataComHora.setHours(+hp[1], +hp[2], 0, 0); }
+      }
+      horasPassadas = (agora - dataComHora) / (1000 * 60 * 60);
     }
 
     // Alerta 72h: status AGUARDANDO e passou 72h
@@ -3672,13 +3678,18 @@ function renderExcluirLista() {
 
 function copiarListaExcluir() {
   const busca = (document.getElementById('excluir-busca')?.value||'').toLowerCase();
-  const opF = document.getElementById('excluir-filter-op')?.value||'';
-  const f = window._excluirDados.filter(r => {
-    const t = (r.placa+r.operacao+r.data+r.motivo).toLowerCase();
-    return (!busca||t.includes(busca))&&(!opF||r.operacao===opF);
+  const todos = window._excluirDadosTodos || window._excluirDados || [];
+  const f = todos.filter(r => {
+    const t = (r.placa+r.data+r.motivo+r.operador+r.combustivel+r.status).toLowerCase();
+    return !busca || t.includes(busca);
   });
-  navigator.clipboard.writeText(f.map(r=>`${r.placa||'—'} | ${r.operacao||'—'} | ${r.data||'—'} | ${r.litros?r.litros+' L':'—'} | ${r.motivo||'—'}`).join('\n'))
-    .then(()=>showToast('✅ '+f.length+' registros copiados!','success')).catch(()=>showToast('Erro ao copiar','error'));
+  const texto = f.map(r =>
+    [r.placa||'—', r.data||(r.hora?r.hora:'—'), r.hora||'—', r.combustivel||'—', r.status||'—', r.motivo||'—', r.operador||'—']
+    .join(' | ')
+  ).join('\n');
+  navigator.clipboard.writeText(texto)
+    .then(()=>showToast('✅ '+f.length+' registros copiados!','success'))
+    .catch(()=>showToast('Erro ao copiar','error'));
 }
 
 function limparExcluir() {
@@ -3713,7 +3724,12 @@ function onShowExcluir() {
           if (r.data) {
             const parts = r.data.split('/');
             if (parts.length === 3) {
-              const d = new Date(+parts[2], +parts[1]-1, +parts[0]);
+              let d = new Date(+parts[2], +parts[1]-1, +parts[0]);
+              // Aplica hora se disponível (HH:MM) para cálculo preciso
+              if (r.hora) {
+                const hp = r.hora.match(/^(\d{1,2}):(\d{2})/);
+                if (hp) { d.setHours(+hp[1], +hp[2], 0, 0); }
+              }
               if (!isNaN(d)) {
                 r.horasPassadas = (agora - d) / (1000 * 60 * 60);
                 if (!concluidos.includes(r.placa + '|' + r.data)) {
