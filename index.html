@@ -6057,8 +6057,8 @@ function kmExportarExcel() {
 function kmCopiarEmail() {
   const { resultados, semNoSistema, label } = window._kmResultado || {};
   if (!resultados) return;
-  const alertas  = resultados.filter(r => r.status === 'alerta');
-  const excessos = resultados.filter(r => r.status === 'excesso');
+  const alertas  = resultados.filter(r => r.status === 'alerta').sort((a,b) => a.diff - b.diff);
+  const excessos = resultados.filter(r => r.status === 'excesso').sort((a,b) => b.diff - a.diff);
   const fmtKm = v => v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
   const tabelaColunas = (linhas) =>
