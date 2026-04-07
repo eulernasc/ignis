@@ -5606,7 +5606,7 @@ function kmComparar() {
   document.getElementById('km-resultado').innerHTML = html;
   document.getElementById('km-resultado').style.display = '';
   document.getElementById('btn-km-export').style.display = '';
-  document.getElementById('btn-km-email').style.display = alertas.length ? '' : 'none';
+  document.getElementById('btn-km-email').style.display = (alertas.length || excessos.length) ? '' : 'none';
   // Rola para os resultados automaticamente
   setTimeout(() => {
     document.getElementById('km-resultado').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -5672,26 +5672,46 @@ function kmExportarExcel() {
 }
 
 function kmCopiarEmail() {
-  const { resultados, semNoSistema, label, margemMin } = window._kmResultado || {};
+  const { resultados, semNoSistema, label } = window._kmResultado || {};
   if (!resultados) return;
-  const alertas = resultados.filter(r => r.status === 'alerta');
-  const atencao = resultados.filter(r => r.status === 'atencao');
+  const alertas  = resultados.filter(r => r.status === 'alerta');
+  const excessos = resultados.filter(r => r.status === 'excesso');
   const fmtKm = v => v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
-  let linhasAlertas = alertas.map(r =>
-    '<tr style="background:#fef2f2;border-bottom:1px solid #fecaca">' +
+  const tabelaColunas = (linhas) =>
+    '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #fecaca;border-radius:8px;overflow:hidden">' +
+    '<thead><tr style="background:#fef2f2">' +
+    '<th style="padding:9px 14px;text-align:left;font-size:11px;color:#64748b;text-transform:uppercase">Placa</th>' +
+    '<th style="padding:9px 14px;text-align:left;font-size:11px;color:#64748b;text-transform:uppercase">Operação</th>' +
+    '<th style="padding:9px 14px;text-align:center;font-size:11px;color:#2563eb;text-transform:uppercase">KM Sistema</th>' +
+    '<th style="padding:9px 14px;text-align:center;font-size:11px;color:#7c3aed;text-transform:uppercase">KM Cliente</th>' +
+    '<th style="padding:9px 14px;text-align:center;font-size:11px;color:#64748b;text-transform:uppercase">Diferença</th>' +
+    '<th style="padding:9px 14px;text-align:center;font-size:11px;color:#64748b;text-transform:uppercase">Variação</th>' +
+    '</tr></thead><tbody>' + linhas + '</tbody></table>';
+
+  const linhaAlerta = (r, bg, cor) =>
+    '<tr style="background:' + bg + ';border-bottom:1px solid #fecaca">' +
     '<td style="padding:9px 14px;font-family:monospace;font-weight:700;color:#1e293b">' + r.placa + '</td>' +
     '<td style="padding:9px 14px;color:#64748b;font-size:12px">' + (r.operacao || '—') + '</td>' +
     '<td style="padding:9px 14px;text-align:center;font-family:monospace;color:#2563eb">' + fmtKm(r.kmSistema) + '</td>' +
     '<td style="padding:9px 14px;text-align:center;font-family:monospace;color:#7c3aed">' + fmtKm(r.kmCliente) + '</td>' +
-    '<td style="padding:9px 14px;text-align:center;font-family:monospace;font-weight:700;color:#dc2626">' + fmtKm(r.diff) + '</td>' +
-    '<td style="padding:9px 14px;text-align:center;font-weight:700;color:#dc2626">' + (r.pct !== null ? r.pct.toFixed(1) + '%' : '—') + '</td>' +
-    '</tr>'
+    '<td style="padding:9px 14px;text-align:center;font-family:monospace;font-weight:700;color:' + cor + '">' + (r.diff >= 0 ? '+' : '') + fmtKm(r.diff) + '</td>' +
+    '<td style="padding:9px 14px;text-align:center;font-weight:700;color:' + cor + '">' + (r.pct !== null ? (r.pct >= 0 ? '+' : '') + r.pct.toFixed(1) + '%' : '—') + '</td>' +
+    '</tr>';
+
+  const linhasAlertas   = alertas.map(r => linhaAlerta(r, '#fef2f2', '#dc2626')).join('');
+  const linhasExcessos  = excessos.map(r => linhaAlerta(r, '#fff7ed', '#ea580c')).join('');
+  const linhasSemSistema = semNoSistema.map(r =>
+    '<tr style="border-bottom:1px solid #e2e8f0">' +
+    '<td style="padding:8px 14px;font-family:monospace;font-weight:700;color:#7c3aed">' + r.placa + '</td>' +
+    '<td colspan="5" style="padding:8px 14px;color:#64748b;font-size:12px">Presente no cliente, não encontrada no sistema — KM cliente: <strong>' + fmtKm(r.kmCliente) + '</strong></td></tr>'
   ).join('');
 
-  let linhasSemSistema = semNoSistema.map(r =>
-    '<tr style="border-bottom:1px solid #e2e8f0"><td style="padding:8px 14px;font-family:monospace;font-weight:700;color:#dc2626">' + r.placa + '</td><td colspan="5" style="padding:8px 14px;color:#64748b;font-size:12px">Placa presente no cliente mas não encontrada no nosso sistema — KM cliente: ' + fmtKm(r.kmCliente) + '</td></tr>'
-  ).join('');
+  // Resumo no banner
+  const partes = [];
+  if (alertas.length)   partes.push('<strong>' + alertas.length + ' placa(s)</strong> com KM abaixo do cliente');
+  if (excessos.length)  partes.push('<strong>' + excessos.length + ' placa(s)</strong> com KM excessivamente acima do cliente');
+  if (semNoSistema.length) partes.push('<strong>' + semNoSistema.length + ' placa(s)</strong> ausentes no sistema');
 
   const html = '<!DOCTYPE html><html><body style="margin:0;padding:20px 0;font-family:Arial,sans-serif;background:#e2e8f0">' +
     '<table width="680" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;border:1px solid #cbd5e1">' +
@@ -5700,16 +5720,16 @@ function kmCopiarEmail() {
     '<div style="font-size:13px;color:#fca5a5;margin-top:4px">Comparativo KM Sistema × KM Produtivo Cliente · ' + label + '</div>' +
     '</td></tr>' +
     '<tr><td style="background:#fef2f2;padding:14px 28px;border-bottom:1px solid #fecaca;font-size:13px;color:#dc2626">' +
-    '⚠️ <strong>' + alertas.length + ' placa(s)</strong> com KM do sistema abaixo do KM produtivo do cliente. Verificar imediatamente.' +
-    (semNoSistema.length ? ' · <strong>' + semNoSistema.length + ' placa(s)</strong> presentes no cliente mas ausentes no sistema.' : '') +
+    '⚠️ ' + partes.join(' · ') +
     '</td></tr>' +
     (alertas.length ? '<tr><td style="padding:20px 28px 8px">' +
-    '<div style="font-size:14px;font-weight:700;color:#1e293b;margin-bottom:12px">🔴 Placas com KM abaixo do cliente</div>' +
-    '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #fecaca;border-radius:8px;overflow:hidden">' +
-    '<thead><tr style="background:#fef2f2"><th style="padding:9px 14px;text-align:left;font-size:11px;color:#64748b;text-transform:uppercase">Placa</th><th style="padding:9px 14px;text-align:left;font-size:11px;color:#64748b;text-transform:uppercase">Operação</th><th style="padding:9px 14px;text-align:center;font-size:11px;color:#2563eb;text-transform:uppercase">KM Sistema</th><th style="padding:9px 14px;text-align:center;font-size:11px;color:#7c3aed;text-transform:uppercase">KM Cliente</th><th style="padding:9px 14px;text-align:center;font-size:11px;color:#64748b;text-transform:uppercase">Diferença</th><th style="padding:9px 14px;text-align:center;font-size:11px;color:#64748b;text-transform:uppercase">Variação</th></tr></thead>' +
-    '<tbody>' + linhasAlertas + '</tbody></table></td></tr>' : '') +
+    '<div style="font-size:14px;font-weight:700;color:#dc2626;margin-bottom:12px">🔴 Placas com KM abaixo do cliente</div>' +
+    tabelaColunas(linhasAlertas) + '</td></tr>' : '') +
+    (excessos.length ? '<tr><td style="padding:16px 28px 8px">' +
+    '<div style="font-size:14px;font-weight:700;color:#ea580c;margin-bottom:12px">🚨 Placas com KM excessivamente acima do cliente</div>' +
+    tabelaColunas(linhasExcessos) + '</td></tr>' : '') +
     (semNoSistema.length ? '<tr><td style="padding:16px 28px 8px">' +
-    '<div style="font-size:14px;font-weight:700;color:#1e293b;margin-bottom:10px">🔍 Placas sem correspondência no sistema</div>' +
+    '<div style="font-size:14px;font-weight:700;color:#7c3aed;margin-bottom:10px">🔍 Placas sem correspondência no sistema</div>' +
     '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">' +
     '<tbody>' + linhasSemSistema + '</tbody></table></td></tr>' : '') +
     '<tr><td style="background:#f8fafc;padding:14px 28px;border-top:1px solid #e2e8f0;text-align:center;font-size:11px;color:#94a3b8">Gerado pelo FuelTracker Pro</td></tr>' +
