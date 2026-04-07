@@ -786,10 +786,11 @@ body{overflow-x:hidden;}
       </div>
       <div class="sheets-config" style="margin-top:16px;border-color:rgba(192,57,43,.4)" id="config-users-section">
         <div class="sheets-config-title" style="color:var(--accent)">👥 Gerenciamento de Usuários</div>
-        <div class="sheets-hint" style="margin-bottom:14px">Crie usuários e defina quais abas cada um pode acessar. Somente o ADM Master pode gerenciar usuários.</div>
+        <div class="sheets-hint" style="margin-bottom:14px">Crie usuários e defina quais abas cada um pode acessar.</div>
         <div id="users-lista" style="margin-bottom:14px"></div>
         <button class="btn btn-primary btn-sm" onclick="abrirModalNovoUsuario()">+ Novo Usuário</button>
       </div>
+      <div class="sheets-config" id="config-danger-zone" style="margin-top:16px;border-color:rgba(239,68,68,.3)">
         <div class="sheets-config-title" style="color:var(--red)">⚠️ Zona de Perigo</div>
         <button class="btn btn-danger btn-sm" onclick="verificarSenha(limparTodosDados)">🗑️ Apagar todos os dados locais</button>
       </div>
@@ -800,29 +801,6 @@ body{overflow-x:hidden;}
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button class="btn btn-primary btn-sm" onclick="dieselPopularOps()">🔄 Atualizar Operações</button>
         </div>
-      </div>
-      <div class="sheets-config" style="margin-top:16px;border-color:rgba(99,102,241,.4)">
-        <div class="sheets-config-title">🔐 Controle de Acesso</div>
-        <div class="sheets-hint" style="margin-bottom:12px">Defina uma senha para proteger importação, edição e exclusão de dados. Quem não tiver a senha só poderá visualizar.</div>
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label">Senha atual</label>
-            <input type="password" class="form-input" id="senha-atual" placeholder="Senha atual">
-          </div>
-          <div class="form-group"></div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label">Nova senha</label>
-            <input type="password" class="form-input" id="nova-senha" placeholder="Digite a nova senha">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Confirmar senha</label>
-            <input type="password" class="form-input" id="confirmar-nova-senha" placeholder="Repita a senha">
-          </div>
-        </div>
-        <button class="btn btn-primary btn-sm" onclick="salvarSenha()">💾 Salvar Senha</button>
-        <span id="senha-msg" style="font-size:12px;margin-left:10px;color:var(--green)"></span>
       </div>
     </div>
   </div>
@@ -1372,6 +1350,13 @@ body{overflow-x:hidden;}
         <label class="perm-item"><input type="checkbox" data-perm="kmcomp"> 📏 KM Comparativo</label>
         <label class="perm-item"><input type="checkbox" data-perm="config"> ⚙️ Configurações</label>
       </div>
+      <div style="margin-top:10px;padding:10px;background:rgba(232,148,26,.08);border:1px solid rgba(232,148,26,.3);border-radius:8px">
+        <label class="perm-item" style="background:none;border:none;padding:0;gap:8px">
+          <input type="checkbox" id="user-field-admin">
+          ⭐ Tag <strong>Admin</strong>
+          <span style="font-size:11px;color:var(--text3)">(pode importar, excluir, editar e gerenciar usuários)</span>
+        </label>
+      </div>
     </div>
     <div id="user-modal-error" style="color:var(--red);font-size:12px;margin-bottom:10px;display:none"></div>
     <div style="display:flex;gap:10px;justify-content:flex-end">
@@ -1673,13 +1658,16 @@ function loginEntrarApp() {
   const u = window._authUser;
   // Atualiza info do usuário na sidebar
   document.getElementById('sidebar-username').textContent = u.nome || u.id;
-  document.getElementById('sidebar-role').textContent = u.role === 'adm' ? 'ADM Master' : 'Usuário';
+  document.getElementById('sidebar-role').textContent = u.role === 'adm' ? 'ADM Master' : u.role === 'admin' ? '⭐ Admin' : 'Usuário';
   document.getElementById('sidebar-avatar').textContent = (u.nome || u.id).charAt(0).toUpperCase();
   // Renderiza nav com permissões
   authRenderNav();
-  // Mostra/oculta seção de usuários no Config (só ADM)
+  // Mostra/oculta seções restritas no Config
+  const canManage = u?.role === 'adm' || u?.role === 'admin';
   const usersSection = document.getElementById('config-users-section');
-  if (usersSection) usersSection.style.display = u.role === 'adm' ? 'block' : 'none';
+  if (usersSection) usersSection.style.display = canManage ? 'block' : 'none';
+  const dangerZone = document.getElementById('config-danger-zone');
+  if (dangerZone) dangerZone.style.display = u.role === 'adm' ? 'block' : 'none';
   // Inicia app normalmente
   loadState().then(() => {
     renderDashboard();
@@ -1736,18 +1724,20 @@ async function authRenderUsuarios() {
   const users = await authCarregarUsuarios();
   const lista = document.getElementById('users-lista');
   if (!lista) return;
+  const u = window._authUser;
+  const isAdm = u?.role === 'adm';
   const entries = Object.entries(users);
   if (!entries.length) { lista.innerHTML = '<div style="font-size:13px;color:var(--text3)">Nenhum usuário cadastrado.</div>'; return; }
-  lista.innerHTML = entries.map(([id, u]) => `
+  lista.innerHTML = entries.map(([id, usr]) => `
     <div class="user-row">
-      <div class="user-avatar" style="flex-shrink:0">${(u.nome||id).charAt(0).toUpperCase()}</div>
+      <div class="user-avatar" style="flex-shrink:0">${(usr.nome||id).charAt(0).toUpperCase()}</div>
       <div style="flex:1">
-        <div class="user-name">${u.nome||id} <span style="font-size:11px;color:var(--text3);font-family:monospace">(${id})</span></div>
-        <div style="font-size:11px;color:var(--text3);margin-top:2px">${(u.perms||[]).length} aba(s) com acesso</div>
+        <div class="user-name">${usr.nome||id} <span style="font-size:11px;color:var(--text3);font-family:monospace">(${id})</span></div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">${(usr.perms||[]).filter(p=>p!=='manage_users').length} aba(s) · ${(usr.perms||[]).includes('manage_users')?'<span style="color:var(--yellow)">pode gerenciar usuários</span>':''}</div>
       </div>
-      <span class="user-role-badge ${u.role==='adm'?'adm':''}">${u.role==='adm'?'ADM':'Usuário'}</span>
-      ${window._authUser?.id !== id ? `<button class="btn btn-secondary btn-sm" onclick="abrirModalEditarUsuario('${id}')">✏️</button>
-      <button class="btn btn-danger btn-sm" onclick="confirmarExcluirUsuario('${id}')">🗑️</button>` : '<span style="font-size:11px;color:var(--text3)">(você)</span>'}
+      <span class="user-role-badge ${usr.role==='adm'?'adm':usr.role==='admin'?'adm':''}">${usr.role==='adm'?'ADM Master':usr.role==='admin'?'⭐ Admin':'Usuário'}</span>
+      ${u?.id !== id && (isAdm || usr.role !== 'adm') ? `<button class="btn btn-secondary btn-sm" onclick="abrirModalEditarUsuario('${id}')">✏️</button>
+      <button class="btn btn-danger btn-sm" onclick="confirmarExcluirUsuario('${id}')">🗑️</button>` : `<span style="font-size:11px;color:var(--text3)">(você)</span>`}
     </div>
   `).join('');
 }
@@ -1761,6 +1751,7 @@ function abrirModalNovoUsuario() {
   document.getElementById('user-field-senha').value = '';
   document.getElementById('user-field-senha2').value = '';
   document.querySelectorAll('[data-perm]').forEach(cb => cb.checked = false);
+  document.getElementById('user-field-admin').checked = false;
   document.getElementById('user-modal-error').style.display = 'none';
   document.getElementById('modal-usuario').classList.add('open');
 }
@@ -1778,6 +1769,7 @@ async function abrirModalEditarUsuario(id) {
   document.querySelectorAll('[data-perm]').forEach(cb => {
     cb.checked = (u.perms || []).includes(cb.dataset.perm);
   });
+  document.getElementById('user-field-admin').checked = (u.role === 'admin');
   document.getElementById('user-modal-error').style.display = 'none';
   document.getElementById('modal-usuario').classList.add('open');
 }
@@ -1793,6 +1785,7 @@ async function salvarUsuario() {
   const pass   = document.getElementById('user-field-senha').value;
   const pass2  = document.getElementById('user-field-senha2').value;
   const perms  = [...document.querySelectorAll('[data-perm]:checked')].map(cb=>cb.dataset.perm);
+  const isAdmin = document.getElementById('user-field-admin').checked;
   const errEl  = document.getElementById('user-modal-error');
   errEl.style.display = 'none';
 
@@ -1807,7 +1800,7 @@ async function salvarUsuario() {
 
   const existing = users[editId || login] || {};
   const hash = pass ? await sha256(pass) : existing.hash;
-  users[login] = { nome: nome||login, hash, role: 'usuario', perms };
+  users[login] = { nome: nome||login, hash, role: isAdmin ? 'admin' : 'usuario', perms };
   data._users = users;
   await window.fbSave(data);
   fecharModalUsuario();
@@ -1835,7 +1828,12 @@ function showPage(page,el) {
   const renders = {dashboard:renderDashboard,comparativo:renderComparativo,abastecimentos:renderAbastecimentos,maquinas:renderMaquinas};
   if(renders[page]) renders[page]();
   if(page==='relatorio') { relPopularOps(); relgInit(); relChecarReincidencia(); }
-  if(page==='config') { dieselPopularOps(); if(window._authUser?.role==='adm') authRenderUsuarios(); }
+  if(page==='config') {
+    dieselPopularOps();
+    const u = window._authUser;
+    const canManage = u?.role === 'adm' || u?.role === 'admin';
+    if(canManage) authRenderUsuarios();
+  }
   if(page==='excluir') { onShowExcluir(); }
   if(page==='arla') { arlaOnShow(); }
   if(page==='kmcomp') { /* nothing extra needed on show */ }
@@ -3240,25 +3238,17 @@ function precisaSenha() {
 }
 
 function verificarSenha(callback) {
-  if (!precisaSenha() || _sessaoAutorizada) { callback(); return; }
-  _senhaCallback = callback;
-  document.getElementById('senha-input').value = '';
-  document.getElementById('senha-erro').style.display = 'none';
-  document.getElementById('modal-senha').classList.add('open');
-  setTimeout(() => document.getElementById('senha-input').focus(), 100);
+  // Sistema novo: verifica role do usuário logado
+  const u = window._authUser;
+  if (!u) { showToast('Você precisa estar logado para esta ação.', 'error'); return; }
+  if (u.role === 'adm' || u.role === 'admin') { callback(); return; }
+  showToast('Sem permissão. Apenas ADM Master e Admin podem realizar esta ação.', 'error');
 }
 
-// Versão Arla — sempre mostra modal de senha SE configurada, depois abre o mês
 function arlaVerificarSenhaEMes() {
-  if (precisaSenha() && !_sessaoAutorizada) {
-    _senhaCallback = arlaAbrirCarregar;
-    document.getElementById('senha-input').value = '';
-    document.getElementById('senha-erro').style.display = 'none';
-    document.getElementById('modal-senha').classList.add('open');
-    setTimeout(() => document.getElementById('senha-input').focus(), 100);
-  } else {
-    arlaAbrirCarregar();
-  }
+  const u = window._authUser;
+  if (u?.role === 'adm' || u?.role === 'admin') { arlaAbrirCarregar(); return; }
+  showToast('Sem permissão. Apenas ADM Master e Admin podem realizar esta ação.', 'error');
 }
 
 function confirmarSenha() {
