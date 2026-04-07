@@ -1510,12 +1510,19 @@ function doPost(e) {
 `;
 
 // ── STATE ─────────────────────────────────────────────────────────────────────
-let state = { maquinas:[], abastecimentos:[], semanas:{}, tab:'semanal', sheetsUrl:'', arlaEgr:[], arlaMeses:[], arlaGrupos:[] };
+let state = { maquinas:[], abastecimentos:[], semanas:{}, tab:'semanal', sheetsUrl:'', arlaEgr:[], arlaMeses:[], arlaGrupos:[], dieselPrecos:{}, opConfigs:{} };
 let selectedIds = new Set();
 let abastFiltrados = [];
 
 async function loadState() {
   try { const s=localStorage.getItem('fueltracker_v3'); if(s) state=JSON.parse(s); } catch(e){}
+  // Migrar preços antigos do localStorage para o state (única vez)
+  if (!state.dieselPrecos || !Object.keys(state.dieselPrecos).length) {
+    try { const old = JSON.parse(localStorage.getItem('diesel_precos')||'{}'); if(Object.keys(old).length) state.dieselPrecos = old; } catch(e){}
+  }
+  if (!state.opConfigs || !Object.keys(state.opConfigs).length) {
+    try { const old = JSON.parse(localStorage.getItem('op_configs')||'{}'); if(Object.keys(old).length) state.opConfigs = old; } catch(e){}
+  }
   // Checar reincidência com dados locais imediatamente (sem esperar Firebase)
   relChecarReincidencia();
   // Tentar carregar do Firebase
@@ -5208,13 +5215,14 @@ function relChecarReincidencia() {
 }
 
 // ── PREÇO DIESEL POR OPERAÇÃO ─────────────────────────────────────────────────
+// Preços ficam no Firebase (state) para serem compartilhados entre todos os usuários
 function dieselGetPrecos() {
-  try { return JSON.parse(localStorage.getItem('diesel_precos') || '{}'); } catch(e) { return {}; }
+  return state.dieselPrecos || {};
 }
-function dieselSalvarPreco(op, val) {
-  const p = dieselGetPrecos();
-  if (val > 0) p[op] = val; else delete p[op];
-  localStorage.setItem('diesel_precos', JSON.stringify(p));
+async function dieselSalvarPreco(op, val) {
+  if (!state.dieselPrecos) state.dieselPrecos = {};
+  if (val > 0) state.dieselPrecos[op] = val; else delete state.dieselPrecos[op];
+  saveState();
 }
 function dieselGetPreco(op) {
   const p = dieselGetPrecos();
@@ -5222,15 +5230,15 @@ function dieselGetPreco(op) {
 }
 
 function opGetConfigs() {
-  try { return JSON.parse(localStorage.getItem('op_configs') || '{}'); } catch(e) { return {}; }
+  return state.opConfigs || {};
 }
-function opSalvarConfig(op, campo, val) {
-  const cfg = opGetConfigs();
-  if (!cfg[op]) cfg[op] = {};
-  if (val !== '' && parseFloat(val) > 0) cfg[op][campo] = parseFloat(val);
-  else delete cfg[op][campo];
-  if (!Object.keys(cfg[op]).length) delete cfg[op];
-  localStorage.setItem('op_configs', JSON.stringify(cfg));
+async function opSalvarConfig(op, campo, val) {
+  if (!state.opConfigs) state.opConfigs = {};
+  if (!state.opConfigs[op]) state.opConfigs[op] = {};
+  if (val !== '' && parseFloat(val) > 0) state.opConfigs[op][campo] = parseFloat(val);
+  else delete state.opConfigs[op][campo];
+  if (!Object.keys(state.opConfigs[op]).length) delete state.opConfigs[op];
+  saveState();
 }
 function opGetMeta(op) {
   const cfg = opGetConfigs();
@@ -5240,8 +5248,6 @@ function opGetTunel(op) {
   const cfg = opGetConfigs();
   return cfg[op]?.tunel ?? cfg['__default__']?.tunel ?? 0;
 }
-// Retorna limite real com túnel: meta * (1 + tunel/100)
-// Menor = melhor, então limite real é o teto tolerado
 function opGetLimiteReal(op, metaMaquina) {
   const metaOp = opGetMeta(op);
   const tunel = opGetTunel(op);
@@ -5260,20 +5266,29 @@ function dieselPopularOps() {
     return;
   }
 
+  const u = window._authUser;
+  const podeEditar = u?.role === 'adm' || u?.role === 'admin';
+  const roAttr = podeEditar ? '' : 'readonly disabled';
+  const roStyle = podeEditar ? '' : 'opacity:.5;cursor:not-allowed;pointer-events:none;';
+
   const mkInput = (opKey, campo, val, placeholder, width, suffix, step) => {
     const safeOp = opKey.replace(/'/g, "\\'");
-    const onchg = campo === 'preco'
+    const onchg = podeEditar ? (campo === 'preco'
       ? `dieselSalvarPreco('${safeOp}', parseFloat(this.value)||0)`
-      : `opSalvarConfig('${safeOp}', '${campo}', this.value)`;
-    return `<input type="number" step="${step}" min="0" placeholder="${placeholder}" value="${val ?? ''}"
-      style="width:${width}px;background:var(--bg2);border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:6px;font-size:12px;text-align:right;font-family:monospace"
+      : `opSalvarConfig('${safeOp}', '${campo}', this.value)`) : '';
+    return `<input type="number" step="${step}" min="0" placeholder="${placeholder}" value="${val ?? ''}" ${roAttr}
+      style="width:${width}px;background:var(--bg2);border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:6px;font-size:12px;text-align:right;font-family:monospace;${roStyle}"
       onchange="${onchg}">
       <span style="font-size:10px;color:var(--text3);flex-shrink:0">${suffix}</span>`;
   };
 
   const colStyle = 'display:flex;align-items:center;gap:4px;justify-content:flex-end';
 
-  let html = `<div style="display:grid;grid-template-columns:1fr 130px 130px 110px;gap:6px;padding:4px 12px 8px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text3)">
+  let aviso = !podeEditar ? `<div style="background:rgba(192,57,43,.08);border:1px solid rgba(192,57,43,.2);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--text2);margin-bottom:10px">
+    🔒 Somente ADM Master e Admin podem editar estas configurações.
+  </div>` : '';
+
+  let html = aviso + `<div style="display:grid;grid-template-columns:1fr 130px 130px 110px;gap:6px;padding:4px 12px 8px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text3)">
     <span>Operação</span>
     <span style="text-align:right">Preço / L</span>
     <span style="text-align:right">Meta Cliente</span>
@@ -5292,7 +5307,6 @@ function dieselPopularOps() {
     </div>`;
   }).join('');
 
-  // Linha padrão
   const dp = precos['__default__'] ?? '';
   const dm = cfgs['__default__']?.meta  ?? '';
   const dt = cfgs['__default__']?.tunel ?? '';
