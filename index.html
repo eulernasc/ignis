@@ -1147,6 +1147,7 @@ body{overflow-x:hidden;}
       <button class="btn btn-secondary btn-sm" onclick="kmReset()">🔄 Novo Comparativo</button>
       <button class="btn btn-secondary btn-sm" id="btn-km-export" style="display:none" onclick="kmExportarExcel()">⬇️ Exportar Excel</button>
       <button class="btn btn-primary btn-sm" id="btn-km-email" style="display:none" onclick="kmCopiarEmail()">📧 Copiar E-mail de Alerta</button>
+      <button class="btn btn-secondary btn-sm" id="btn-km-email-comp" style="display:none" onclick="kmAbrirComparativoDuplo()" title="Gerar e-mail comparando dois períodos lado a lado">📧 Comparar 2 Períodos</button>
     </div>
   </div>
 
@@ -1313,6 +1314,28 @@ body{overflow-x:hidden;}
 </div>
 
 <!-- MODAL IMPORTAR -->
+<div class="modal-overlay" id="modal-km-comp-duplo">
+  <div class="modal" style="width:560px">
+    <div class="modal-title">📧 Comparar 2 Períodos — E-mail Lado a Lado</div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:16px">Selecione dois comparativos salvos para gerar um e-mail com os resultados lado a lado.</div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Período A (esquerda)</label>
+        <select class="form-input" id="km-comp-duplo-a"></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Período B (direita)</label>
+        <select class="form-input" id="km-comp-duplo-b"></select>
+      </div>
+    </div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:16px">💡 O comparativo atual já está salvo automaticamente. Faça outro comparativo para ter dois para comparar.</div>
+    <div style="display:flex;gap:10px;justify-content:flex-end">
+      <button class="btn btn-secondary" onclick="document.getElementById('modal-km-comp-duplo').classList.remove('open')">Cancelar</button>
+      <button class="btn btn-primary" onclick="kmGerarEmailDuplo()">📧 Gerar E-mail</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal-usuario">
   <div class="modal" style="width:520px">
     <div class="modal-title" id="modal-usuario-title">👤 Novo Usuário</div>
@@ -5833,6 +5856,12 @@ function kmComparar() {
     resultados.push({ placa, kmSistema: kmS, kmCliente: kmC, diff, pct, status, operacao: op });
   });
 
+  // Salva no histórico de comparativos para uso no e-mail duplo
+  if (!window._kmHistorico) window._kmHistorico = [];
+  window._kmHistorico = window._kmHistorico.filter(h => h.label !== label); // evita duplicata
+  window._kmHistorico.unshift({ label, resultados: [...resultados], semNoSistema: [...semNoSistema], semNoCliente: [...semNoCliente] });
+  if (window._kmHistorico.length > 10) window._kmHistorico.pop();
+
   // Salva para exportação e e-mail (usa valores globais para evitar ReferenceError)
   window._kmResultado = { resultados, semNoSistema, semNoCliente, label, margemMin: margemMinGlobal, margemAtencao: margemAtencaoGlobal, margemExcesso: margemExcessoGlobal };
 
@@ -5990,6 +6019,7 @@ function kmComparar() {
   document.getElementById('km-resultado').style.display = '';
   document.getElementById('btn-km-export').style.display = '';
   document.getElementById('btn-km-email').style.display = (alertas.length || excessos.length) ? '' : 'none';
+  document.getElementById('btn-km-email-comp').style.display = '';
   // Rola para os resultados automaticamente
   setTimeout(() => {
     document.getElementById('km-resultado').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -6125,6 +6155,102 @@ function kmCopiarEmail() {
   setTimeout(() => window.open('mailto:?subject=' + assunto, '_blank'), 500);
 }
 
+function kmAbrirComparativoDuplo() {
+  const hist = window._kmHistorico || [];
+  if (hist.length < 2) {
+    showToast('Faça ao menos 2 comparativos para usar esta função.', 'error');
+    return;
+  }
+  const selA = document.getElementById('km-comp-duplo-a');
+  const selB = document.getElementById('km-comp-duplo-b');
+  selA.innerHTML = hist.map((h,i) => `<option value="${i}">${h.label}</option>`).join('');
+  selB.innerHTML = hist.map((h,i) => `<option value="${i}" ${i===1?'selected':''}>${h.label}</option>`).join('');
+  document.getElementById('modal-km-comp-duplo').classList.add('open');
+}
+
+function kmGerarEmailDuplo() {
+  const hist = window._kmHistorico || [];
+  const idxA = parseInt(document.getElementById('km-comp-duplo-a').value);
+  const idxB = parseInt(document.getElementById('km-comp-duplo-b').value);
+  if (idxA === idxB) { showToast('Selecione dois períodos diferentes.', 'error'); return; }
+  const A = hist[idxA];
+  const B = hist[idxB];
+  document.getElementById('modal-km-comp-duplo').classList.remove('open');
+
+  const fmtKm = v => v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
+  const buildColuna = (dados) => {
+    const alertas  = dados.resultados.filter(r => r.status === 'alerta').sort((a,b) => a.diff - b.diff);
+    const excessos = dados.resultados.filter(r => r.status === 'excesso').sort((a,b) => b.diff - a.diff);
+    const semSist  = dados.semNoSistema || [];
+
+    const mkTabela = (linhas, corBorda, corFundo) =>
+      `<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid ${corBorda};border-radius:6px;overflow:hidden;margin-bottom:10px">
+        <thead><tr style="background:${corFundo}">
+          <th style="padding:6px 8px;text-align:left;font-size:10px;color:#64748b">Placa</th>
+          <th style="padding:6px 8px;text-align:left;font-size:10px;color:#64748b">Operação</th>
+          <th style="padding:6px 8px;text-align:center;font-size:10px;color:#64748b">Dif.</th>
+          <th style="padding:6px 8px;text-align:center;font-size:10px;color:#64748b">Var.%</th>
+        </tr></thead><tbody>${linhas}</tbody></table>`;
+
+    const linhaAlerta = (r, cor) =>
+      `<tr style="border-bottom:1px solid #f1f5f9">
+        <td style="padding:6px 8px;font-family:monospace;font-size:11px;font-weight:700;color:#1e293b">${r.placa}</td>
+        <td style="padding:6px 8px;font-size:10px;color:#64748b">${(r.operacao||'—').substring(0,12)}</td>
+        <td style="padding:6px 8px;text-align:center;font-size:11px;font-weight:700;color:${cor}">${(r.diff>=0?'+':'')+fmtKm(r.diff)}</td>
+        <td style="padding:6px 8px;text-align:center;font-size:11px;font-weight:700;color:${cor}">${r.pct!==null?(r.pct>=0?'+':'')+r.pct.toFixed(1)+'%':'—'}</td>
+      </tr>`;
+
+    let html = `<div style="background:#f8fafc;border-radius:6px;padding:10px 12px;margin-bottom:8px;font-size:12px">
+      <div style="font-weight:700;color:#1e293b;margin-bottom:4px">${dados.label}</div>
+      <div style="color:#dc2626"><strong>${alertas.length}</strong> alertas · <strong>${excessos.length}</strong> excessos · <strong>${semSist.length}</strong> ausentes</div>
+    </div>`;
+
+    if (alertas.length) {
+      html += `<div style="font-size:12px;font-weight:700;color:#dc2626;margin-bottom:4px">🔴 KM abaixo do cliente</div>`;
+      html += mkTabela(alertas.map(r => linhaAlerta(r,'#dc2626')).join(''), '#fecaca', '#fef2f2');
+    }
+    if (excessos.length) {
+      html += `<div style="font-size:12px;font-weight:700;color:#ea580c;margin-bottom:4px">🚨 KM acima em excesso</div>`;
+      html += mkTabela(excessos.map(r => linhaAlerta(r,'#ea580c')).join(''), '#fed7aa', '#fff7ed');
+    }
+    if (semSist.length) {
+      html += `<div style="font-size:12px;font-weight:700;color:#7c3aed;margin-bottom:4px">🔍 Só no cliente</div>`;
+      html += mkTabela(semSist.map(r =>
+        `<tr style="border-bottom:1px solid #f1f5f9">
+          <td style="padding:6px 8px;font-family:monospace;font-size:11px;font-weight:700;color:#7c3aed">${r.placa}</td>
+          <td colspan="3" style="padding:6px 8px;font-size:10px;color:#64748b">${r.operacao||'—'} · ${fmtKm(r.kmCliente)} km</td>
+        </tr>`
+      ).join(''), '#ddd6fe', '#f5f3ff');
+    }
+    return html;
+  };
+
+  const html = `<!DOCTYPE html><html><body style="margin:0;padding:20px 0;font-family:Arial,sans-serif;background:#e2e8f0">
+  <table width="720" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;border:1px solid #cbd5e1">
+    <tr><td style="background:linear-gradient(135deg,#7f1d1d,#dc2626);padding:20px 24px">
+      <div style="font-size:18px;font-weight:700;color:#fff">📏 Ignis — Comparativo de Períodos</div>
+      <div style="font-size:12px;color:#fca5a5;margin-top:3px">${A.label} × ${B.label}</div>
+    </td></tr>
+    <tr><td style="padding:16px 24px">
+      <table width="100%" cellpadding="0" cellspacing="0">
+        <tr valign="top">
+          <td width="48%" style="padding-right:12px">${buildColuna(A)}</td>
+          <td width="4%" style="border-right:2px solid #e2e8f0"></td>
+          <td width="48%" style="padding-left:12px">${buildColuna(B)}</td>
+        </tr>
+      </table>
+    </td></tr>
+    <tr><td style="background:#f8fafc;padding:12px 24px;border-top:1px solid #e2e8f0;text-align:center;font-size:11px;color:#94a3b8">Gerado pelo Ignis</td></tr>
+  </table></body></html>`;
+
+  navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }) })]).then(() => {
+    showToast('✅ E-mail comparativo copiado! Cole no Outlook (Ctrl+V)', 'success');
+  }).catch(() => showToast('Erro ao copiar', 'error'));
+  const assunto = encodeURIComponent('KM Comparativo — ' + A.label + ' × ' + B.label);
+  setTimeout(() => window.open('mailto:?subject=' + assunto, '_blank'), 500);
+}
+
 function kmReset() {
   window._kmState = { sistema: null, cliente: null };
   ['km-box-sistema','km-box-cliente'].forEach(id => document.getElementById(id)?.classList.remove('loaded'));
@@ -6132,6 +6258,7 @@ function kmReset() {
   document.getElementById('km-resultado').style.display = 'none';
   document.getElementById('btn-km-export').style.display = 'none';
   document.getElementById('btn-km-email').style.display = 'none';
+  document.getElementById('btn-km-email-comp').style.display = 'none';
   document.getElementById('btn-km-comparar').disabled = true;
   document.getElementById('km-label').value = '';
   const badge = document.getElementById('kmcomp-nav-badge');
