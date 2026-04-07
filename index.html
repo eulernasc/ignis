@@ -1130,11 +1130,11 @@ body{overflow-x:hidden;}
         <div style="font-size:12px;color:var(--text2);margin-bottom:10px">Nosso KM está excessivamente acima do cliente. Pode indicar erro de medição ou dados inconsistentes.</div>
         <div style="display:flex;align-items:center;gap:8px">
           <span style="font-size:12px;color:var(--text2)">Acima de:</span>
-          <input type="number" id="km-margem-excesso" value="10" min="1" max="200" step="1"
-            style="width:64px;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:6px;font-size:13px;text-align:center;font-family:monospace">
-          <span style="font-size:12px;color:var(--text2)">% acima do cliente</span>
+          <input type="number" id="km-margem-excesso" value="0" min="0" max="99999" step="10"
+            style="width:80px;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:6px;font-size:13px;text-align:center;font-family:monospace">
+          <span style="font-size:12px;color:var(--text2)">km acima do cliente</span>
         </div>
-        <div style="font-size:11px;color:var(--text3);margin-top:6px">💡 Deixe vazio ou 0 para desativar. Ex: 10% = alerta quando nosso KM superar o cliente em mais de 10%</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:6px">💡 Limite global. Use o campo por operação abaixo para definir por cliente. 0 = desativado.</div>
       </div>
 
   <!-- Upload dos dois arquivos -->
@@ -5251,10 +5251,10 @@ function kmMostrarMargensOps() {
   const existing = window._kmState.margensOp || {};
   let html = '<div style="background:var(--bg2);border:1px solid rgba(245,158,11,.4);border-radius:12px;padding:16px 20px;margin-bottom:16px">';
   html += '<div style="font-size:14px;font-weight:700;margin-bottom:4px">⚙️ Margem por Operação</div>';
-  html += '<div style="font-size:12px;color:var(--text2);margin-bottom:14px">' + ops.size + ' operação(ões) identificada(s). Mínima = alerta se abaixo · Atenção = zona intermediária · Excesso = alerta se muito acima.</div>';
-  html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:10px">';
+  html += '<div style="font-size:12px;color:var(--text2);margin-bottom:14px">' + ops.size + ' operação(ões) identificada(s). Mínima = alerta se abaixo · Atenção = zona intermediária · Excesso = limite absoluto de KM acima do cliente.</div>';
+  html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:10px">';
   [...ops].sort().forEach(op => {
-    const prev = existing[op] || { min: 0, atencao: 5, excesso: 10 };
+    const prev = existing[op] || { min: 0, atencao: 5, excesso: 0 };
     html += '<div style="background:var(--bg3);border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">';
     html += '<span style="flex:1;font-size:13px;font-weight:600;min-width:150px">' + op + '</span>';
     html += '<div style="display:flex;align-items:center;gap:6px">';
@@ -5269,8 +5269,8 @@ function kmMostrarMargensOps() {
     html += '</div>';
     html += '<div style="display:flex;align-items:center;gap:6px">';
     html += '<span style="font-size:11px;color:var(--red)">Excesso</span>';
-    html += '<input type="number" class="km-op-margem-excesso" data-op="' + op + '" value="' + (prev.excesso ?? 10) + '" min="0" max="200" step="1" style="width:60px;background:var(--bg2);border:1px solid rgba(239,68,68,.3);color:var(--text);padding:5px 8px;border-radius:6px;font-size:12px;text-align:center;font-family:monospace">';
-    html += '<span style="font-size:11px;color:var(--text3)">%</span>';
+    html += '<input type="number" class="km-op-margem-excesso" data-op="' + op + '" value="' + (prev.excesso ?? 0) + '" min="0" max="99999" step="50" style="width:70px;background:var(--bg2);border:1px solid rgba(239,68,68,.3);color:var(--text);padding:5px 8px;border-radius:6px;font-size:12px;text-align:center;font-family:monospace">';
+    html += '<span style="font-size:11px;color:var(--text3)">km</span>';
     html += '</div>';
     html += '</div>';
   });
@@ -5441,7 +5441,8 @@ function kmComparar() {
 
     let status;
     if (pct === null) { status = 'sem_base'; }
-    else if (margemExcesso > 0 && pct > margemExcesso) { status = 'excesso'; }
+    // Excesso: diferença absoluta em KM (diff = kmSistema - kmCliente)
+    else if (margemExcesso > 0 && diff > margemExcesso) { status = 'excesso'; }
     else if (pct < margemMin) { status = 'alerta'; }
     else if (pct < margemAtencao) { status = 'atencao'; }
     else { status = 'ok'; }
@@ -5711,13 +5712,13 @@ function kmCopiarEmail() {
     '<div style="font-size:14px;font-weight:700;color:#1e293b;margin-bottom:10px">🔍 Placas sem correspondência no sistema</div>' +
     '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">' +
     '<tbody>' + linhasSemSistema + '</tbody></table></td></tr>' : '') +
-    '<tr><td style="background:#f8fafc;padding:14px 28px;border-top:1px solid #e2e8f0;text-align:center;font-size:11px;color:#94a3b8">Gerado pelo FuelTracker Pro · eulernasc.github.io/fueltracker</td></tr>' +
+    '<tr><td style="background:#f8fafc;padding:14px 28px;border-top:1px solid #e2e8f0;text-align:center;font-size:11px;color:#94a3b8">Gerado pelo FuelTracker Pro</td></tr>' +
     '</table></body></html>';
 
   navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }) })]).then(() => {
     showToast('✅ E-mail copiado! Cole no corpo do e-mail (Ctrl+V)', 'success');
   }).catch(() => showToast('Erro ao copiar', 'error'));
-  const assunto = encodeURIComponent('FuelTracker — Alerta KM Comparativo · ' + label);
+  const assunto = encodeURIComponent('Alerta KM Comparativo - ' + label);
   setTimeout(() => window.open('mailto:?subject=' + assunto, '_blank'), 500);
 }
 
