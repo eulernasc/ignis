@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Ignis — Gestão Inteligente de Frotas</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⛽</text></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔥</text></svg>">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script type="module">
@@ -43,10 +43,10 @@ window.dispatchEvent(new Event('firebaseReady'));
 </script>
 <style>
 :root {
-  --bg:#0f1117;--bg2:#171b26;--bg3:#1e2333;--border:#2a2f45;
-  --accent:#4f8ef7;--accent2:#7c5cfc;--green:#22c55e;--red:#ef4444;
-  --yellow:#f59e0b;--text:#e8eaf0;--text2:#8b90a7;--text3:#555a75;
-  --card-shadow:0 4px 24px rgba(0,0,0,0.4);--radius:14px;
+  --bg:#0e0c0b;--bg2:#161210;--bg3:#1e1916;--border:rgba(220,80,30,.18);
+  --accent:#c0392b;--accent2:#d9621e;--green:#2a9d6a;--red:#c0392b;
+  --yellow:#e8941a;--text:#f0ebe4;--text2:#9a8f85;--text3:#5e5550;
+  --card-shadow:0 4px 24px rgba(0,0,0,0.5);--radius:14px;
 }
 *{margin:0;padding:0;box-sizing:border-box;}
 body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;display:flex;}
@@ -72,18 +72,18 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
   transition:left .3s cubic-bezier(.4,0,.2,1),background .2s,box-shadow .2s;
   color:var(--text3);box-shadow:3px 0 12px rgba(0,0,0,.3);
 }
-.sidebar-toggle::after{content:'';position:absolute;inset:0;border-radius:0 10px 10px 0;background:linear-gradient(to right,rgba(79,142,247,0),rgba(79,142,247,.06));opacity:0;transition:.2s;}
-.sidebar-toggle:hover{color:var(--accent);box-shadow:3px 0 18px rgba(79,142,247,.25);}
+.sidebar-toggle::after{content:'';position:absolute;inset:0;border-radius:0 10px 10px 0;background:linear-gradient(to right,rgba(192,57,43,0),rgba(192,57,43,.06));opacity:0;transition:.2s;}
+.sidebar-toggle:hover{color:var(--accent);box-shadow:3px 0 18px rgba(192,57,43,.25);}
 .sidebar-toggle:hover::after{opacity:1;}
 .sidebar.collapsed .sidebar-toggle{left:64px;}
 .logo{padding:24px 20px;display:flex;align-items:center;gap:12px;border-bottom:1px solid var(--border);}
-.logo-icon{width:38px;height:38px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;}
+.logo-icon{width:38px;height:38px;background:var(--accent);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;}
 .logo-text{font-size:15px;font-weight:700;letter-spacing:-0.3px;}
 .logo-sub{font-size:11px;color:var(--text2);}
 .nav{padding:16px 12px;flex:1;}
 .nav-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;cursor:pointer;font-size:14px;font-weight:500;color:var(--text2);transition:all .2s;margin-bottom:4px;position:relative;}
 .nav-item:hover{background:var(--bg3);color:var(--text);}
-.nav-item.active{background:linear-gradient(135deg,rgba(79,142,247,.15),rgba(124,92,252,.15));color:var(--accent);border:1px solid rgba(79,142,247,.2);}
+.nav-item.active{background:rgba(192,57,43,.15);color:var(--accent);border:1px solid rgba(192,57,43,.3);border-left:3px solid var(--accent);}
 .nav-item .icon{font-size:18px;width:22px;text-align:center;}
 .sync-status{padding:12px 16px;border-top:1px solid var(--border);font-size:11px;display:flex;align-items:center;gap:8px;}
 .sync-dot{width:7px;height:7px;border-radius:50%;background:var(--text3);}
@@ -96,7 +96,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 /* ── MOBILE TOPBAR ── */
 .mob-topbar{display:none;position:fixed;top:0;left:0;right:0;height:54px;background:var(--bg2);border-bottom:1px solid var(--border);z-index:200;align-items:center;padding:0 16px;gap:12px;}
 .mob-logo{display:flex;align-items:center;gap:8px;flex:1;}
-.mob-logo-icon{width:30px;height:30px;background:linear-gradient(135deg,var(--accent),var(--accent2));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;}
+.mob-logo-icon{width:30px;height:30px;background:var(--accent);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;}
 .mob-logo-text{font-size:14px;font-weight:700;}
 .mob-hamburger{background:none;border:none;color:var(--text);cursor:pointer;font-size:22px;padding:4px 8px;border-radius:8px;line-height:1;}
 .mob-hamburger:hover{background:var(--bg3);}
@@ -236,8 +236,8 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .bars{display:flex;align-items:flex-end;gap:3px;height:160px;}
 .bar{border-radius:4px 4px 0 0;min-width:22px;transition:opacity .2s;cursor:pointer;}
 .bar:hover{opacity:.8;}
-.bar-litros{background:linear-gradient(180deg,var(--accent),rgba(79,142,247,.5));}
-.bar-media{background:linear-gradient(180deg,var(--yellow),rgba(245,158,11,.5));}
+.bar-litros{background:linear-gradient(180deg,#4f8ef7,rgba(79,142,247,.5));}
+.bar-media{background:linear-gradient(180deg,var(--yellow),rgba(232,148,26,.5));}
 .bar-label{font-size:11px;color:var(--text2);font-family:monospace;}
 .chart-legend{display:flex;gap:14px;margin-top:12px;}
 .legend-item{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text2);}
@@ -261,11 +261,11 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .comp-diff.down{color:var(--red);}
 .comp-maq-table{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:24px;}
 .comp-maq-header{padding:16px 20px;border-bottom:1px solid var(--border);font-size:15px;font-weight:600;display:flex;align-items:center;justify-content:space-between;}
-.comp-badge{font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;background:rgba(79,142,247,.15);color:var(--accent);}
+.comp-badge{font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;background:rgba(192,57,43,.15);color:var(--accent);}
 /* BUTTONS */
 .btn{padding:9px 18px;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .2s;font-family:'DM Sans',sans-serif;display:inline-flex;align-items:center;gap:7px;}
-.btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;}
-.btn-primary:hover{opacity:.9;transform:translateY(-1px);box-shadow:0 4px 16px rgba(79,142,247,.3);}
+.btn-primary{background:var(--accent);color:#fff;}
+.btn-primary:hover{background:var(--accent2);transform:translateY(-1px);box-shadow:0 4px 16px rgba(192,57,43,.35);}
 .btn-secondary{background:var(--bg2);border:1px solid var(--border);color:var(--text);}
 .btn-secondary:hover{border-color:var(--accent);color:var(--accent);}
 .btn-danger{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);color:var(--red);}
@@ -284,7 +284,7 @@ tr:last-child td{border-bottom:none;}
 tr:hover td{background:rgba(79,142,247,.03);}
 tr.selected-row td{background:rgba(79,142,247,.06);}
 .badge{display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;font-family:monospace;}
-.badge-blue{background:rgba(79,142,247,.15);color:var(--accent);}
+.badge-blue{background:rgba(192,57,43,.15);color:var(--accent);}
 .badge-green{background:rgba(34,197,94,.15);color:var(--green);}
 .badge-red{background:rgba(239,68,68,.15);color:var(--red);}
 .badge-yellow{background:rgba(245,158,11,.15);color:var(--yellow);}
@@ -334,8 +334,8 @@ tr.selected-row td{background:rgba(79,142,247,.06);}
 .semana-select-group{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:16px;}
 .semana-opt{padding:10px;border-radius:10px;border:1px solid var(--border);text-align:center;cursor:pointer;transition:.2s;}
 .semana-opt:hover{border-color:var(--accent);}
-.semana-opt.selected{background:rgba(79,142,247,.15);border-color:var(--accent);color:var(--accent);}
-.semana-opt.has-data{border-color:rgba(79,142,247,.3);}
+.semana-opt.selected{background:rgba(192,57,43,.15);border-color:var(--accent);color:var(--accent);}
+.semana-opt.has-data{border-color:rgba(192,57,43,.3);}
 .semana-opt-num{font-size:16px;font-weight:700;font-family:monospace;}
 .semana-opt-label{font-size:10px;color:var(--text2);margin-top:2px;}
 /* SHEETS CONFIG */
@@ -415,15 +415,84 @@ body{overflow-x:hidden;}
   margin:0;font-size:8px;padding:1px 3px;
 }
 
+/* ── LOGIN ── */
+#login-screen{position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;}
+.login-card{background:var(--bg2);border:1px solid var(--border);border-radius:20px;width:100%;max-width:420px;overflow:hidden;}
+.login-hero{background:var(--accent);padding:36px 32px;text-align:center;}
+.login-flame{font-size:48px;margin-bottom:12px;display:block;}
+.login-brand{font-size:28px;font-weight:800;color:#fff;letter-spacing:3px;}
+.login-tagline{font-size:11px;color:rgba(255,255,255,.6);letter-spacing:2px;margin-top:4px;text-transform:uppercase;}
+.login-divider{height:3px;background:linear-gradient(90deg,var(--accent),var(--accent2),var(--yellow));opacity:.6;}
+.login-body{padding:28px 32px;}
+.login-label{font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--text3);margin-bottom:6px;display:block;}
+.login-input{width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:11px 14px;border-radius:10px;font-size:14px;font-family:'DM Sans',sans-serif;outline:none;margin-bottom:14px;transition:.2s;}
+.login-input:focus{border-color:var(--accent);}
+.login-btn{width:100%;background:var(--accent);color:#fff;border:none;padding:13px;border-radius:10px;font-size:14px;font-weight:700;letter-spacing:.5px;cursor:pointer;transition:.2s;font-family:'DM Sans',sans-serif;}
+.login-btn:hover{background:var(--accent2);}
+.login-error{background:rgba(192,57,43,.15);border:1px solid rgba(192,57,43,.3);color:#f07070;border-radius:8px;padding:10px 14px;font-size:13px;margin-bottom:14px;display:none;}
+.login-setup-note{font-size:12px;color:var(--text3);text-align:center;margin-top:14px;}
+/* ── USER MGMT ── */
+.user-row{display:flex;align-items:center;gap:10px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 14px;margin-bottom:8px;}
+.user-name{font-size:13px;font-weight:600;flex:1;}
+.user-role-badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:rgba(192,57,43,.15);color:var(--accent);border:1px solid rgba(192,57,43,.3);}
+.user-role-badge.adm{background:rgba(232,148,26,.15);color:var(--yellow);border-color:rgba(232,148,26,.3);}
+.perm-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0;}
+.perm-item{display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:8px 10px;}
+.perm-item input{accent-color:var(--accent);}
+/* user info in sidebar bottom */
+.user-info{padding:10px 16px;border-top:1px solid var(--border);display:flex;align-items:center;gap:8px;font-size:12px;}
+.user-avatar{width:28px;height:28px;background:var(--accent);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0;}
+.user-details{flex:1;min-width:0;}
+.user-display-name{font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.user-display-role{font-size:10px;color:var(--text3);}
+.logout-btn{background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;padding:4px;border-radius:6px;transition:.2s;}
+.logout-btn:hover{color:var(--red);background:rgba(192,57,43,.1);}
 .nav-badge-abs{position:absolute;top:-5px;right:-6px;margin:0 !important;width:15px;height:15px;font-size:9px;}
 </style>
 </head>
 <body>
 
+<!-- ══ TELA DE LOGIN ══ -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-hero">
+      <span class="login-flame">🔥</span>
+      <div class="login-brand">IGNIS</div>
+      <div class="login-tagline">Gestão Inteligente de Frotas</div>
+    </div>
+    <div class="login-divider"></div>
+    <div class="login-body">
+      <div id="login-error" class="login-error"></div>
+      <!-- Modo: login normal -->
+      <div id="login-form">
+        <label class="login-label">Usuário</label>
+        <input class="login-input" type="text" id="login-user" placeholder="Digite seu usuário" autocomplete="username">
+        <label class="login-label">Senha</label>
+        <input class="login-input" type="password" id="login-pass" placeholder="Digite sua senha" autocomplete="current-password" onkeydown="if(event.key==='Enter')loginEntrar()">
+        <button class="login-btn" onclick="loginEntrar()">Entrar</button>
+      </div>
+      <!-- Modo: primeiro acesso (cria ADM) -->
+      <div id="login-setup" style="display:none">
+        <div style="font-size:13px;color:var(--text2);margin-bottom:16px;line-height:1.6">
+          Primeiro acesso detectado. Crie as credenciais do <strong style="color:var(--accent)">ADM Master</strong>.
+        </div>
+        <label class="login-label">Nome de usuário ADM</label>
+        <input class="login-input" type="text" id="setup-user" placeholder="Ex: admin" autocomplete="off">
+        <label class="login-label">Senha</label>
+        <input class="login-input" type="password" id="setup-pass" placeholder="Mínimo 6 caracteres">
+        <label class="login-label">Confirmar senha</label>
+        <input class="login-input" type="password" id="setup-pass2" placeholder="Repita a senha" onkeydown="if(event.key==='Enter')loginCriarAdm()">
+        <button class="login-btn" onclick="loginCriarAdm()">Criar ADM e Entrar</button>
+      </div>
+      <div class="login-setup-note" id="login-version">Ignis · v2.0</div>
+    </div>
+  </div>
+</div>
+
 <!-- MOBILE TOPBAR -->
 <div class="mob-topbar">
   <div class="mob-logo">
-    <div class="mob-logo-icon">⛽</div>
+    <div class="mob-logo-icon">🔥</div>
     <div class="mob-logo-text">Ignis</div>
   </div>
   <button class="mob-hamburger" onclick="toggleSidebar()">☰</button>
@@ -433,7 +502,7 @@ body{overflow-x:hidden;}
 
 <aside class="sidebar" id="sidebar">
   <div class="logo">
-    <div class="logo-icon">⛽</div>
+    <div class="logo-icon">🔥</div>
     <div><div class="logo-text">Ignis</div><div class="logo-sub">Gestão Inteligente de Frotas</div></div>
   </div>
   <nav class="nav">
@@ -448,6 +517,14 @@ body{overflow-x:hidden;}
     <div class="nav-item" onclick="showPage('config',this)"><span class="icon">⚙️</span><span class="nav-label">Configurações</span></div>
   </nav>
   <div class="sidebar-toggle" id="sidebar-toggle" onclick="toggleSidebarCollapse()" title="Recolher">&#8249;</div>
+  <div class="user-info" id="sidebar-user-info">
+    <div class="user-avatar" id="sidebar-avatar">?</div>
+    <div class="user-details">
+      <div class="user-display-name" id="sidebar-username">—</div>
+      <div class="user-display-role" id="sidebar-role">—</div>
+    </div>
+    <button class="logout-btn" onclick="loginSair()" title="Sair">⏻</button>
+  </div>
   <div class="sync-status">
     <div class="sync-dot" id="sync-dot"></div>
     <span id="sync-label" class="sync-label"><span class="sync-label-text" id="sync-label-text" style="color:var(--text2)">Sem sincronização</span></span>
@@ -707,7 +784,12 @@ body{overflow-x:hidden;}
         <input type="file" id="import-json" accept=".json" style="display:none" onchange="importarJSON(this)">
         <div class="sheets-hint" style="margin-top:10px">Use o backup JSON para transferir dados entre computadores sem internet.</div>
       </div>
-      <div class="sheets-config" style="margin-top:16px;border-color:rgba(239,68,68,.3)">
+      <div class="sheets-config" style="margin-top:16px;border-color:rgba(192,57,43,.4)" id="config-users-section">
+        <div class="sheets-config-title" style="color:var(--accent)">👥 Gerenciamento de Usuários</div>
+        <div class="sheets-hint" style="margin-bottom:14px">Crie usuários e defina quais abas cada um pode acessar. Somente o ADM Master pode gerenciar usuários.</div>
+        <div id="users-lista" style="margin-bottom:14px"></div>
+        <button class="btn btn-primary btn-sm" onclick="abrirModalNovoUsuario()">+ Novo Usuário</button>
+      </div>
         <div class="sheets-config-title" style="color:var(--red)">⚠️ Zona de Perigo</div>
         <button class="btn btn-danger btn-sm" onclick="verificarSenha(limparTodosDados)">🗑️ Apagar todos os dados locais</button>
       </div>
@@ -1073,7 +1155,7 @@ body{overflow-x:hidden;}
 .km-status-ok{background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.3);color:var(--green);}
 .km-status-atencao{background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.3);color:var(--yellow);}
 .km-status-alerta{background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.3);color:var(--red);}
-.km-status-sem{background:rgba(124,92,252,.12);border:1px solid rgba(124,92,252,.3);color:var(--accent2);}
+.km-status-sem{background:rgba(124,92,252,.12);border:1px solid rgba(217,98,30,.3);color:var(--accent2);}
 @keyframes kf-progress{0%{width:0%;margin-left:0}50%{width:60%;margin-left:20%}100%{width:0%;margin-left:100%}}
 </style>
 
@@ -1253,6 +1335,52 @@ body{overflow-x:hidden;}
 </div>
 
 <!-- MODAL IMPORTAR -->
+<div class="modal-overlay" id="modal-usuario">
+  <div class="modal" style="width:520px">
+    <div class="modal-title" id="modal-usuario-title">👤 Novo Usuário</div>
+    <input type="hidden" id="edit-user-id">
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Usuário</label>
+        <input type="text" class="form-input" id="user-field-login" placeholder="Nome de login (sem espaços)" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nome de exibição</label>
+        <input type="text" class="form-input" id="user-field-nome" placeholder="Ex: João Silva">
+      </div>
+    </div>
+    <div class="form-row" style="margin-bottom:4px">
+      <div class="form-group">
+        <label class="form-label">Senha</label>
+        <input type="password" class="form-input" id="user-field-senha" placeholder="Deixe vazio para não alterar">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Confirmar senha</label>
+        <input type="password" class="form-input" id="user-field-senha2" placeholder="Repita a senha">
+      </div>
+    </div>
+    <div class="form-group" style="margin-bottom:14px">
+      <label class="form-label">Permissões de acesso</label>
+      <div class="perm-grid">
+        <label class="perm-item"><input type="checkbox" data-perm="dashboard"> ⊞ Dashboard</label>
+        <label class="perm-item"><input type="checkbox" data-perm="comparativo"> 📊 Comparativo</label>
+        <label class="perm-item"><input type="checkbox" data-perm="abastecimentos"> ⛽ Abastecimentos</label>
+        <label class="perm-item"><input type="checkbox" data-perm="maquinas"> 🚜 Máquinas</label>
+        <label class="perm-item"><input type="checkbox" data-perm="relatorio"> 📧 Relatório</label>
+        <label class="perm-item"><input type="checkbox" data-perm="excluir"> 🗑️ A Excluir</label>
+        <label class="perm-item"><input type="checkbox" data-perm="arla"> 🧪 Arla</label>
+        <label class="perm-item"><input type="checkbox" data-perm="kmcomp"> 📏 KM Comparativo</label>
+        <label class="perm-item"><input type="checkbox" data-perm="config"> ⚙️ Configurações</label>
+      </div>
+    </div>
+    <div id="user-modal-error" style="color:var(--red);font-size:12px;margin-bottom:10px;display:none"></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end">
+      <button class="btn btn-secondary" onclick="fecharModalUsuario()">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarUsuario()">💾 Salvar</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal-import">
   <div class="modal" style="width:540px">
     <div class="modal-title">⬆️ Importar Relatório</div>
@@ -1448,6 +1576,257 @@ function saveState() {
 }
 
 // ── NAV ───────────────────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
+// ── SISTEMA DE AUTENTICAÇÃO IGNIS ─────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
+
+window._authUser = null; // usuário logado atualmente
+
+// Todas as abas disponíveis
+const AUTH_PAGES = [
+  { id:'dashboard',    label:'Dashboard',      icon:'⊞' },
+  { id:'comparativo',  label:'Comparativo',    icon:'📊' },
+  { id:'abastecimentos',label:'Abastecimentos',icon:'⛽' },
+  { id:'maquinas',     label:'Máquinas',       icon:'🚜' },
+  { id:'relatorio',    label:'Relatório',      icon:'📧' },
+  { id:'excluir',      label:'A Excluir',      icon:'🗑️' },
+  { id:'arla',         label:'Arla',           icon:'🧪' },
+  { id:'kmcomp',       label:'KM Comparativo', icon:'📏' },
+  { id:'config',       label:'Configurações',  icon:'⚙️' },
+];
+
+async function sha256(str) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+// Inicializa: verifica se existe ADM, se não mostra setup
+async function loginInit() {
+  // Aguarda Firebase
+  if (!window.firebaseReady) {
+    await new Promise(r => window.addEventListener('firebaseReady', r, {once:true}));
+  }
+  const data = await window.fbLoad();
+  const users = data?._users || {};
+  if (!Object.keys(users).length) {
+    // Primeiro acesso — mostra tela de criação do ADM
+    document.getElementById('login-form').style.display = 'none';
+    document.getElementById('login-setup').style.display = 'block';
+  }
+  // Verifica sessão salva
+  const sessao = sessionStorage.getItem('ignis_session');
+  if (sessao) {
+    try {
+      const s = JSON.parse(sessao);
+      const users2 = data?._users || {};
+      if (users2[s.id] && users2[s.id].hash === s.hash) {
+        window._authUser = { id: s.id, ...users2[s.id] };
+        loginEntrarApp();
+        return;
+      }
+    } catch(e) {}
+  }
+  // Mostra tela de login
+  document.getElementById('login-screen').style.display = 'flex';
+}
+
+async function loginCriarAdm() {
+  const login = document.getElementById('setup-user').value.trim().toLowerCase();
+  const pass  = document.getElementById('setup-pass').value;
+  const pass2 = document.getElementById('setup-pass2').value;
+  const err   = document.getElementById('login-error');
+  err.style.display='none';
+  if (!login || login.length < 2) { mostrarLoginErro('Nome de usuário inválido (mínimo 2 caracteres).'); return; }
+  if (pass.length < 6) { mostrarLoginErro('Senha deve ter no mínimo 6 caracteres.'); return; }
+  if (pass !== pass2) { mostrarLoginErro('As senhas não conferem.'); return; }
+  const hash = await sha256(pass);
+  const adm = { nome: login, hash, role: 'adm', perms: ['dashboard','comparativo','abastecimentos','maquinas','relatorio','excluir','arla','kmcomp','config'] };
+  const data = (await window.fbLoad()) || {};
+  data._users = { [login]: adm };
+  await window.fbSave(data);
+  window._authUser = { id: login, ...adm };
+  sessionStorage.setItem('ignis_session', JSON.stringify({ id: login, hash }));
+  loginEntrarApp();
+}
+
+async function loginEntrar() {
+  const login = document.getElementById('login-user').value.trim().toLowerCase();
+  const pass  = document.getElementById('login-pass').value;
+  if (!login || !pass) { mostrarLoginErro('Preencha usuário e senha.'); return; }
+  const hash = await sha256(pass);
+  const data = await window.fbLoad();
+  const users = data?._users || {};
+  const u = users[login];
+  if (!u || u.hash !== hash) { mostrarLoginErro('Usuário ou senha incorretos.'); return; }
+  window._authUser = { id: login, ...u };
+  sessionStorage.setItem('ignis_session', JSON.stringify({ id: login, hash }));
+  loginEntrarApp();
+}
+
+function mostrarLoginErro(msg) {
+  const el = document.getElementById('login-error');
+  el.textContent = msg; el.style.display = 'block';
+}
+
+function loginEntrarApp() {
+  document.getElementById('login-screen').style.display = 'none';
+  const u = window._authUser;
+  // Atualiza info do usuário na sidebar
+  document.getElementById('sidebar-username').textContent = u.nome || u.id;
+  document.getElementById('sidebar-role').textContent = u.role === 'adm' ? 'ADM Master' : 'Usuário';
+  document.getElementById('sidebar-avatar').textContent = (u.nome || u.id).charAt(0).toUpperCase();
+  // Renderiza nav com permissões
+  authRenderNav();
+  // Mostra/oculta seção de usuários no Config (só ADM)
+  const usersSection = document.getElementById('config-users-section');
+  if (usersSection) usersSection.style.display = u.role === 'adm' ? 'block' : 'none';
+  // Inicia app normalmente
+  loadState().then(() => {
+    renderDashboard();
+    relChecarReincidencia();
+    onShowExcluir();
+    setTimeout(() => { arlaInit(); arlaChecarLembrete(); }, 1000);
+  });
+}
+
+function loginSair() {
+  sessionStorage.removeItem('ignis_session');
+  window._authUser = null;
+  window.location.reload();
+}
+
+function authRenderNav() {
+  const u = window._authUser;
+  if (!u) return;
+  const perms = u.role === 'adm' ? AUTH_PAGES.map(p=>p.id) : (u.perms || []);
+  // Sidebar desktop
+  const nav = document.querySelector('.nav');
+  nav.innerHTML = '';
+  AUTH_PAGES.forEach(p => {
+    if (!perms.includes(p.id)) return;
+    const isSpecial = ['relatorio','excluir','arla','kmcomp'].includes(p.id);
+    let inner = '';
+    if (p.id === 'relatorio') inner = `<span class="icon-wrap" style="position:relative;display:inline-flex"><span class="icon">${p.icon}</span><span id="rel-reincidencia-badge" style="display:none" class="excl-badge nav-badge-abs">!</span></span>`;
+    else if (p.id === 'excluir') inner = `<span class="icon-wrap" style="position:relative;display:inline-flex"><span class="icon">${p.icon}</span><span id="excluir-nav-badge" style="display:none" class="excl-badge nav-badge-abs">0</span></span>`;
+    else if (p.id === 'arla') inner = `<span class="icon-wrap" style="position:relative;display:inline-flex"><span class="icon">${p.icon}</span><span id="arla-nav-badge" style="display:none" class="excl-badge nav-badge-abs">0</span></span>`;
+    else if (p.id === 'kmcomp') inner = `<span class="icon-wrap" style="position:relative;display:inline-flex"><span class="icon">${p.icon}</span><span id="kmcomp-nav-badge" style="display:none" class="excl-badge nav-badge-abs">!</span></span>`;
+    else inner = `<span class="icon">${p.icon}</span>`;
+    const div = document.createElement('div');
+    div.className = 'nav-item' + (p.id === 'dashboard' ? ' active' : '');
+    div.id = 'nav-' + p.id;
+    div.innerHTML = inner + `<span class="nav-label">${p.label}</span>`;
+    div.onclick = () => showPage(p.id, div);
+    nav.appendChild(div);
+  });
+  // Mobile bottom nav — mostra só abas com permissão
+  document.querySelectorAll('.mob-nav-item').forEach(el => {
+    const pageId = el.id.replace('mob-nav-','');
+    el.style.display = perms.includes(pageId) ? '' : 'none';
+  });
+}
+
+// ── GERENCIAMENTO DE USUÁRIOS ──────────────────────────────────────────────────
+
+async function authCarregarUsuarios() {
+  const data = await window.fbLoad();
+  return data?._users || {};
+}
+
+async function authRenderUsuarios() {
+  const users = await authCarregarUsuarios();
+  const lista = document.getElementById('users-lista');
+  if (!lista) return;
+  const entries = Object.entries(users);
+  if (!entries.length) { lista.innerHTML = '<div style="font-size:13px;color:var(--text3)">Nenhum usuário cadastrado.</div>'; return; }
+  lista.innerHTML = entries.map(([id, u]) => `
+    <div class="user-row">
+      <div class="user-avatar" style="flex-shrink:0">${(u.nome||id).charAt(0).toUpperCase()}</div>
+      <div style="flex:1">
+        <div class="user-name">${u.nome||id} <span style="font-size:11px;color:var(--text3);font-family:monospace">(${id})</span></div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">${(u.perms||[]).length} aba(s) com acesso</div>
+      </div>
+      <span class="user-role-badge ${u.role==='adm'?'adm':''}">${u.role==='adm'?'ADM':'Usuário'}</span>
+      ${window._authUser?.id !== id ? `<button class="btn btn-secondary btn-sm" onclick="abrirModalEditarUsuario('${id}')">✏️</button>
+      <button class="btn btn-danger btn-sm" onclick="confirmarExcluirUsuario('${id}')">🗑️</button>` : '<span style="font-size:11px;color:var(--text3)">(você)</span>'}
+    </div>
+  `).join('');
+}
+
+function abrirModalNovoUsuario() {
+  document.getElementById('modal-usuario-title').textContent = '👤 Novo Usuário';
+  document.getElementById('edit-user-id').value = '';
+  document.getElementById('user-field-login').value = '';
+  document.getElementById('user-field-login').disabled = false;
+  document.getElementById('user-field-nome').value = '';
+  document.getElementById('user-field-senha').value = '';
+  document.getElementById('user-field-senha2').value = '';
+  document.querySelectorAll('[data-perm]').forEach(cb => cb.checked = false);
+  document.getElementById('user-modal-error').style.display = 'none';
+  document.getElementById('modal-usuario').classList.add('open');
+}
+
+async function abrirModalEditarUsuario(id) {
+  const users = await authCarregarUsuarios();
+  const u = users[id]; if (!u) return;
+  document.getElementById('modal-usuario-title').textContent = '✏️ Editar Usuário';
+  document.getElementById('edit-user-id').value = id;
+  document.getElementById('user-field-login').value = id;
+  document.getElementById('user-field-login').disabled = true;
+  document.getElementById('user-field-nome').value = u.nome || '';
+  document.getElementById('user-field-senha').value = '';
+  document.getElementById('user-field-senha2').value = '';
+  document.querySelectorAll('[data-perm]').forEach(cb => {
+    cb.checked = (u.perms || []).includes(cb.dataset.perm);
+  });
+  document.getElementById('user-modal-error').style.display = 'none';
+  document.getElementById('modal-usuario').classList.add('open');
+}
+
+function fecharModalUsuario() {
+  document.getElementById('modal-usuario').classList.remove('open');
+}
+
+async function salvarUsuario() {
+  const editId = document.getElementById('edit-user-id').value;
+  const login  = document.getElementById('user-field-login').value.trim().toLowerCase();
+  const nome   = document.getElementById('user-field-nome').value.trim();
+  const pass   = document.getElementById('user-field-senha').value;
+  const pass2  = document.getElementById('user-field-senha2').value;
+  const perms  = [...document.querySelectorAll('[data-perm]:checked')].map(cb=>cb.dataset.perm);
+  const errEl  = document.getElementById('user-modal-error');
+  errEl.style.display = 'none';
+
+  if (!login || login.length < 2) { errEl.textContent='Nome de login inválido.'; errEl.style.display='block'; return; }
+  if (!editId && pass.length < 6) { errEl.textContent='Senha deve ter no mínimo 6 caracteres.'; errEl.style.display='block'; return; }
+  if (pass && pass !== pass2) { errEl.textContent='As senhas não conferem.'; errEl.style.display='block'; return; }
+
+  const data = (await window.fbLoad()) || {};
+  const users = data._users || {};
+
+  if (!editId && users[login]) { errEl.textContent='Este login já existe.'; errEl.style.display='block'; return; }
+
+  const existing = users[editId || login] || {};
+  const hash = pass ? await sha256(pass) : existing.hash;
+  users[login] = { nome: nome||login, hash, role: 'usuario', perms };
+  data._users = users;
+  await window.fbSave(data);
+  fecharModalUsuario();
+  authRenderUsuarios();
+  showToast('Usuário salvo com sucesso!', 'success');
+}
+
+async function confirmarExcluirUsuario(id) {
+  if (!confirm(`Excluir o usuário "${id}"? Esta ação não pode ser desfeita.`)) return;
+  const data = (await window.fbLoad()) || {};
+  delete data._users[id];
+  await window.fbSave(data);
+  authRenderUsuarios();
+  showToast('Usuário excluído.', 'success');
+}
+
+// Inicializa ao carregar
+document.addEventListener('DOMContentLoaded', loginInit);
+
 function showPage(page,el) {
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
@@ -1456,7 +1835,7 @@ function showPage(page,el) {
   const renders = {dashboard:renderDashboard,comparativo:renderComparativo,abastecimentos:renderAbastecimentos,maquinas:renderMaquinas};
   if(renders[page]) renders[page]();
   if(page==='relatorio') { relPopularOps(); relgInit(); relChecarReincidencia(); }
-  if(page==='config') { dieselPopularOps(); }
+  if(page==='config') { dieselPopularOps(); if(window._authUser?.role==='adm') authRenderUsuarios(); }
   if(page==='excluir') { onShowExcluir(); }
   if(page==='arla') { arlaOnShow(); }
   if(page==='kmcomp') { /* nothing extra needed on show */ }
@@ -1811,7 +2190,7 @@ function renderBarChart(list) {
     const desvio=meta>0&&m>0?((m-meta)/meta*100):null;
     const barColor=desvio===null?'var(--yellow)':desvio<=0?'var(--green)':desvio<=10?'#f59e0b':'var(--red)';
     const metaText = meta > 0
-      ? `<div style="font-size:9px;font-weight:600;font-family:monospace;white-space:nowrap;margin-top:3px;padding:1px 5px;border-radius:4px;background:rgba(79,142,247,.15);color:var(--accent)">${meta.toFixed(1)}</div>`
+      ? `<div style="font-size:9px;font-weight:600;font-family:monospace;white-space:nowrap;margin-top:3px;padding:1px 5px;border-radius:4px;background:rgba(192,57,43,.15);color:var(--accent)">${meta.toFixed(1)}</div>`
       : `<div style="font-size:9px;margin-top:3px;padding:1px 5px;height:16px;visibility:hidden">—</div>`;
     return `<div class="bar-group" style="padding-bottom:20px;gap:16px">
       <div class="bars">
@@ -1949,7 +2328,7 @@ function renderComparativo() {
 
   // Renderizar checkboxes — só os períodos visíveis
   checkboxDiv.innerHTML = periodosVisiveis.map(([id, p]) => `
-    <label style="display:inline-flex;align-items:center;gap:7px;padding:7px 12px;background:${_periodosSelec.has(id)?'rgba(79,142,247,.15)':'var(--bg3)'};border:1px solid ${_periodosSelec.has(id)?'var(--accent)':'var(--border)'};border-radius:8px;cursor:pointer;font-size:12px;font-weight:500;transition:.2s">
+    <label style="display:inline-flex;align-items:center;gap:7px;padding:7px 12px;background:${_periodosSelec.has(id)?'rgba(192,57,43,.15)':'var(--bg3)'};border:1px solid ${_periodosSelec.has(id)?'var(--accent)':'var(--border)'};border-radius:8px;cursor:pointer;font-size:12px;font-weight:500;transition:.2s">
       <input type="checkbox" style="accent-color:var(--accent)" ${_periodosSelec.has(id)?'checked':''} onchange="togglePeriodoComp('${id}',this)">
       ${p.label||id}
       <span style="color:var(--text3);font-size:10px">${(p.registros||[]).length} maq.</span>
@@ -4150,7 +4529,7 @@ function arlaSetStatusTab(tab, el) {
     b.style.borderColor = 'var(--border)';
   });
   if (el) {
-    const colors = { abaixo: ['rgba(239,68,68,.12)', 'var(--red)', 'rgba(239,68,68,.4)'], acima: ['rgba(34,197,94,.12)', 'var(--green)', 'rgba(34,197,94,.4)'], todos: ['rgba(79,142,247,.12)', 'var(--accent)', 'rgba(79,142,247,.4)'] };
+    const colors = { abaixo: ['rgba(239,68,68,.12)', 'var(--red)', 'rgba(239,68,68,.4)'], acima: ['rgba(34,197,94,.12)', 'var(--green)', 'rgba(34,197,94,.4)'], todos: ['rgba(79,142,247,.12)', 'var(--accent)', 'rgba(192,57,43,.4)'] };
     const [bg, color, border] = colors[tab] || colors.todos;
     el.style.background = bg; el.style.color = color; el.style.borderColor = border;
   }
@@ -5493,7 +5872,7 @@ function kmComparar() {
       html += '<div style="font-size:12px;font-weight:700;color:var(--text2);margin-bottom:6px">🗂️ Presentes no nosso sistema mas NÃO na planilha do cliente (' + semNoCliente.length + '):</div>';
       html += '<div style="display:flex;flex-wrap:wrap;gap:6px">';
       semNoCliente.forEach(r => {
-        html += '<span style="background:rgba(79,142,247,.15);color:var(--accent);border:1px solid rgba(79,142,247,.3);border-radius:6px;padding:3px 9px;font-family:monospace;font-size:12px;font-weight:700">' + r.placa + ' <span style="font-weight:400;font-size:10px">' + fmtKm(r.kmSistema) + ' km</span></span>';
+        html += '<span style="background:rgba(192,57,43,.15);color:var(--accent);border:1px solid rgba(192,57,43,.3);border-radius:6px;padding:3px 9px;font-family:monospace;font-size:12px;font-weight:700">' + r.placa + ' <span style="font-weight:400;font-size:10px">' + fmtKm(r.kmSistema) + ' km</span></span>';
       });
       html += '</div>';
     }
@@ -5591,7 +5970,7 @@ function kmComparar() {
   });
   semNoCliente.forEach(r => {
     html += '<tr data-status="sem_corr" data-placa="' + r.placa + '" data-op="' + (r.operacao || '') + '">';
-    html += '<td><span class="placa-tag" style="border-color:rgba(79,142,247,.4)">' + r.placa + '</span></td>';
+    html += '<td><span class="placa-tag" style="border-color:rgba(192,57,43,.4)">' + r.placa + '</span></td>';
     html += '<td style="font-size:12px;color:var(--text2)">' + (r.operacao || '—') + '</td>';
     html += '<td style="text-align:center;font-family:monospace;color:var(--accent)">' + fmtKm(r.kmSistema) + '</td>';
     html += '<td style="text-align:center;color:var(--text3)">—</td>';
@@ -5808,16 +6187,9 @@ function setCompMaq(el) {
   else renderComparativo();
 }
 
-// ── INIT ──────────────────────────────────────────────────────────────────────
+// ── INIT — feito após login em loginEntrarApp() ───────────────────────────────
 updateFilters();
-renderDashboard();
-loadState();
-onShowExcluir(); // Restaura alertas e badge ao carregar a página
-// Checa lembrete de importação Arla no carregamento
-setTimeout(() => {
-  arlaInit();
-  arlaChecarLembrete();
-}, 1500);
+// arlaInit e lembrete são chamados após login
 </script>
 </body>
 </html>
