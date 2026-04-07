@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>FuelTracker Pro — Gestão de Combustível</title>
+<title>Ignis — Gestão Inteligente de Frotas</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⛽</text></svg>">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -424,7 +424,7 @@ body{overflow-x:hidden;}
 <div class="mob-topbar">
   <div class="mob-logo">
     <div class="mob-logo-icon">⛽</div>
-    <div class="mob-logo-text">FuelTracker Pro</div>
+    <div class="mob-logo-text">Ignis</div>
   </div>
   <button class="mob-hamburger" onclick="toggleSidebar()">☰</button>
 </div>
@@ -434,7 +434,7 @@ body{overflow-x:hidden;}
 <aside class="sidebar" id="sidebar">
   <div class="logo">
     <div class="logo-icon">⛽</div>
-    <div><div class="logo-text">FuelTracker</div><div class="logo-sub">Gestão de Combustível</div></div>
+    <div><div class="logo-text">Ignis</div><div class="logo-sub">Gestão Inteligente de Frotas</div></div>
   </div>
   <nav class="nav">
     <div class="nav-item active" onclick="showPage('dashboard',this)"><span class="icon">⊞</span><span class="nav-label">Dashboard</span></div>
@@ -1384,7 +1384,7 @@ function doGet(e) {
 function doPost(e) {
   const payload = JSON.parse(e.postData.contents);
   const ss = SpreadsheetApp.openById(SHEET_ID);
-  const sheetName = payload.sheet || 'FuelTracker';
+  const sheetName = payload.sheet || 'Ignis';
   let sh = ss.getSheetByName(sheetName);
   if (!sh) sh = ss.insertSheet(sheetName);
   sh.clearContents();
@@ -2805,7 +2805,7 @@ function exportarJSON() {
   const blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
-  a.download=`fueltracker_backup_${new Date().toISOString().split('T')[0]}.json`;
+  a.download=`ignis_backup_${new Date().toISOString().split('T')[0]}.json`;
   a.click();
   showToast('Backup exportado!','success');
 }
@@ -3243,7 +3243,7 @@ function buildEmailHTML(blocoOps, byOp, labelPeriodo, limite, labelBloco) {
       '<table cellpadding="0" cellspacing="0"><tr>' +
         '<td style="font-size:30px;padding-right:14px;vertical-align:middle">⛽</td>' +
         '<td style="vertical-align:middle">' +
-          '<div style="font-size:18px;font-weight:700;color:#ffffff;line-height:1.3">FuelTracker Pro</div>' +
+          '<div style="font-size:18px;font-weight:700;color:#ffffff;line-height:1.3">Ignis</div>' +
           '<div style="font-size:12px;color:#93c5fd;margin-top:3px">Relatório de Eficiência — ' + labelBloco + '</div>' +
         '</td>' +
       '</tr></table>' +
@@ -3273,8 +3273,8 @@ function buildEmailHTML(blocoOps, byOp, labelPeriodo, limite, labelBloco) {
 
     // Footer
     '<tr><td style="background:#f8fafc;padding:16px 24px;border-top:1px solid #e2e8f0;text-align:center">' +
-      '<a href="https://eulernasc.github.io/fueltracker" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 28px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:700">Abrir FuelTracker Pro →</a>' +
-      '<div style="margin-top:10px;font-size:11px;color:#94a3b8">Gerado pelo FuelTracker Pro · eulernasc.github.io/fueltracker</div>' +
+      '<a href="https://" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 28px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:700">Abrir Ignis →</a>' +
+      '<div style="margin-top:10px;font-size:11px;color:#94a3b8">Gerado pelo Ignis · </div>' +
     '</td></tr>' +
 
     '</table></body></html>';
@@ -3303,7 +3303,7 @@ async function enviarBloco(blocoId) {
   const destRaw = document.getElementById('rel-email-bloco-' + encodeURIComponent(blocoId))?.value?.trim();
   if (!destRaw) { showToast('Informe o e-mail para ' + bloco.label, 'error'); return; }
   const dests = destRaw.split(',').map(e => e.trim()).filter(Boolean).join(',');
-  const assunto = encodeURIComponent('FuelTracker — Alerta de Eficiência · ' + bloco.label);
+  const assunto = encodeURIComponent('Ignis — Alerta de Eficiência · ' + bloco.label);
   const html = buildEmailHTML(bloco.ops, byOp, labelPeriodo, limite, bloco.label);
   try {
     await navigator.clipboard.write([
@@ -4474,7 +4474,7 @@ function arlaBuildEmailHTML(registros, nomeGrupo, mesRef, obs) {
   return '<!DOCTYPE html><html><body style="margin:0;padding:20px 0;font-family:Arial,sans-serif;background:#e2e8f0">' +
     '<table width="620" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;border:1px solid #cbd5e1">' +
     '<tr><td style="background:linear-gradient(135deg,#1e3a8a,#1d4ed8);padding:22px 24px">' +
-    '<div style="font-size:18px;font-weight:700;color:#fff">🧪 FuelTracker Pro</div>' +
+    '<div style="font-size:18px;font-weight:700;color:#fff">🧪 Ignis</div>' +
     '<div style="font-size:12px;color:#93c5fd;margin-top:3px">Controle de Arla — ' + (mesRef || '') + (nomeGrupo ? ' · ' + nomeGrupo : '') + '</div>' +
     '</td></tr>' +
     '<tr><td style="background:#eff6ff;padding:10px 24px;font-size:12px;color:#1d4ed8;border-bottom:1px solid #bfdbfe">' +
@@ -4489,7 +4489,7 @@ function arlaBuildEmailHTML(registros, nomeGrupo, mesRef, obs) {
     '<th style="padding:10px 14px;text-align:center;font-size:11px;color:#64748b;text-transform:uppercase">Arla</th>' +
     '<th style="padding:10px 14px;text-align:center;font-size:11px;color:#64748b;text-transform:uppercase">%</th>' +
     '</tr></thead><tbody>' + secoes + '</tbody></table></td></tr>' +
-    '<tr><td style="background:#f8fafc;padding:16px 24px;border-top:1px solid #e2e8f0;text-align:center;font-size:11px;color:#94a3b8">Gerado pelo FuelTracker Pro</td></tr>' +
+    '<tr><td style="background:#f8fafc;padding:16px 24px;border-top:1px solid #e2e8f0;text-align:center;font-size:11px;color:#94a3b8">Gerado pelo Ignis</td></tr>' +
     '</table></body></html>';
 }
 
@@ -4503,7 +4503,7 @@ function arlaEnviarEmailGrupo(grupoId) {
   navigator.clipboard.write([new ClipboardItem({'text/html': new Blob([html], {type:'text/html'})})]).then(() => {
     showToast('✅ Tabela copiada! Cole no e-mail (Ctrl+V)', 'success');
   }).catch(() => showToast('Copie o relatório manualmente', 'error'));
-  const assunto = encodeURIComponent('FuelTracker — Alerta Arla · ' + g.nome);
+  const assunto = encodeURIComponent('Ignis — Alerta Arla · ' + g.nome);
   setTimeout(() => window.open('mailto:' + g.emails + '?subject=' + assunto, '_blank'), 500);
 }
 
@@ -4514,7 +4514,7 @@ function arlaEnviarEmail() {
   navigator.clipboard.write([new ClipboardItem({'text/html': new Blob([html], {type:'text/html'})})]).then(() => {
     showToast('✅ Tabela copiada! Cole no e-mail (Ctrl+V)', 'success');
   }).catch(() => showToast('Copie o relatório manualmente', 'error'));
-  const assunto = encodeURIComponent('FuelTracker — Alerta Controle Arla');
+  const assunto = encodeURIComponent('Ignis — Alerta Controle Arla');
   setTimeout(() => window.open('mailto:?subject=' + assunto, '_blank'), 500);
 }
 
@@ -5196,7 +5196,7 @@ function exportarExecutivoEmail() {
   const html = '<!DOCTYPE html><html><body style="margin:0;padding:20px 0;font-family:Arial,sans-serif;background:#e2e8f0">' +
     '<table width="680" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;border:1px solid #cbd5e1">' +
     '<tr><td style="background:linear-gradient(135deg,#064e3b 0%,#065f46 100%);padding:24px 28px">' +
-    '<div style="font-size:20px;font-weight:700;color:#fff">⛽ FuelTracker Pro</div>' +
+    '<div style="font-size:20px;font-weight:700;color:#fff">⛽ Ignis</div>' +
     '<div style="font-size:13px;color:#6ee7b7;margin-top:4px">Relatório Executivo de Economia — ' + labelPeriodo + '</div>' +
     '</td></tr>' +
     '<tr><td style="padding:20px 28px">' +
@@ -5221,13 +5221,13 @@ function exportarExecutivoEmail() {
     '<thead><tr style="background:#f1f5f9"><th style="padding:9px 14px;text-align:left;font-size:11px;color:#64748b;text-transform:uppercase">Operação</th><th style="padding:9px 14px;text-align:center;font-size:11px;color:#64748b;text-transform:uppercase">Maq.</th><th style="padding:9px 14px;text-align:center;font-size:11px;color:#64748b;text-transform:uppercase">Consumido</th><th style="padding:9px 14px;text-align:center;font-size:11px;color:#64748b;text-transform:uppercase">Desperdiçado</th><th style="padding:9px 14px;text-align:right;font-size:11px;color:#64748b;text-transform:uppercase">Custo</th></tr></thead>' +
     '<tbody>' + linhasOps + '</tbody></table></td></tr>' +
     (todasMaq.length ? '<tr><td style="padding:0 28px 20px"><div style="font-size:14px;font-weight:700;color:#1e293b;margin-bottom:10px">🚨 Top ' + todasMaq.length + ' Máquinas</div><table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden"><thead><tr style="background:#f1f5f9"><th style="padding:9px 12px;text-align:left;font-size:11px;color:#64748b;text-transform:uppercase">Máquina</th><th style="padding:9px 12px;text-align:left;font-size:11px;color:#64748b;text-transform:uppercase">Operação</th><th style="padding:9px 12px;text-align:center;font-size:11px;color:#64748b;text-transform:uppercase">Meta</th><th style="padding:9px 12px;text-align:center;font-size:11px;color:#64748b;text-transform:uppercase">Real</th><th style="padding:9px 12px;text-align:center;font-size:11px;color:#64748b;text-transform:uppercase">Efic.</th><th style="padding:9px 12px;text-align:right;font-size:11px;color:#64748b;text-transform:uppercase">Custo</th></tr></thead><tbody>' + linhasMaq + '</tbody></table></td></tr>' : '') +
-    '<tr><td style="background:#f8fafc;padding:14px 28px;border-top:1px solid #e2e8f0;text-align:center;font-size:11px;color:#94a3b8">Gerado pelo FuelTracker Pro · eulernasc.github.io/fueltracker</td></tr>' +
+    '<tr><td style="background:#f8fafc;padding:14px 28px;border-top:1px solid #e2e8f0;text-align:center;font-size:11px;color:#94a3b8">Gerado pelo Ignis · </td></tr>' +
     '</table></body></html>';
 
   navigator.clipboard.write([new ClipboardItem({'text/html': new Blob([html], {type:'text/html'})})]).then(() => {
     showToast('✅ Relatório copiado! Cole no e-mail (Ctrl+V)', 'success');
   }).catch(() => showToast('Erro ao copiar', 'error'));
-  const assunto = encodeURIComponent('FuelTracker — Relatório Executivo · ' + labelPeriodo);
+  const assunto = encodeURIComponent('Ignis — Relatório Executivo · ' + labelPeriodo);
   setTimeout(() => window.open('mailto:?subject=' + assunto, '_blank'), 500);
 }
 
@@ -5716,7 +5716,7 @@ function kmCopiarEmail() {
   const html = '<!DOCTYPE html><html><body style="margin:0;padding:20px 0;font-family:Arial,sans-serif;background:#e2e8f0">' +
     '<table width="680" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;border:1px solid #cbd5e1">' +
     '<tr><td style="background:linear-gradient(135deg,#7f1d1d,#dc2626);padding:24px 28px">' +
-    '<div style="font-size:20px;font-weight:700;color:#fff">📏 FuelTracker Pro — Alerta KM</div>' +
+    '<div style="font-size:20px;font-weight:700;color:#fff">📏 Ignis — Alerta KM</div>' +
     '<div style="font-size:13px;color:#fca5a5;margin-top:4px">Comparativo KM Sistema × KM Produtivo Cliente · ' + label + '</div>' +
     '</td></tr>' +
     '<tr><td style="background:#fef2f2;padding:14px 28px;border-bottom:1px solid #fecaca;font-size:13px;color:#dc2626">' +
@@ -5732,7 +5732,7 @@ function kmCopiarEmail() {
     '<div style="font-size:14px;font-weight:700;color:#7c3aed;margin-bottom:10px">🔍 Placas sem correspondência no sistema</div>' +
     '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">' +
     '<tbody>' + linhasSemSistema + '</tbody></table></td></tr>' : '') +
-    '<tr><td style="background:#f8fafc;padding:14px 28px;border-top:1px solid #e2e8f0;text-align:center;font-size:11px;color:#94a3b8">Gerado pelo FuelTracker Pro</td></tr>' +
+    '<tr><td style="background:#f8fafc;padding:14px 28px;border-top:1px solid #e2e8f0;text-align:center;font-size:11px;color:#94a3b8">Gerado pelo Ignis</td></tr>' +
     '</table></body></html>';
 
   navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }) })]).then(() => {
