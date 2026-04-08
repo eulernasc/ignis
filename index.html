@@ -1618,65 +1618,121 @@ async function sha256(str) {
 
 // Inicializa: verifica se existe ADM, se não mostra setup
 async function loginInit() {
-  // Aguarda Firebase
-  if (!window.firebaseReady) {
-    await new Promise(r => window.addEventListener('firebaseReady', r, {once:true}));
-  }
-  const data = await window.fbLoad();
-  const users = data?._users || {};
-  if (!Object.keys(users).length) {
-    // Primeiro acesso — mostra tela de criação do ADM
-    document.getElementById('login-form').style.display = 'none';
-    document.getElementById('login-setup').style.display = 'block';
-  }
-  // Verifica sessão salva
-  const sessao = sessionStorage.getItem('ignis_session');
-  if (sessao) {
-    try {
-      const s = JSON.parse(sessao);
-      const users2 = data?._users || {};
-      if (users2[s.id] && users2[s.id].hash === s.hash) {
-        window._authUser = { id: s.id, ...users2[s.id] };
-        loginEntrarApp();
-        return;
-      }
-    } catch(e) {}
-  }
-  // Mostra tela de login
+  // Mostra tela de login imediatamente (não espera Firebase para exibir)
   document.getElementById('login-screen').style.display = 'flex';
+
+  // Verifica sessão salva no sessionStorage primeiro (sem precisar do Firebase)
+  const sessao = sessionStorage.getItem('ignis_session');
+
+  try {
+    // Aguarda Firebase com timeout de 10s
+    if (!window.firebaseReady) {
+      await Promise.race([
+        new Promise(r => window.addEventListener('firebaseReady', r, {once:true})),
+        new Promise((_,rej) => setTimeout(() => rej(new Error('timeout')), 10000))
+      ]);
+    }
+
+    const data = await window.fbLoad();
+    const users = data?._users || {};
+
+    if (!Object.keys(users).length) {
+      document.getElementById('login-form').style.display = 'none';
+      document.getElementById('login-setup').style.display = 'block';
+      return;
+    }
+
+    // Verifica sessão salva
+    if (sessao) {
+      try {
+        const s = JSON.parse(sessao);
+        if (users[s.id] && users[s.id].hash === s.hash) {
+          window._authUser = { id: s.id, ...users[s.id] };
+          loginEntrarApp();
+          return;
+        }
+      } catch(e) {}
+    }
+  } catch(e) {
+    console.warn('Firebase não disponível no init:', e);
+    // Continua mostrando a tela de login — loginEntrar vai tentar novamente
+  }
 }
 
 async function loginCriarAdm() {
   const login = document.getElementById('setup-user').value.trim().toLowerCase();
   const pass  = document.getElementById('setup-pass').value;
   const pass2 = document.getElementById('setup-pass2').value;
-  const err   = document.getElementById('login-error');
-  err.style.display='none';
+  const btn   = document.querySelector('#login-setup .login-btn');
+
+  document.getElementById('login-error').style.display='none';
   if (!login || login.length < 2) { mostrarLoginErro('Nome de usuário inválido (mínimo 2 caracteres).'); return; }
   if (pass.length < 6) { mostrarLoginErro('Senha deve ter no mínimo 6 caracteres.'); return; }
   if (pass !== pass2) { mostrarLoginErro('As senhas não conferem.'); return; }
-  const hash = await sha256(pass);
-  const adm = { nome: login, hash, role: 'adm', perms: ['dashboard','comparativo','abastecimentos','maquinas','relatorio','excluir','arla','kmcomp','config'] };
-  const data = (await window.fbLoad()) || {};
-  data._users = { [login]: adm };
-  await window.fbSave(data);
-  window._authUser = { id: login, ...adm };
-  sessionStorage.setItem('ignis_session', JSON.stringify({ id: login, hash }));
-  loginEntrarApp();
+
+  btn.textContent = 'Criando...';
+  btn.disabled = true;
+
+  try {
+    const hash = await sha256(pass);
+    const adm = { nome: login, hash, role: 'adm', perms: ['dashboard','comparativo','abastecimentos','maquinas','relatorio','excluir','arla','kmcomp','config'] };
+    const data = (await window.fbLoad()) || {};
+    data._users = { [login]: adm };
+    await window.fbSave(data);
+    window._authUser = { id: login, ...adm };
+    sessionStorage.setItem('ignis_session', JSON.stringify({ id: login, hash }));
+    loginEntrarApp();
+  } catch(e) {
+    console.error('Setup error:', e);
+    mostrarLoginErro('Erro ao salvar. Verifique sua conexão e tente novamente.');
+    btn.textContent = 'Criar ADM e Entrar';
+    btn.disabled = false;
+  }
 }
 
 async function loginEntrar() {
   const login = document.getElementById('login-user').value.trim().toLowerCase();
   const pass  = document.getElementById('login-pass').value;
+  const btn   = document.querySelector('#login-form .login-btn');
+
   if (!login || !pass) { mostrarLoginErro('Preencha usuário e senha.'); return; }
-  const hash = await sha256(pass);
-  const data = await window.fbLoad();
-  const users = data?._users || {};
-  const u = users[login];
-  if (!u || u.hash !== hash) { mostrarLoginErro('Usuário ou senha incorretos.'); return; }
-  window._authUser = { id: login, ...u };
-  sessionStorage.setItem('ignis_session', JSON.stringify({ id: login, hash }));
-  loginEntrarApp();
+
+  // Loading visual
+  btn.textContent = 'Aguarde...';
+  btn.disabled = true;
+
+  try {
+    const hash = await sha256(pass);
+
+    // Garante Firebase pronto
+    if (!window.firebaseReady) {
+      await Promise.race([
+        new Promise(r => window.addEventListener('firebaseReady', r, {once:true})),
+        new Promise((_,rej) => setTimeout(() => rej(new Error('Firebase timeout')), 8000))
+      ]);
+    }
+
+    const data = await window.fbLoad();
+    const users = data?._users || {};
+    const u = users[login];
+
+    if (!u || u.hash !== hash) {
+      mostrarLoginErro('Usuário ou senha incorretos.');
+      btn.textContent = 'Entrar';
+      btn.disabled = false;
+      return;
+    }
+
+    window._authUser = { id: login, ...u };
+    sessionStorage.setItem('ignis_session', JSON.stringify({ id: login, hash }));
+    loginEntrarApp();
+
+  } catch(e) {
+    console.error('Login error:', e);
+    mostrarLoginErro('Erro de conexão. Verifique sua internet e tente novamente.');
+    btn.textContent = 'Entrar';
+    btn.disabled = false;
+  }
 }
 
 function mostrarLoginErro(msg) {
