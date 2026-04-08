@@ -9,7 +9,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, doc, setDoc, getDoc, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBdfrSrif-vThP3WqWJF76hhKE7FXGFpL0",
@@ -24,20 +24,32 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
+// Wrapper com timeout para evitar hang infinito
+const withTimeout = (promise, ms) => Promise.race([
+  promise,
+  new Promise((_, rej) => setTimeout(() => rej(new Error('Firebase timeout '+ms+'ms')), ms))
+]);
+
 window.fbSave = async function(data) {
   try {
-    await setDoc(doc(db, "fueltracker", "dados"), data);
+    await withTimeout(setDoc(doc(db, "fueltracker", "dados"), data), 10000);
     return true;
   } catch(e) { console.error("Firebase save error:", e); return false; }
 };
 
 window.fbLoad = async function() {
   try {
-    const snap = await getDoc(doc(db, "fueltracker", "dados"));
+    const snap = await withTimeout(getDoc(doc(db, "fueltracker", "dados")), 8000);
     return snap.exists() ? snap.data() : null;
   } catch(e) { console.error("Firebase load error:", e); return null; }
 };
 
+// Sinaliza pronto apenas após confirmar conexão
+try {
+  await withTimeout(getDoc(doc(db, "fueltracker", "dados")), 6000);
+} catch(e) {
+  console.warn("Firebase warm-up falhou, continuando mesmo assim:", e.message);
+}
 window.firebaseReady = true;
 window.dispatchEvent(new Event('firebaseReady'));
 </script>
@@ -1630,20 +1642,29 @@ async function sha256(str) {
 async function loginInit() {
   const hideLoading = () => { const el = document.getElementById('ignis-loading'); if(el) el.style.display='none'; };
   const showLogin   = () => { hideLoading(); document.getElementById('login-screen').style.display='flex'; };
+  const showLoginErro = msg => { showLogin(); mostrarLoginErro(msg); };
 
-  const sessao = sessionStorage.getItem('ignis_session');
+  // Timeout global de 12s para não ficar preso para sempre
+  const timeout = setTimeout(() => {
+    showLoginErro('Não foi possível conectar ao servidor. Verifique sua internet e recarregue a página.');
+  }, 12000);
 
   try {
+    // Aguarda Firebase sinalizar pronto
     if (!window.firebaseReady) {
       await Promise.race([
         new Promise(r => window.addEventListener('firebaseReady', r, {once:true})),
-        new Promise((_,rej) => setTimeout(() => rej(new Error('timeout')), 10000))
+        new Promise((_,rej) => setTimeout(() => rej(new Error('firebaseReady timeout')), 10000))
       ]);
     }
+
+    clearTimeout(timeout);
+
     const data = await window.fbLoad();
     const users = data?._users || {};
 
-    // Sessão salva válida → entra direto
+    // Sessão salva válida → entra direto sem pedir login
+    const sessao = sessionStorage.getItem('ignis_session');
     if (sessao) {
       try {
         const s = JSON.parse(sessao);
@@ -1657,13 +1678,16 @@ async function loginInit() {
       sessionStorage.removeItem('ignis_session');
     }
 
-    // Primeiro acesso → mostra setup
+    // Primeiro acesso → setup ADM
     if (!Object.keys(users).length) {
       document.getElementById('login-form').style.display = 'none';
       document.getElementById('login-setup').style.display = 'block';
     }
+
   } catch(e) {
-    console.warn('Firebase timeout no init:', e);
+    clearTimeout(timeout);
+    console.warn('loginInit error:', e.message);
+    // Firebase indisponível — mostra login, loginEntrar tentará novamente
   }
 
   showLogin();
