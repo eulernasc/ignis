@@ -6048,9 +6048,147 @@ function kmExportarExcel() {
   const { resultados, semNoSistema, semNoCliente, label } = window._kmResultado || {};
   if (!resultados) return;
 
-  const wb = XLSX.utils.book_new();
-  const fmtKm = v => parseFloat(v.toFixed(1));
+  const fmtN = v => v.toLocaleString('pt-BR', {minimumFractionDigits:1, maximumFractionDigits:1});
+  const fmtP = v => (v >= 0 ? '+' : '') + v.toFixed(1) + '%';
   const dataHoje = new Date().toLocaleDateString('pt-BR');
+
+  const alertas  = resultados.filter(r => r.status === 'alerta').sort((a,b) => a.diff - b.diff);
+  const excessos = resultados.filter(r => r.status === 'excesso').sort((a,b) => b.diff - a.diff);
+  const atencao  = resultados.filter(r => r.status === 'atencao');
+  const ok       = resultados.filter(r => r.status === 'ok');
+
+  // Por operação
+  const porOp = {};
+  resultados.forEach(r => {
+    const op = r.operacao || '—';
+    if (!porOp[op]) porOp[op] = {total:0, alerta:0, excesso:0, atencao:0, ok:0, kmS:0, kmC:0};
+    porOp[op].total++;
+    porOp[op][r.status] = (porOp[op][r.status]||0) + 1;
+    porOp[op].kmS += r.kmSistema;
+    porOp[op].kmC += r.kmCliente;
+  });
+
+  const css = `
+    body { font-family: Calibri, Arial, sans-serif; font-size: 11pt; }
+    .titulo { background: #7F1D1D; color: #fff; font-size: 16pt; font-weight: bold; padding: 10px 16px; }
+    .subtitulo { background: #991B1B; color: #fca5a5; font-size: 10pt; padding: 4px 16px; }
+    .resumo-box { background: #FEF2F2; border: 1px solid #FECACA; padding: 8px 16px; margin: 8px 0; }
+    .section-header { background: #1F2937; color: #fff; font-size: 12pt; font-weight: bold; padding: 8px 12px; margin-top: 16px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 4px; }
+    th { background: #374151; color: #fff; font-weight: bold; font-size: 10pt; padding: 7px 10px; text-align: center; border: 1px solid #4B5563; }
+    td { padding: 6px 10px; border: 1px solid #E5E7EB; font-size: 10pt; }
+    tr:nth-child(even) td { background: #F9FAFB; }
+    tr:nth-child(odd) td { background: #FFFFFF; }
+    .placa { font-family: Courier New, monospace; font-weight: bold; text-align: center; }
+    .num { text-align: right; }
+    .neg { color: #DC2626; font-weight: bold; }
+    .pos { color: #16A34A; font-weight: bold; }
+    .st-alerta { background: #FEF2F2 !important; color: #991B1B; font-weight: bold; text-align: center; }
+    .st-atencao { background: #FFFBEB !important; color: #92400E; font-weight: bold; text-align: center; }
+    .st-ok { background: #F0FDF4 !important; color: #166534; font-weight: bold; text-align: center; }
+    .st-excesso { background: #FFF7ED !important; color: #9A3412; font-weight: bold; text-align: center; }
+    .st-sem { background: #EFF6FF !important; color: #1E40AF; font-weight: bold; text-align: center; }
+    .op-alerta { background: #FEF2F2 !important; color: #991B1B; font-weight: bold; text-align: center; }
+    .resumo-kpi { display: inline-block; margin: 4px 12px 4px 0; }
+    .resumo-kpi b { font-size: 14pt; }
+    .sec-alerta { color: #DC2626; }
+    .sec-excesso { color: #EA580C; }
+  `;
+
+  const mkLinhaResultado = r => {
+    const diff = r.diff;
+    const diffClass = diff < 0 ? 'neg' : 'pos';
+    const pctTxt = r.pct !== null ? fmtP(r.pct) : '—';
+    const stClass = {ok:'st-ok', atencao:'st-atencao', alerta:'st-alerta', excesso:'st-excesso', sem_base:'st-sem'}[r.status] || '';
+    const stLabel = {ok:'✅ OK', atencao:'⚠️ Atenção', alerta:'🔴 Alerta', excesso:'🚨 Excesso', sem_base:'—'}[r.status] || '';
+    return `<tr>
+      <td class="placa">${r.placa}</td>
+      <td>${r.operacao||'—'}</td>
+      <td class="num">${fmtN(r.kmSistema)}</td>
+      <td class="num">${fmtN(r.kmCliente)}</td>
+      <td class="num ${diffClass}">${(diff>=0?'+':'')+fmtN(diff)}</td>
+      <td class="num ${diffClass}">${pctTxt}</td>
+      <td class="${stClass}">${stLabel}</td>
+    </tr>`;
+  };
+
+  const tabelaResultados = (rows, titulo, corTitulo) => `
+    <div class="section-header" style="background:${corTitulo}">${titulo} (${rows.length})</div>
+    <table>
+      <thead><tr>
+        <th style="width:90px">Placa</th><th>Operação</th>
+        <th style="width:110px">KM Sistema</th><th style="width:110px">KM Cliente</th>
+        <th style="width:100px">Diferença</th><th style="width:80px">Var. %</th><th style="width:100px">Status</th>
+      </tr></thead>
+      <tbody>${rows.map(mkLinhaResultado).join('')}</tbody>
+    </table>`;
+
+  const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel">
+  <head><meta charset="UTF-8"><style>${css}</style></head>
+  <body>
+    <div class="titulo">📏 KM Comparativo — Ignis</div>
+    <div class="subtitulo">${label || ''} &nbsp;·&nbsp; Gerado em ${dataHoje}</div>
+
+    <div class="resumo-box">
+      <span class="resumo-kpi"><b style="color:#DC2626">${alertas.length}</b> alertas</span>
+      <span class="resumo-kpi"><b style="color:#EA580C">${excessos.length}</b> excessos</span>
+      <span class="resumo-kpi"><b style="color:#CA8A04">${atencao.length}</b> atenção</span>
+      <span class="resumo-kpi"><b style="color:#16A34A">${ok.length}</b> OK</span>
+      <span class="resumo-kpi"><b style="color:#7C3AED">${semNoSistema.length}</b> só no cliente</span>
+      <span class="resumo-kpi"><b style="color:#2563EB">${semNoCliente.length}</b> só no sistema</span>
+    </div>
+
+    <!-- Resumo por operação -->
+    <div class="section-header">📍 Resumo por Operação</div>
+    <table>
+      <thead><tr>
+        <th>Operação</th><th style="width:80px">Total</th>
+        <th style="width:90px">🔴 Alerta</th><th style="width:90px">🚨 Excesso</th>
+        <th style="width:90px">⚠️ Atenção</th><th style="width:80px">✅ OK</th>
+        <th style="width:110px">KM Sistema</th><th style="width:110px">KM Cliente</th><th style="width:110px">Diferença</th>
+      </tr></thead>
+      <tbody>
+        ${Object.entries(porOp).sort((a,b)=>b[1].alerta-a[1].alerta).map(([op,d],i) => `
+          <tr>
+            <td>${op}</td>
+            <td class="num">${d.total}</td>
+            <td class="${d.alerta>0?'op-alerta':'num'}">${d.alerta||'—'}</td>
+            <td class="${d.excesso>0?'st-excesso':'num'}">${d.excesso||'—'}</td>
+            <td class="${d.atencao>0?'st-atencao':'num'}">${d.atencao||'—'}</td>
+            <td class="${d.ok>0?'st-ok':'num'}">${d.ok||'—'}</td>
+            <td class="num">${fmtN(d.kmS)}</td>
+            <td class="num">${fmtN(d.kmC)}</td>
+            <td class="num ${(d.kmS-d.kmC)<0?'neg':'pos'}">${(d.kmS-d.kmC>=0?'+':'')+fmtN(d.kmS-d.kmC)}</td>
+          </tr>`).join('')}
+      </tbody>
+    </table>
+
+    ${alertas.length ? tabelaResultados(alertas, '🔴 KM Abaixo do Cliente', '#991B1B') : ''}
+    ${excessos.length ? tabelaResultados(excessos, '🚨 KM Excessivamente Acima', '#9A3412') : ''}
+    ${atencao.length ? tabelaResultados(atencao, '⚠️ Atenção — Margem Apertada', '#92400E') : ''}
+    ${ok.length ? tabelaResultados(ok, '✅ OK', '#166534') : ''}
+
+    ${semNoSistema.length || semNoCliente.length ? `
+    <div class="section-header" style="background:#5B21B6">🔍 Sem Correspondência</div>
+    <table>
+      <thead><tr><th style="width:90px">Placa</th><th>Operação</th><th>Situação</th><th style="width:110px">KM</th></tr></thead>
+      <tbody>
+        ${semNoSistema.map(r=>`<tr><td class="placa st-sem">${r.placa}</td><td>${r.operacao||'—'}</td><td>Só no cliente</td><td class="num">${fmtN(r.kmCliente)}</td></tr>`).join('')}
+        ${semNoCliente.map(r=>`<tr><td class="placa" style="font-family:monospace;font-weight:bold;text-align:center">${r.placa}</td><td>${r.operacao||'—'}</td><td>Só no sistema</td><td class="num">${fmtN(r.kmSistema)}</td></tr>`).join('')}
+      </tbody>
+    </table>` : ''}
+
+  </body></html>`;
+
+  const blob = new Blob([html], {type:'application/vnd.ms-excel;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `ignis_km_${(label||'comparativo').replace(/[^a-zA-Z0-9]/g,'_')}_${new Date().toISOString().split('T')[0]}.xls`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('Excel exportado com design profissional!', 'success');
+}
 
   // ── Estilos ─────────────────────────────────────────────────────────────────
   const sCabTitulo  = { font:{bold:true,sz:14,color:{rgb:'FFFFFF'}}, fill:{fgColor:{rgb:'7F1D1D'}}, alignment:{horizontal:'center',vertical:'center'} };
@@ -6293,12 +6431,102 @@ function arlaExportarExcel() {
   ['A4','B4','C4','D4','E4','F4'].forEach(a=>aplicarEstilo(ws3,a,sHeader));
   XLSX.utils.book_append_sheet(wb, ws3, '📍 Por Operação');
 
-  XLSX.writeFile(wb, `ignis_arla_${mesLabel.replace(/[^a-zA-Z0-9]/g,'_')}_${new Date().toISOString().split('T')[0]}.xlsx`);
+  XLSX.writeFile(wb, `ignis_arla_old_${new Date().toISOString().split('T')[0]}.xlsx`);
   showToast('Excel Arla exportado!', 'success');
 }
 
+function arlaExportarExcel() {
+  const dados = window._arlaState?.processados;
+  if (!dados?.length) { showToast('Sem dados para exportar.', 'error'); return; }
+
+  const mesLabel = window._arlaState.meses?.find(m => m.id === window._arlaState.mesAtual)?.label || 'Arla';
+  const dataHoje = new Date().toLocaleDateString('pt-BR');
+  const fmtN = v => (v||0).toLocaleString('pt-BR', {minimumFractionDigits:1, maximumFractionDigits:1});
+  const fmtP = v => v !== null ? (v||0).toFixed(1) + '%' : '—';
+
+  const fails = dados.filter(r => r.status === 'FAIL').sort((a,b) => (a.pct||0) - (b.pct||0));
+  const oks   = dados.filter(r => r.status === 'OK');
+  const egrs  = dados.filter(r => r.status === 'EGR');
+  const semD  = dados.filter(r => r.status === 'SEM_DIESEL');
+
+  const porOp = {};
+  dados.forEach(r => {
+    const op = r.operacao || '—';
+    if (!porOp[op]) porOp[op] = {total:0,fail:0,ok:0,diesel:0,arla:0};
+    porOp[op].total++;
+    if (r.status === 'FAIL') porOp[op].fail++;
+    if (r.status === 'OK') porOp[op].ok++;
+    porOp[op].diesel += (r.diesel||0);
+    porOp[op].arla += (r.arla||0);
+  });
+
+  const css = `
+    body{font-family:Calibri,Arial,sans-serif;font-size:11pt}
+    .titulo{background:#064E3B;color:#fff;font-size:16pt;font-weight:bold;padding:10px 16px}
+    .subtitulo{background:#065F46;color:#A7F3D0;font-size:10pt;padding:4px 16px}
+    .resumo-box{background:#F0FDF4;border:1px solid #BBF7D0;padding:8px 16px;margin:8px 0}
+    table{border-collapse:collapse;width:100%;margin-top:4px}
+    th{background:#374151;color:#fff;font-weight:bold;font-size:10pt;padding:7px 10px;text-align:center;border:1px solid #4B5563}
+    td{padding:6px 10px;border:1px solid #E5E7EB;font-size:10pt}
+    tr:nth-child(even) td{background:#F9FAFB}
+    tr:nth-child(odd) td{background:#FFFFFF}
+    .section-header{font-size:12pt;font-weight:bold;padding:8px 12px;margin-top:16px;color:#fff}
+    .placa{font-family:'Courier New',monospace;font-weight:bold;text-align:center}
+    .num{text-align:right}
+    .fail-row td{background:#FEF2F2!important}
+    .ok-row td{background:#F0FDF4!important}
+    .st-fail{color:#991B1B;font-weight:bold;text-align:center}
+    .st-ok{color:#166534;font-weight:bold;text-align:center}
+    .st-egr{color:#1E40AF;font-weight:bold;text-align:center}
+    .st-sem{color:#92400E;font-weight:bold;text-align:center}
+    .pct-fail{color:#DC2626;font-weight:bold;text-align:right}
+    .pct-ok{color:#16A34A;font-weight:bold;text-align:right}
+    .op-fail{color:#DC2626;font-weight:bold;text-align:center}
+    .resumo-kpi{display:inline-block;margin:4px 12px 4px 0}
+    .resumo-kpi b{font-size:14pt}
+  `;
+
+  const mkLinhaSRC = r => {
+    const rowCls = r.status==='FAIL' ? 'fail-row' : r.status==='OK' ? 'ok-row' : '';
+    const stCls = r.status==='FAIL'?'st-fail':r.status==='OK'?'st-ok':r.status==='EGR'?'st-egr':'st-sem';
+    const stLabel = r.status==='FAIL'?'⚠️ ABAIXO':r.status==='OK'?'✅ OK':r.status==='EGR'?'🚗 EGR':'— SEM DIESEL';
+    const pctCls = r.status==='FAIL'?'pct-fail':r.status==='OK'?'pct-ok':'num';
+    return `<tr class="${rowCls}"><td class="placa">${r.placa}</td><td>${r.operacao||'—'}</td><td>${r.modelo||'—'}</td><td class="num">${fmtN(r.diesel)}</td><td class="num">${fmtN(r.arla)}</td><td class="${pctCls}">${fmtP(r.pct)}</td><td class="${stCls}">${stLabel}</td></tr>`;
+  };
+
+  const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel">
+  <head><meta charset="UTF-8"><style>${css}</style></head><body>
+    <div class="titulo">🧪 Controle de Arla 32 — Ignis</div>
+    <div class="subtitulo">${mesLabel} · Gerado em ${dataHoje}</div>
+    <div class="resumo-box">
+      <span class="resumo-kpi"><b style="color:#DC2626">${fails.length}</b> abaixo de 5%</span>
+      <span class="resumo-kpi"><b style="color:#16A34A">${oks.length}</b> acima de 5%</span>
+      <span class="resumo-kpi"><b style="color:#1E40AF">${egrs.length}</b> EGR</span>
+      <span class="resumo-kpi"><b style="color:#92400E">${semD.length}</b> sem diesel</span>
+      <span class="resumo-kpi"><b>${dados.length}</b> total</span>
+    </div>
+    <div class="section-header" style="background:#064E3B">📍 Resumo por Operação</div>
+    <table><thead><tr><th>Operação</th><th>Total</th><th>⚠️ Abaixo</th><th>✅ OK</th><th>Diesel (L)</th><th>Arla (L)</th><th>% Média</th></tr></thead><tbody>
+      ${Object.entries(porOp).sort((a,b)=>b[1].fail-a[1].fail).map(([op,d])=>{
+        const pm = d.diesel>0?(d.arla/d.diesel*100).toFixed(1):'—';
+        return `<tr><td>${op}</td><td class="num">${d.total}</td><td class="${d.fail>0?'op-fail':'num'}">${d.fail||'—'}</td><td class="${d.ok>0?'pct-ok':'num'}">${d.ok||'—'}</td><td class="num">${fmtN(d.diesel)}</td><td class="num">${fmtN(d.arla)}</td><td class="${parseFloat(pm)<5?'pct-fail':'pct-ok'}">${pm}${pm!=='—'?'%':''}</td></tr>`;
+      }).join('')}
+    </tbody></table>
+    ${fails.length?`<div class="section-header" style="background:#991B1B">⚠️ Abaixo de 5% (${fails.length})</div>
+    <table><thead><tr><th>Placa</th><th>Operação</th><th>Modelo</th><th>Diesel (L)</th><th>Arla (L)</th><th>% Arla</th><th>Status</th></tr></thead><tbody>${fails.map(mkLinhaSRC).join('')}</tbody></table>`:''}
+    <div class="section-header" style="background:#374151">📊 Todos os SRC (${dados.length})</div>
+    <table><thead><tr><th>Placa</th><th>Operação</th><th>Modelo</th><th>Diesel (L)</th><th>Arla (L)</th><th>% Arla</th><th>Status</th></tr></thead><tbody>${dados.map(mkLinhaSRC).join('')}</tbody></table>
+  </body></html>`;
+
+  const blob = new Blob([html], {type:'application/vnd.ms-excel;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `ignis_arla_${mesLabel.replace(/[^a-zA-Z0-9]/g,'_')}.xls`;
+  a.click(); URL.revokeObjectURL(url);
+  showToast('Excel Arla exportado com design profissional!', 'success');
+}
+
 function kmCopiarEmail() {
-  const { resultados, semNoSistema, label } = window._kmResultado || {};
   if (!resultados) return;
   const alertas  = resultados.filter(r => r.status === 'alerta').sort((a,b) => a.diff - b.diff);
   const excessos = resultados.filter(r => r.status === 'excesso').sort((a,b) => b.diff - a.diff);
