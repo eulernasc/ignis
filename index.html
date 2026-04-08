@@ -989,6 +989,7 @@ body{overflow-x:hidden;}
       </div>
       <div class="header-actions" id="arla-header-actions">
         <button class="btn btn-secondary btn-sm" id="btn-arla-excluir-mes" style="display:none" onclick="verificarSenha(arlaAbrirExcluirMes)">🗑️ Excluir Mês</button>
+        <button class="btn btn-secondary btn-sm" id="btn-arla-export" style="display:none" onclick="arlaExportarExcel()">⬇️ Exportar Excel</button>
         <button class="btn btn-primary btn-sm" onclick="arlaVerificarSenhaEMes()">⬆️ Carregar Relatório</button>
         <input type="file" id="arla-file-input" accept=".xlsx,.xls" style="display:none" onchange="arlaCarregarArquivo(this)">
       </div>
@@ -4438,6 +4439,7 @@ function arlaExibirResultado() {
   document.getElementById('arla-empty').style.display = 'none';
   document.getElementById('arla-resultado').style.display = 'block';
   document.getElementById('btn-arla-excluir-mes').style.display = '';
+  document.getElementById('btn-arla-export').style.display = '';
 
   // Popula seletor de meses
   const sel = document.getElementById('arla-mes-sel');
@@ -6043,45 +6045,256 @@ function kmFiltrarTabela() {
 }
 
 function kmExportarExcel() {
-  const { resultados, semNoSistema, semNoCliente, label, margemMin, margemAtencao } = window._kmResultado || {};
+  const { resultados, semNoSistema, semNoCliente, label } = window._kmResultado || {};
   if (!resultados) return;
 
   const wb = XLSX.utils.book_new();
   const fmtKm = v => parseFloat(v.toFixed(1));
+  const dataHoje = new Date().toLocaleDateString('pt-BR');
 
-  // Aba principal
-  const rows = [['Placa', 'Operação', 'KM Sistema', 'KM Cliente', 'Diferença', 'Variação %', 'Status']];
-  resultados.forEach(r => {
-    const statusMap = { ok: '✅ OK', atencao: '⚠️ Atenção', alerta: '🔴 Alerta', sem_base: '— Sem base' };
-    rows.push([r.placa, r.operacao || '', fmtKm(r.kmSistema), fmtKm(r.kmCliente), fmtKm(r.diff), r.pct !== null ? parseFloat(r.pct.toFixed(1)) : '', statusMap[r.status] || '']);
+  // ── Estilos ─────────────────────────────────────────────────────────────────
+  const sCabTitulo  = { font:{bold:true,sz:14,color:{rgb:'FFFFFF'}}, fill:{fgColor:{rgb:'7F1D1D'}}, alignment:{horizontal:'center',vertical:'center'} };
+  const sCabSub     = { font:{bold:true,sz:10,color:{rgb:'FFFFFF'}}, fill:{fgColor:{rgb:'991B1B'}}, alignment:{horizontal:'center',vertical:'center'} };
+  const sHeader     = { font:{bold:true,sz:10,color:{rgb:'FFFFFF'}}, fill:{fgColor:{rgb:'374151'}}, alignment:{horizontal:'center',vertical:'center'}, border:{bottom:{style:'thin',color:{rgb:'9CA3AF'}}} };
+  const sAlerta     = { fill:{fgColor:{rgb:'FEF2F2'}}, font:{color:{rgb:'991B1B'},bold:true}, alignment:{horizontal:'center'} };
+  const sAtencao    = { fill:{fgColor:{rgb:'FFFBEB'}}, font:{color:{rgb:'92400E'},bold:true}, alignment:{horizontal:'center'} };
+  const sOk         = { fill:{fgColor:{rgb:'F0FDF4'}}, font:{color:{rgb:'166534'},bold:true}, alignment:{horizontal:'center'} };
+  const sExcesso    = { fill:{fgColor:{rgb:'FFF7ED'}}, font:{color:{rgb:'9A3412'},bold:true}, alignment:{horizontal:'center'} };
+  const sPlaca      = { font:{bold:true,name:'Courier New',sz:10}, alignment:{horizontal:'center'} };
+  const sNum        = { alignment:{horizontal:'right'}, numFmt:'#,##0.0' };
+  const sNumRed     = { alignment:{horizontal:'right'}, numFmt:'#,##0.0', font:{color:{rgb:'DC2626'},bold:true} };
+  const sNumGreen   = { alignment:{horizontal:'right'}, numFmt:'#,##0.0', font:{color:{rgb:'16A34A'},bold:true} };
+  const sPct        = { alignment:{horizontal:'right'}, numFmt:'0.0"%"' };
+  const sPctRed     = { alignment:{horizontal:'right'}, numFmt:'0.0"%"', font:{color:{rgb:'DC2626'},bold:true} };
+  const sPctGreen   = { alignment:{horizontal:'right'}, numFmt:'0.0"%"', font:{color:{rgb:'16A34A'},bold:true} };
+  const sZebra      = { fill:{fgColor:{rgb:'F9FAFB'}} };
+
+  const mkWs = (aoa, cols) => {
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws['!cols'] = cols;
+    return ws;
+  };
+
+  const aplicarEstilo = (ws, addr, style) => {
+    if (!ws[addr]) ws[addr] = { t:'s', v:'' };
+    ws[addr].s = style;
+  };
+
+  // ── Aba 1: Resumo + todos os resultados ─────────────────────────────────────
+  const alertas  = resultados.filter(r => r.status === 'alerta').sort((a,b)=>a.diff-b.diff);
+  const excessos = resultados.filter(r => r.status === 'excesso').sort((a,b)=>b.diff-a.diff);
+  const atencao  = resultados.filter(r => r.status === 'atencao');
+  const ok       = resultados.filter(r => r.status === 'ok');
+
+  const aoa1 = [
+    ['KM COMPARATIVO — IGNIS', '', '', '', '', '', ''],
+    [label || '', '', '', '', `Gerado: ${dataHoje}`, '', ''],
+    ['', '', '', '', '', '', ''],
+    ['RESUMO', '', '', '', '', '', ''],
+    ['🔴 Alertas', alertas.length, '', '🚨 Excessos', excessos.length, '', ''],
+    ['⚠️ Atenção', atencao.length, '', '✅ OK', ok.length, '', ''],
+    ['🔍 Só no cliente', semNoSistema.length, '', '🔍 Só no sistema', semNoCliente.length, '', ''],
+    ['', '', '', '', '', '', ''],
+    ['Placa', 'Operação', 'KM Sistema', 'KM Cliente', 'Diferença', 'Var. %', 'Status'],
+  ];
+
+  resultados.forEach((r, i) => {
+    const statusLabel = { ok:'✅ OK', atencao:'⚠️ Atenção', alerta:'🔴 Alerta', excesso:'🚨 Excesso', sem_base:'— Sem base' };
+    aoa1.push([r.placa, r.operacao||'', fmtKm(r.kmSistema), fmtKm(r.kmCliente), fmtKm(r.diff), r.pct!==null?parseFloat(r.pct.toFixed(1)):0, statusLabel[r.status]||'']);
   });
-  const wsMain = XLSX.utils.aoa_to_sheet(rows);
-  wsMain['!cols'] = [{ wch: 14 }, { wch: 28 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 16 }];
-  XLSX.utils.book_append_sheet(wb, wsMain, 'Comparativo');
 
-  // Aba alertas
-  if (resultados.filter(r => r.status === 'alerta').length) {
-    const alertas = resultados.filter(r => r.status === 'alerta');
-    const rowsA = [['Placa', 'Operação', 'KM Sistema', 'KM Cliente', 'Diferença', 'Variação %']];
-    alertas.forEach(r => rowsA.push([r.placa, r.operacao || '', fmtKm(r.kmSistema), fmtKm(r.kmCliente), fmtKm(r.diff), r.pct !== null ? parseFloat(r.pct.toFixed(1)) : '']));
-    const wsAl = XLSX.utils.aoa_to_sheet(rowsA);
-    wsAl['!cols'] = [{ wch: 14 }, { wch: 28 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }];
-    XLSX.utils.book_append_sheet(wb, wsAl, '🔴 Alertas');
+  const ws1 = mkWs(aoa1, [{wch:14},{wch:28},{wch:14},{wch:14},{wch:14},{wch:10},{wch:14}]);
+  ws1['!merges'] = [{s:{r:0,c:0},e:{r:0,c:6}},{s:{r:1,c:0},e:{r:1,c:3}},{s:{r:3,c:0},e:{r:3,c:6}}];
+  ws1['!rows'] = [{hpt:28},{hpt:18},{hpt:8},{hpt:18},...Array(4).fill({hpt:16}),...Array(1).fill({hpt:20}),...Array(resultados.length).fill({hpt:16})];
+
+  // Estilo do cabeçalho
+  ['A1','B1','C1','D1','E1','F1','G1'].forEach(a=>aplicarEstilo(ws1,a,sCabTitulo));
+  ['A2','B2','C2','D2'].forEach(a=>aplicarEstilo(ws1,a,sCabSub));
+  ['A4','B4','C4','D4','E4','F4','G4'].forEach(a=>aplicarEstilo(ws1,a,{...sCabSub,fill:{fgColor:{rgb:'1F2937'}}}));
+  ['A9','B9','C9','D9','E9','F9','G9'].forEach(a=>aplicarEstilo(ws1,a,sHeader));
+
+  // Linhas de dados
+  resultados.forEach((r, i) => {
+    const row = i + 10;
+    const isZebra = i % 2 === 0;
+    const base = isZebra ? sZebra : {};
+    aplicarEstilo(ws1, `A${row}`, {...sPlaca, ...(isZebra?{fill:{fgColor:{rgb:'F9FAFB'}}}:{})});
+    aplicarEstilo(ws1, `B${row}`, base);
+    aplicarEstilo(ws1, `C${row}`, {...sNum, ...(isZebra?{fill:{fgColor:{rgb:'F9FAFB'}}}:{})});
+    aplicarEstilo(ws1, `D${row}`, {...sNum, ...(isZebra?{fill:{fgColor:{rgb:'F9FAFB'}}}:{})});
+    const diffStyle = r.diff < 0 ? sNumRed : sNumGreen;
+    const pctStyle  = r.diff < 0 ? sPctRed : sPctGreen;
+    aplicarEstilo(ws1, `E${row}`, {...diffStyle, ...(isZebra?{fill:{fgColor:{rgb:'F9FAFB'}}}:{})});
+    aplicarEstilo(ws1, `F${row}`, {...pctStyle,  ...(isZebra?{fill:{fgColor:{rgb:'F9FAFB'}}}:{})});
+    const stStyle = r.status==='alerta'?sAlerta : r.status==='atencao'?sAtencao : r.status==='excesso'?sExcesso : sOk;
+    aplicarEstilo(ws1, `G${row}`, stStyle);
+  });
+
+  XLSX.utils.book_append_sheet(wb, ws1, '📊 Comparativo');
+
+  // ── Aba 2: Alertas ordenados ─────────────────────────────────────────────────
+  if (alertas.length) {
+    const aoa2 = [
+      ['🔴 ALERTAS — KM ABAIXO DO CLIENTE', '', '', '', '', ''],
+      [label||'', '', '', '', `Total: ${alertas.length} placas`, ''],
+      ['', '', '', '', '', ''],
+      ['Placa', 'Operação', 'KM Sistema', 'KM Cliente', 'Diferença', 'Var. %'],
+      ...alertas.map(r => [r.placa, r.operacao||'', fmtKm(r.kmSistema), fmtKm(r.kmCliente), fmtKm(r.diff), r.pct!==null?parseFloat(r.pct.toFixed(1)):0])
+    ];
+    const ws2 = mkWs(aoa2, [{wch:14},{wch:28},{wch:14},{wch:14},{wch:14},{wch:10}]);
+    ws2['!merges'] = [{s:{r:0,c:0},e:{r:0,c:5}},{s:{r:1,c:0},e:{r:1,c:3}}];
+    ['A1','B1','C1','D1','E1','F1'].forEach(a=>aplicarEstilo(ws2,a,{...sCabTitulo,fill:{fgColor:{rgb:'991B1B'}}}));
+    ['A4','B4','C4','D4','E4','F4'].forEach(a=>aplicarEstilo(ws2,a,sHeader));
+    alertas.forEach((_,i)=>{
+      const r = i+5;
+      ['A','B','C','D','E','F'].forEach(c=>aplicarEstilo(ws2,`${c}${r}`,i%2===0?sZebra:{}));
+      aplicarEstilo(ws2,`A${r}`,{...sPlaca,...(i%2===0?{fill:{fgColor:{rgb:'F9FAFB'}}}:{})});
+      aplicarEstilo(ws2,`E${r}`,{...sNumRed,...(i%2===0?{fill:{fgColor:{rgb:'F9FAFB'}}}:{})});
+      aplicarEstilo(ws2,`F${r}`,{...sPctRed,...(i%2===0?{fill:{fgColor:{rgb:'F9FAFB'}}}:{})});
+    });
+    XLSX.utils.book_append_sheet(wb, ws2, '🔴 Alertas');
   }
 
-  // Aba sem correspondência
+  // ── Aba 3: Sem correspondência ───────────────────────────────────────────────
   if (semNoSistema.length || semNoCliente.length) {
-    const rowsS = [['Placa', 'Situação', 'KM']];
-    semNoSistema.forEach(r => rowsS.push([r.placa, 'Só no cliente (não está no sistema)', fmtKm(r.kmCliente)]));
-    semNoCliente.forEach(r => rowsS.push([r.placa, 'Só no sistema (não está no cliente)', fmtKm(r.kmSistema)]));
-    const wsS = XLSX.utils.aoa_to_sheet(rowsS);
-    wsS['!cols'] = [{ wch: 14 }, { wch: 40 }, { wch: 14 }];
-    XLSX.utils.book_append_sheet(wb, wsS, '🔍 Sem Correspondência');
+    const aoa3 = [
+      ['🔍 SEM CORRESPONDÊNCIA', '', '', ''],
+      [label||'', '', `Total: ${semNoSistema.length+semNoCliente.length}`, ''],
+      ['', '', '', ''],
+      ['Placa', 'Operação', 'Situação', 'KM'],
+      ...semNoSistema.map(r=>[r.placa, r.operacao||'', 'Só no cliente', fmtKm(r.kmCliente)]),
+      ...semNoCliente.map(r=>[r.placa, r.operacao||'', 'Só no sistema', fmtKm(r.kmSistema)]),
+    ];
+    const ws3 = mkWs(aoa3, [{wch:14},{wch:28},{wch:26},{wch:14}]);
+    ws3['!merges'] = [{s:{r:0,c:0},e:{r:0,c:3}}];
+    ['A1','B1','C1','D1'].forEach(a=>aplicarEstilo(ws3,a,{...sCabTitulo,fill:{fgColor:{rgb:'5B21B6'}}}));
+    ['A4','B4','C4','D4'].forEach(a=>aplicarEstilo(ws3,a,sHeader));
+    XLSX.utils.book_append_sheet(wb, ws3, '🔍 Sem Correspondência');
   }
 
-  const dataHoje = new Date().toISOString().split('T')[0];
-  XLSX.writeFile(wb, 'km_comparativo_' + dataHoje + '.xlsx');
-  showToast('Excel exportado!', 'success');
+  XLSX.writeFile(wb, `ignis_km_${(label||'comparativo').replace(/[^a-zA-Z0-9]/g,'_')}_${new Date().toISOString().split('T')[0]}.xlsx`);
+  showToast('Excel exportado com design profissional!', 'success');
+}
+
+function arlaExportarExcel() {
+  const dados = window._arlaState?.processados;
+  if (!dados?.length) { showToast('Sem dados para exportar.', 'error'); return; }
+
+  const mesLabel = window._arlaState.meses?.find(m => m.id === window._arlaState.mesAtual)?.label || 'Arla';
+  const dataHoje = new Date().toLocaleDateString('pt-BR');
+  const wb = XLSX.utils.book_new();
+
+  // ── Estilos ─────────────────────────────────────────────────────────────────
+  const sCabTitulo = { font:{bold:true,sz:14,color:{rgb:'FFFFFF'}}, fill:{fgColor:{rgb:'064E3B'}}, alignment:{horizontal:'center',vertical:'center'} };
+  const sCabSub    = { font:{bold:true,sz:10,color:{rgb:'FFFFFF'}}, fill:{fgColor:{rgb:'065F46'}}, alignment:{horizontal:'center',vertical:'center'} };
+  const sHeader    = { font:{bold:true,sz:10,color:{rgb:'FFFFFF'}}, fill:{fgColor:{rgb:'374151'}}, alignment:{horizontal:'center',vertical:'center'} };
+  const sFail      = { fill:{fgColor:{rgb:'FEF2F2'}}, font:{color:{rgb:'991B1B'},bold:true}, alignment:{horizontal:'center'} };
+  const sOk        = { fill:{fgColor:{rgb:'F0FDF4'}}, font:{color:{rgb:'166534'},bold:true}, alignment:{horizontal:'center'} };
+  const sEgr       = { fill:{fgColor:{rgb:'EFF6FF'}}, font:{color:{rgb:'1E40AF'},bold:true}, alignment:{horizontal:'center'} };
+  const sPlaca     = { font:{bold:true,name:'Courier New',sz:10}, alignment:{horizontal:'center'} };
+  const sNum       = { alignment:{horizontal:'right'}, numFmt:'#,##0.0' };
+  const sPct       = { alignment:{horizontal:'right'}, numFmt:'0.0"%"' };
+  const sPctFail   = { alignment:{horizontal:'right'}, numFmt:'0.0"%"', font:{color:{rgb:'DC2626'},bold:true} };
+  const sPctOk     = { alignment:{horizontal:'right'}, numFmt:'0.0"%"', font:{color:{rgb:'16A34A'},bold:true} };
+  const sZebra     = { fill:{fgColor:{rgb:'F9FAFB'}} };
+
+  const aplicarEstilo = (ws, addr, style) => {
+    if (!ws[addr]) ws[addr] = { t:'s', v:'' };
+    ws[addr].s = style;
+  };
+
+  const fails = dados.filter(r => r.status === 'FAIL').sort((a,b) => (a.pct||0)-(b.pct||0));
+  const oks   = dados.filter(r => r.status === 'OK');
+  const egrs  = dados.filter(r => r.status === 'EGR');
+  const semD  = dados.filter(r => r.status === 'SEM_DIESEL');
+
+  // Por operação — agrupa para resumo
+  const porOp = {};
+  dados.forEach(r => {
+    if (!porOp[r.operacao||'—']) porOp[r.operacao||'—'] = {total:0,fail:0,diesel:0,arla:0};
+    const o = porOp[r.operacao||'—'];
+    o.total++; if(r.status==='FAIL') o.fail++; o.diesel+=r.diesel; o.arla+=r.arla;
+  });
+
+  // ── Aba 1: Resumo + todos ────────────────────────────────────────────────────
+  const aoa1 = [
+    ['CONTROLE DE ARLA 32 — IGNIS', '', '', '', '', ''],
+    [mesLabel, '', '', `Gerado: ${dataHoje}`, '', ''],
+    ['', '', '', '', '', ''],
+    ['RESUMO', '', '', '', '', ''],
+    ['⚠️ Abaixo de 5%', fails.length, '', '✅ Acima de 5%', oks.length, ''],
+    ['🚗 EGR (ignorado)', egrs.length, '', '⛽ Sem diesel', semD.length, ''],
+    ['', '', '', '', '', ''],
+    ['Placa', 'Operação', 'Modelo', 'Diesel (L)', 'Arla (L)', '% Arla', 'Status'],
+    ...dados.map(r => [r.placa, r.operacao||'', r.modelo||'', r.diesel||0, r.arla||0, r.pct!==null?parseFloat(r.pct.toFixed(1)):0, r.status==='FAIL'?'⚠️ ABAIXO':r.status==='OK'?'✅ OK':r.status==='EGR'?'🚗 EGR':'— Sem diesel'])
+  ];
+
+  const ws1 = XLSX.utils.aoa_to_sheet(aoa1);
+  ws1['!cols'] = [{wch:14},{wch:28},{wch:22},{wch:13},{wch:13},{wch:10},{wch:14}];
+  ws1['!merges'] = [{s:{r:0,c:0},e:{r:0,c:6}},{s:{r:1,c:0},e:{r:1,c:2}},{s:{r:3,c:0},e:{r:3,c:6}}];
+
+  ['A1','B1','C1','D1','E1','F1','G1'].forEach(a=>aplicarEstilo(ws1,a,sCabTitulo));
+  ['A2','B2','C2'].forEach(a=>aplicarEstilo(ws1,a,sCabSub));
+  ['A4','B4','C4','D4','E4','F4','G4'].forEach(a=>aplicarEstilo(ws1,a,{...sCabSub,fill:{fgColor:{rgb:'1F2937'}}}));
+  ['A8','B8','C8','D8','E8','F8','G8'].forEach(a=>aplicarEstilo(ws1,a,sHeader));
+
+  dados.forEach((r,i) => {
+    const row = i+9;
+    const isZ = i%2===0;
+    const zf = isZ?{fill:{fgColor:{rgb:'F9FAFB'}}}:{};
+    aplicarEstilo(ws1,`A${row}`,{...sPlaca,...zf});
+    aplicarEstilo(ws1,`B${row}`,zf);
+    aplicarEstilo(ws1,`C${row}`,{font:{sz:9},...zf});
+    aplicarEstilo(ws1,`D${row}`,{...sNum,...zf});
+    aplicarEstilo(ws1,`E${row}`,{...sNum,...zf});
+    const pStyle = r.status==='FAIL'?sPctFail:r.status==='OK'?sPctOk:sPct;
+    aplicarEstilo(ws1,`F${row}`,{...pStyle,...zf});
+    aplicarEstilo(ws1,`G${row}`,r.status==='FAIL'?sFail:r.status==='OK'?sOk:r.status==='EGR'?sEgr:{...zf});
+  });
+  XLSX.utils.book_append_sheet(wb, ws1, '📊 Todos os SRC');
+
+  // ── Aba 2: Abaixo de 5% ──────────────────────────────────────────────────────
+  if (fails.length) {
+    const aoa2 = [
+      ['⚠️ ABAIXO DE 5% — ARLA 32', '', '', '', '', ''],
+      [mesLabel, '', `Total: ${fails.length} SRCs`, '', '', ''],
+      ['', '', '', '', '', ''],
+      ['Placa', 'Operação', 'Modelo', 'Diesel (L)', 'Arla (L)', '% Arla'],
+      ...fails.map(r => [r.placa, r.operacao||'', r.modelo||'', r.diesel||0, r.arla||0, r.pct!==null?parseFloat(r.pct.toFixed(1)):0])
+    ];
+    const ws2 = XLSX.utils.aoa_to_sheet(aoa2);
+    ws2['!cols'] = [{wch:14},{wch:28},{wch:22},{wch:13},{wch:13},{wch:10}];
+    ws2['!merges'] = [{s:{r:0,c:0},e:{r:0,c:5}}];
+    ['A1','B1','C1','D1','E1','F1'].forEach(a=>aplicarEstilo(ws2,a,{...sCabTitulo,fill:{fgColor:{rgb:'991B1B'}}}));
+    ['A4','B4','C4','D4','E4','F4'].forEach(a=>aplicarEstilo(ws2,a,sHeader));
+    fails.forEach((_,i)=>{
+      const r=i+5; const isZ=i%2===0; const zf=isZ?{fill:{fgColor:{rgb:'F9FAFB'}}}:{};
+      aplicarEstilo(ws2,`A${r}`,{...sPlaca,...zf});
+      ['B','C'].forEach(c=>aplicarEstilo(ws2,`${c}${r}`,zf));
+      aplicarEstilo(ws2,`D${r}`,{...sNum,...zf});
+      aplicarEstilo(ws2,`E${r}`,{...sNum,...zf});
+      aplicarEstilo(ws2,`F${r}`,{...sPctFail,...zf});
+    });
+    XLSX.utils.book_append_sheet(wb, ws2, '⚠️ Abaixo de 5%');
+  }
+
+  // ── Aba 3: Resumo por Operação ───────────────────────────────────────────────
+  const aoaOp = [
+    ['RESUMO POR OPERAÇÃO', '', '', '', ''],
+    [mesLabel, '', '', '', ''],
+    ['', '', '', '', ''],
+    ['Operação', 'Total SRC', 'Abaixo 5%', 'Diesel Total (L)', 'Arla Total (L)', '% Média Arla'],
+    ...Object.entries(porOp).map(([op,d]) => [op, d.total, d.fail, parseFloat(d.diesel.toFixed(1)), parseFloat(d.arla.toFixed(1)), d.diesel>0?parseFloat((d.arla/d.diesel*100).toFixed(1)):0])
+  ];
+  const ws3 = XLSX.utils.aoa_to_sheet(aoaOp);
+  ws3['!cols'] = [{wch:32},{wch:12},{wch:12},{wch:18},{wch:16},{wch:14}];
+  ws3['!merges'] = [{s:{r:0,c:0},e:{r:0,c:5}}];
+  ['A1','B1','C1','D1','E1','F1'].forEach(a=>aplicarEstilo(ws3,a,{...sCabTitulo,fill:{fgColor:{rgb:'064E3B'}}}));
+  ['A4','B4','C4','D4','E4','F4'].forEach(a=>aplicarEstilo(ws3,a,sHeader));
+  XLSX.utils.book_append_sheet(wb, ws3, '📍 Por Operação');
+
+  XLSX.writeFile(wb, `ignis_arla_${mesLabel.replace(/[^a-zA-Z0-9]/g,'_')}_${new Date().toISOString().split('T')[0]}.xlsx`);
+  showToast('Excel Arla exportado!', 'success');
 }
 
 function kmCopiarEmail() {
