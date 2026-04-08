@@ -6115,147 +6115,166 @@ function kmExportarExcel() {
   if (!resultados) return;
 
   const fmtN = v => v.toLocaleString('pt-BR', {minimumFractionDigits:1, maximumFractionDigits:1});
-  const fmtP = v => (v >= 0 ? '+' : '') + v.toFixed(1) + '%';
   const dataHoje = new Date().toLocaleDateString('pt-BR');
 
-  const alertas  = resultados.filter(r => r.status === 'alerta').sort((a,b) => a.diff - b.diff);
-  const excessos = resultados.filter(r => r.status === 'excesso').sort((a,b) => b.diff - a.diff);
-  const atencao  = resultados.filter(r => r.status === 'atencao');
-  const ok       = resultados.filter(r => r.status === 'ok');
+  // Cores inline (Excel 2010 só lê style= e bgcolor=)
+  const S = {
+    tdBase:    'font-family:Arial,sans-serif;font-size:10pt;padding:4px 8px;border:1px solid #CCCCCC;',
+    thBase:    'font-family:Arial,sans-serif;font-size:10pt;font-weight:bold;padding:5px 8px;border:1px solid #555555;text-align:center;background-color:#374151;color:#FFFFFF;',
+    titulo:    'font-family:Arial,sans-serif;font-size:14pt;font-weight:bold;background-color:#7F1D1D;color:#FFFFFF;padding:8px 12px;',
+    subtitulo: 'font-family:Arial,sans-serif;font-size:10pt;background-color:#991B1B;color:#FCA5A5;padding:3px 12px;',
+    secHeader: (bg) => `font-family:Arial,sans-serif;font-size:11pt;font-weight:bold;background-color:${bg};color:#FFFFFF;padding:6px 10px;`,
+    placa:     (bg) => `font-family:"Courier New",monospace;font-weight:bold;font-size:10pt;text-align:center;padding:4px 8px;border:1px solid #CCCCCC;background-color:${bg};`,
+    num:       (bg) => `font-family:Arial,sans-serif;font-size:10pt;text-align:right;padding:4px 8px;border:1px solid #CCCCCC;background-color:${bg};`,
+    numRed:    (bg) => `font-family:Arial,sans-serif;font-size:10pt;font-weight:bold;color:#CC0000;text-align:right;padding:4px 8px;border:1px solid #CCCCCC;background-color:${bg};`,
+    numGreen:  (bg) => `font-family:Arial,sans-serif;font-size:10pt;font-weight:bold;color:#166534;text-align:right;padding:4px 8px;border:1px solid #CCCCCC;background-color:${bg};`,
+    stAlerta:  'font-family:Arial,sans-serif;font-size:10pt;font-weight:bold;text-align:center;padding:4px 8px;border:1px solid #CCCCCC;background-color:#FEE2E2;color:#991B1B;',
+    stAtencao: 'font-family:Arial,sans-serif;font-size:10pt;font-weight:bold;text-align:center;padding:4px 8px;border:1px solid #CCCCCC;background-color:#FEF9C3;color:#854D0E;',
+    stOk:      'font-family:Arial,sans-serif;font-size:10pt;font-weight:bold;text-align:center;padding:4px 8px;border:1px solid #CCCCCC;background-color:#DCFCE7;color:#166534;',
+    stExcesso: 'font-family:Arial,sans-serif;font-size:10pt;font-weight:bold;text-align:center;padding:4px 8px;border:1px solid #CCCCCC;background-color:#FFEDD5;color:#9A3412;',
+    stSem:     'font-family:Arial,sans-serif;font-size:10pt;font-weight:bold;text-align:center;padding:4px 8px;border:1px solid #CCCCCC;background-color:#EDE9FE;color:#5B21B6;',
+    cell:      (bg) => `font-family:Arial,sans-serif;font-size:10pt;padding:4px 8px;border:1px solid #CCCCCC;background-color:${bg};`,
+  };
+
+  // Status → cor de fundo da linha e estilo da célula status
+  const rowBg    = r => ({alerta:'#FFF5F5', atencao:'#FEFCE8', ok:'#F8FFF8', excesso:'#FFF8F5', sem_base:'#FAF5FF'}[r.status]||'#FFFFFF');
+  const stStyle  = r => ({alerta:S.stAlerta, atencao:S.stAtencao, ok:S.stOk, excesso:S.stExcesso, sem_base:S.stSem}[r.status]||S.cell('#FFFFFF'));
+  const stLabel  = r => ({alerta:'ALERTA', atencao:'ATENÇÃO', ok:'OK', excesso:'EXCESSO', sem_base:'SEM BASE'}[r.status]||'');
 
   // Por operação
   const porOp = {};
   resultados.forEach(r => {
-    const op = r.operacao || '—';
-    if (!porOp[op]) porOp[op] = {total:0, alerta:0, excesso:0, atencao:0, ok:0, kmS:0, kmC:0};
-    porOp[op].total++;
-    porOp[op][r.status] = (porOp[op][r.status]||0) + 1;
-    porOp[op].kmS += r.kmSistema;
-    porOp[op].kmC += r.kmCliente;
+    const op = r.operacao||'—';
+    if (!porOp[op]) porOp[op]={total:0,alerta:0,excesso:0,atencao:0,ok:0,kmS:0,kmC:0};
+    porOp[op].total++; porOp[op][r.status]=(porOp[op][r.status]||0)+1;
+    porOp[op].kmS+=r.kmSistema; porOp[op].kmC+=r.kmCliente;
   });
 
-  const css = `
-    body { font-family: Calibri, Arial, sans-serif; font-size: 11pt; }
-    .titulo { background: #7F1D1D; color: #fff; font-size: 16pt; font-weight: bold; padding: 10px 16px; }
-    .subtitulo { background: #991B1B; color: #fca5a5; font-size: 10pt; padding: 4px 16px; }
-    .resumo-box { background: #FEF2F2; border: 1px solid #FECACA; padding: 8px 16px; margin: 8px 0; }
-    .section-header { background: #1F2937; color: #fff; font-size: 12pt; font-weight: bold; padding: 8px 12px; margin-top: 16px; }
-    table { border-collapse: collapse; width: 100%; margin-top: 4px; }
-    th { background: #374151; color: #fff; font-weight: bold; font-size: 10pt; padding: 7px 10px; text-align: center; border: 1px solid #4B5563; }
-    td { padding: 6px 10px; border: 1px solid #E5E7EB; font-size: 10pt; }
-    tr:nth-child(even) td { background: #F9FAFB; }
-    tr:nth-child(odd) td { background: #FFFFFF; }
-    .placa { font-family: Courier New, monospace; font-weight: bold; text-align: center; }
-    .num { text-align: right; }
-    .neg { color: #DC2626; font-weight: bold; }
-    .pos { color: #16A34A; font-weight: bold; }
-    .st-alerta { background: #FEF2F2 !important; color: #991B1B; font-weight: bold; text-align: center; }
-    .st-atencao { background: #FFFBEB !important; color: #92400E; font-weight: bold; text-align: center; }
-    .st-ok { background: #F0FDF4 !important; color: #166534; font-weight: bold; text-align: center; }
-    .st-excesso { background: #FFF7ED !important; color: #9A3412; font-weight: bold; text-align: center; }
-    .st-sem { background: #EFF6FF !important; color: #1E40AF; font-weight: bold; text-align: center; }
-    .op-alerta { background: #FEF2F2 !important; color: #991B1B; font-weight: bold; text-align: center; }
-    .resumo-kpi { display: inline-block; margin: 4px 12px 4px 0; }
-    .resumo-kpi b { font-size: 14pt; }
-    .sec-alerta { color: #DC2626; }
-    .sec-excesso { color: #EA580C; }
-  `;
+  const alertas = resultados.filter(r=>r.status==='alerta').sort((a,b)=>a.diff-b.diff);
+  const excessos= resultados.filter(r=>r.status==='excesso').sort((a,b)=>b.diff-a.diff);
+  const atencao = resultados.filter(r=>r.status==='atencao');
+  const ok      = resultados.filter(r=>r.status==='ok');
 
-  const mkLinhaResultado = r => {
+  const mkLinha = (r,i) => {
+    const bg = i%2===0 ? rowBg(r) : '#FFFFFF';
     const diff = r.diff;
-    const diffClass = diff < 0 ? 'neg' : 'pos';
-    const pctTxt = r.pct !== null ? fmtP(r.pct) : '—';
-    const stClass = {ok:'st-ok', atencao:'st-atencao', alerta:'st-alerta', excesso:'st-excesso', sem_base:'st-sem'}[r.status] || '';
-    const stLabel = {ok:'✅ OK', atencao:'⚠️ Atenção', alerta:'🔴 Alerta', excesso:'🚨 Excesso', sem_base:'—'}[r.status] || '';
+    const pctTxt = r.pct!==null ? (r.pct>=0?'+':'')+r.pct.toFixed(1)+'%' : '—';
+    const diffStyle = diff<0 ? S.numRed(bg) : S.numGreen(bg);
     return `<tr>
-      <td class="placa">${r.placa}</td>
-      <td>${r.operacao||'—'}</td>
-      <td class="num">${fmtN(r.kmSistema)}</td>
-      <td class="num">${fmtN(r.kmCliente)}</td>
-      <td class="num ${diffClass}">${(diff>=0?'+':'')+fmtN(diff)}</td>
-      <td class="num ${diffClass}">${pctTxt}</td>
-      <td class="${stClass}">${stLabel}</td>
+      <td style="${S.placa(bg)}">${r.placa}</td>
+      <td style="${S.cell(bg)}">${r.operacao||'—'}</td>
+      <td style="${S.num(bg)}">${fmtN(r.kmSistema)}</td>
+      <td style="${S.num(bg)}">${fmtN(r.kmCliente)}</td>
+      <td style="${diffStyle}">${(diff>=0?'+':'')+fmtN(diff)}</td>
+      <td style="${diffStyle}">${pctTxt}</td>
+      <td style="${stStyle(r)}">${stLabel(r)}</td>
     </tr>`;
   };
 
-  const tabelaResultados = (rows, titulo, corTitulo) => `
-    <div class="section-header" style="background:${corTitulo}">${titulo} (${rows.length})</div>
-    <table>
-      <thead><tr>
-        <th style="width:90px">Placa</th><th>Operação</th>
-        <th style="width:110px">KM Sistema</th><th style="width:110px">KM Cliente</th>
-        <th style="width:100px">Diferença</th><th style="width:80px">Var. %</th><th style="width:100px">Status</th>
-      </tr></thead>
-      <tbody>${rows.map(mkLinhaResultado).join('')}</tbody>
-    </table>`;
+  const mkSecao = (rows, titulo, corFundo) => {
+    if (!rows.length) return '';
+    return `<tr><td colspan="7" style="${S.secHeader(corFundo)}">${titulo} (${rows.length})</td></tr>
+    <tr>
+      <td style="${S.thBase}width:90px">Placa</td>
+      <td style="${S.thBase}">Operação</td>
+      <td style="${S.thBase}width:110px">KM Sistema</td>
+      <td style="${S.thBase}width:110px">KM Cliente</td>
+      <td style="${S.thBase}width:90px">Diferença</td>
+      <td style="${S.thBase}width:75px">Var. %</td>
+      <td style="${S.thBase}width:90px">Status</td>
+    </tr>
+    ${rows.map((r,i)=>mkLinha(r,i)).join('')}
+    <tr><td colspan="7" style="padding:4px"></td></tr>`;
+  };
 
   const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel">
-  <head><meta charset="UTF-8"><style>${css}</style></head>
-  <body>
-    <div class="titulo">📏 KM Comparativo — Ignis</div>
-    <div class="subtitulo">${label || ''} &nbsp;·&nbsp; Gerado em ${dataHoje}</div>
+<head><meta charset="UTF-8">
+<!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet>
+<x:Name>KM Comparativo</x:Name>
+<x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>
+</x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->
+</head>
+<body>
+<table border="0" cellspacing="0" cellpadding="0" style="border-collapse:collapse;font-family:Arial,sans-serif">
 
-    <div class="resumo-box">
-      <span class="resumo-kpi"><b style="color:#DC2626">${alertas.length}</b> alertas</span>
-      <span class="resumo-kpi"><b style="color:#EA580C">${excessos.length}</b> excessos</span>
-      <span class="resumo-kpi"><b style="color:#CA8A04">${atencao.length}</b> atenção</span>
-      <span class="resumo-kpi"><b style="color:#16A34A">${ok.length}</b> OK</span>
-      <span class="resumo-kpi"><b style="color:#7C3AED">${semNoSistema.length}</b> só no cliente</span>
-      <span class="resumo-kpi"><b style="color:#2563EB">${semNoCliente.length}</b> só no sistema</span>
-    </div>
+  <!-- Cabeçalho -->
+  <tr><td colspan="7" style="${S.titulo}">KM Comparativo — Ignis</td></tr>
+  <tr><td colspan="7" style="${S.subtitulo}">${label||''} &nbsp;·&nbsp; Gerado em ${dataHoje}</td></tr>
+  <tr><td colspan="7" style="padding:4px;background-color:#F8F8F8"></td></tr>
 
-    <!-- Resumo por operação -->
-    <div class="section-header">📍 Resumo por Operação</div>
-    <table>
-      <thead><tr>
-        <th>Operação</th><th style="width:80px">Total</th>
-        <th style="width:90px">🔴 Alerta</th><th style="width:90px">🚨 Excesso</th>
-        <th style="width:90px">⚠️ Atenção</th><th style="width:80px">✅ OK</th>
-        <th style="width:110px">KM Sistema</th><th style="width:110px">KM Cliente</th><th style="width:110px">Diferença</th>
-      </tr></thead>
-      <tbody>
-        ${Object.entries(porOp).sort((a,b)=>b[1].alerta-a[1].alerta).map(([op,d],i) => `
-          <tr>
-            <td>${op}</td>
-            <td class="num">${d.total}</td>
-            <td class="${d.alerta>0?'op-alerta':'num'}">${d.alerta||'—'}</td>
-            <td class="${d.excesso>0?'st-excesso':'num'}">${d.excesso||'—'}</td>
-            <td class="${d.atencao>0?'st-atencao':'num'}">${d.atencao||'—'}</td>
-            <td class="${d.ok>0?'st-ok':'num'}">${d.ok||'—'}</td>
-            <td class="num">${fmtN(d.kmS)}</td>
-            <td class="num">${fmtN(d.kmC)}</td>
-            <td class="num ${(d.kmS-d.kmC)<0?'neg':'pos'}">${(d.kmS-d.kmC>=0?'+':'')+fmtN(d.kmS-d.kmC)}</td>
-          </tr>`).join('')}
-      </tbody>
-    </table>
+  <!-- Resumo -->
+  <tr><td colspan="7" style="${S.secHeader('#1F2937')}">Resumo</td></tr>
+  <tr>
+    <td colspan="2" style="${S.cell('#FEE2E2')}"><b style="color:#991B1B">${alertas.length}</b> &nbsp;Alertas</td>
+    <td colspan="2" style="${S.cell('#FFEDD5')}"><b style="color:#9A3412">${excessos.length}</b> &nbsp;Excessos</td>
+    <td colspan="2" style="${S.cell('#FEF9C3')}"><b style="color:#854D0E">${atencao.length}</b> &nbsp;Atenção</td>
+    <td style="${S.cell('#DCFCE7')}"><b style="color:#166534">${ok.length}</b> &nbsp;OK</td>
+  </tr>
+  <tr><td colspan="7" style="padding:4px"></td></tr>
 
-    ${alertas.length ? tabelaResultados(alertas, '🔴 KM Abaixo do Cliente', '#991B1B') : ''}
-    ${excessos.length ? tabelaResultados(excessos, '🚨 KM Excessivamente Acima', '#9A3412') : ''}
-    ${atencao.length ? tabelaResultados(atencao, '⚠️ Atenção — Margem Apertada', '#92400E') : ''}
-    ${ok.length ? tabelaResultados(ok, '✅ OK', '#166534') : ''}
+  <!-- Resumo por Operação -->
+  <tr><td colspan="9" style="${S.secHeader('#1E3A5F')}">Resumo por Operação</td></tr>
+  <tr>
+    <td colspan="2" style="${S.thBase}">Operação</td>
+    <td style="${S.thBase}">Total</td>
+    <td style="${S.thBase}background-color:#7F1D1D">Alerta</td>
+    <td style="${S.thBase}background-color:#9A3412">Excesso</td>
+    <td style="${S.thBase}background-color:#854D0E">Atenção</td>
+    <td style="${S.thBase}background-color:#166534">OK</td>
+  </tr>
+  ${Object.entries(porOp).sort((a,b)=>b[1].alerta-a[1].alerta).map(([op,d],i)=>{
+    const bg = i%2===0?'#F5F5F5':'#FFFFFF';
+    return `<tr>
+      <td colspan="2" style="${S.cell(bg)}">${op}</td>
+      <td style="${S.num(bg)}">${d.total}</td>
+      <td style="${d.alerta>0?'font-family:Arial,sans-serif;font-size:10pt;font-weight:bold;text-align:center;padding:4px 8px;border:1px solid #CCCCCC;background-color:#FEE2E2;color:#991B1B;':S.num(bg)}">${d.alerta||'—'}</td>
+      <td style="${d.excesso>0?'font-family:Arial,sans-serif;font-size:10pt;font-weight:bold;text-align:center;padding:4px 8px;border:1px solid #CCCCCC;background-color:#FFEDD5;color:#9A3412;':S.num(bg)}">${d.excesso||'—'}</td>
+      <td style="${d.atencao>0?'font-family:Arial,sans-serif;font-size:10pt;font-weight:bold;text-align:center;padding:4px 8px;border:1px solid #CCCCCC;background-color:#FEF9C3;color:#854D0E;':S.num(bg)}">${d.atencao||'—'}</td>
+      <td style="${d.ok>0?'font-family:Arial,sans-serif;font-size:10pt;font-weight:bold;text-align:center;padding:4px 8px;border:1px solid #CCCCCC;background-color:#DCFCE7;color:#166534;':S.num(bg)}">${d.ok||'—'}</td>
+    </tr>`;
+  }).join('')}
+  <tr><td colspan="7" style="padding:4px"></td></tr>
 
-    ${semNoSistema.length || semNoCliente.length ? `
-    <div class="section-header" style="background:#5B21B6">🔍 Sem Correspondência</div>
-    <table>
-      <thead><tr><th style="width:90px">Placa</th><th>Operação</th><th>Situação</th><th style="width:110px">KM</th></tr></thead>
-      <tbody>
-        ${semNoSistema.map(r=>`<tr><td class="placa st-sem">${r.placa}</td><td>${r.operacao||'—'}</td><td>Só no cliente</td><td class="num">${fmtN(r.kmCliente)}</td></tr>`).join('')}
-        ${semNoCliente.map(r=>`<tr><td class="placa" style="font-family:monospace;font-weight:bold;text-align:center">${r.placa}</td><td>${r.operacao||'—'}</td><td>Só no sistema</td><td class="num">${fmtN(r.kmSistema)}</td></tr>`).join('')}
-      </tbody>
-    </table>` : ''}
+  <!-- Seções por status (sem duplicação — cada placa aparece uma vez) -->
+  ${mkSecao(alertas,  'Alertas — KM abaixo do cliente', '#991B1B')}
+  ${mkSecao(excessos, 'Excessos — KM muito acima',      '#9A3412')}
+  ${mkSecao(atencao,  'Atenção — margem apertada',       '#854D0E')}
+  ${mkSecao(ok,       'OK',                              '#166534')}
 
-  </body></html>`;
+  <!-- Sem correspondência -->
+  ${semNoSistema.length||semNoCliente.length ? `
+  <tr><td colspan="7" style="${S.secHeader('#5B21B6')}">Sem Correspondência</td></tr>
+  <tr>
+    <td style="${S.thBase}">Placa</td>
+    <td colspan="3" style="${S.thBase}">Operação</td>
+    <td colspan="2" style="${S.thBase}">Situação</td>
+    <td style="${S.thBase}">KM</td>
+  </tr>
+  ${semNoSistema.map((r,i)=>`<tr>
+    <td style="${S.placa(i%2===0?'#EDE9FE':'#FFFFFF')}">${r.placa}</td>
+    <td colspan="3" style="${S.cell(i%2===0?'#EDE9FE':'#FFFFFF')}">${r.operacao||'—'}</td>
+    <td colspan="2" style="${S.cell(i%2===0?'#EDE9FE':'#FFFFFF')}">Só no cliente</td>
+    <td style="${S.num(i%2===0?'#EDE9FE':'#FFFFFF')}">${fmtN(r.kmCliente)}</td>
+  </tr>`).join('')}
+  ${semNoCliente.map((r,i)=>`<tr>
+    <td style="${S.placa(i%2===0?'#F0F9FF':'#FFFFFF')}">${r.placa}</td>
+    <td colspan="3" style="${S.cell(i%2===0?'#F0F9FF':'#FFFFFF')}">${r.operacao||'—'}</td>
+    <td colspan="2" style="${S.cell(i%2===0?'#F0F9FF':'#FFFFFF')}">Só no sistema</td>
+    <td style="${S.num(i%2===0?'#F0F9FF':'#FFFFFF')}">${fmtN(r.kmSistema)}</td>
+  </tr>`).join('')}` : ''}
 
-  const blob = new Blob([html], {type:'application/vnd.ms-excel;charset=utf-8'});
+</table>
+</body></html>`;
+
+  const blob = new Blob(['\uFEFF'+html], {type:'application/vnd.ms-excel;charset=utf-8'});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `ignis_km_${(label||'comparativo').replace(/[^a-zA-Z0-9]/g,'_')}_${new Date().toISOString().split('T')[0]}.xls`;
+  a.download = `ignis_km_${(label||'comparativo').replace(/[^a-zA-Z0-9]/g,'_')}.xls`;
   a.click();
   URL.revokeObjectURL(url);
-  showToast('Excel exportado com design profissional!', 'success');
+  showToast('Excel exportado!', 'success');
 }
-
 
 function arlaExportarExcel() {
   const dados = window._arlaState?.processados;
@@ -6264,7 +6283,124 @@ function arlaExportarExcel() {
   const mesLabel = window._arlaState.meses?.find(m => m.id === window._arlaState.mesAtual)?.label || 'Arla';
   const dataHoje = new Date().toLocaleDateString('pt-BR');
   const fmtN = v => (v||0).toLocaleString('pt-BR', {minimumFractionDigits:1, maximumFractionDigits:1});
-  const fmtP = v => v !== null ? (v||0).toFixed(1) + '%' : '—';
+
+  const fails = dados.filter(r => r.status === 'FAIL').sort((a,b) => (a.pct||0)-(b.pct||0));
+  const oks   = dados.filter(r => r.status === 'OK');
+  const egrs  = dados.filter(r => r.status === 'EGR');
+  const semD  = dados.filter(r => r.status === 'SEM_DIESEL');
+
+  const porOp = {};
+  dados.forEach(r => {
+    const op = r.operacao||'—';
+    if (!porOp[op]) porOp[op]={total:0,fail:0,ok:0,diesel:0,arla:0};
+    porOp[op].total++;
+    if(r.status==='FAIL') porOp[op].fail++;
+    if(r.status==='OK') porOp[op].ok++;
+    porOp[op].diesel+=(r.diesel||0); porOp[op].arla+=(r.arla||0);
+  });
+
+  // Estilos 100% inline — compatível Excel 2010
+  const base  = 'font-family:Arial,sans-serif;font-size:10pt;padding:4px 8px;border:1px solid #CCCCCC;';
+  const th    = 'font-family:Arial,sans-serif;font-size:10pt;font-weight:bold;padding:5px 8px;border:1px solid #555555;text-align:center;background-color:#374151;color:#FFFFFF;';
+  const thGrn = 'font-family:Arial,sans-serif;font-size:10pt;font-weight:bold;padding:5px 8px;border:1px solid #555555;text-align:center;background-color:#064E3B;color:#FFFFFF;';
+  const sec   = bg => `font-family:Arial,sans-serif;font-size:11pt;font-weight:bold;padding:6px 10px;background-color:${bg};color:#FFFFFF;`;
+  const cell  = bg => base + `background-color:${bg};`;
+  const numC  = (bg,color) => base + `text-align:right;background-color:${bg};${color?'color:'+color+';font-weight:bold;':''}`;
+  const mono  = bg => `font-family:"Courier New",monospace;font-weight:bold;font-size:10pt;text-align:center;padding:4px 8px;border:1px solid #CCCCCC;background-color:${bg};`;
+
+  const rowBg = (r,i) => {
+    if(r.status==='FAIL') return i%2===0?'#FFF0F0':'#FFF8F8';
+    if(r.status==='OK')   return i%2===0?'#F0FFF4':'#F8FFF8';
+    return i%2===0?'#F5F5F5':'#FFFFFF';
+  };
+  const stStyle = (r,bg) => {
+    const map = {FAIL:base+'background-color:#FEE2E2;color:#991B1B;font-weight:bold;text-align:center;', OK:base+'background-color:#DCFCE7;color:#166534;font-weight:bold;text-align:center;', EGR:base+'background-color:#EFF6FF;color:#1E40AF;font-weight:bold;text-align:center;', SEM_DIESEL:base+'background-color:#FEF9C3;color:#854D0E;font-weight:bold;text-align:center;'};
+    return map[r.status]||cell(bg);
+  };
+  const stLabel = r => ({FAIL:'ABAIXO 5%', OK:'OK', EGR:'EGR', SEM_DIESEL:'SEM DIESEL'}[r.status]||r.status);
+
+  const mkLinha = (r,i) => {
+    const bg = rowBg(r,i);
+    const pct = r.pct!==null ? r.pct.toFixed(1)+'%' : '—';
+    const pctColor = r.status==='FAIL'?'#CC0000':r.status==='OK'?'#166534':null;
+    return `<tr>
+      <td style="${mono(bg)}">${r.placa}</td>
+      <td style="${cell(bg)}">${r.operacao||'—'}</td>
+      <td style="${cell(bg)}">${r.modelo||'—'}</td>
+      <td style="${numC(bg,null)}">${fmtN(r.diesel)}</td>
+      <td style="${numC(bg,null)}">${fmtN(r.arla)}</td>
+      <td style="${numC(bg,pctColor)}">${pct}</td>
+      <td style="${stStyle(r,bg)}">${stLabel(r)}</td>
+    </tr>`;
+  };
+
+  const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel">
+<head><meta charset="UTF-8">
+<!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet>
+<x:Name>Arla 32</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions>
+</x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->
+</head>
+<body>
+<table border="0" cellspacing="0" cellpadding="0" style="border-collapse:collapse;font-family:Arial,sans-serif">
+
+  <tr><td colspan="7" style="${sec('#064E3B')}font-size:14pt;">Controle de Arla 32 — Ignis</td></tr>
+  <tr><td colspan="7" style="${sec('#065F46')}font-size:10pt;color:#A7F3D0;">${mesLabel} &nbsp;·&nbsp; Gerado em ${dataHoje}</td></tr>
+  <tr><td colspan="7" style="padding:4px;background-color:#F8F8F8"></td></tr>
+
+  <tr><td colspan="7" style="${sec('#1F2937')}">Resumo</td></tr>
+  <tr>
+    <td colspan="2" style="${cell('#FEE2E2')}"><b style="color:#991B1B">${fails.length}</b> &nbsp;Abaixo de 5%</td>
+    <td colspan="2" style="${cell('#DCFCE7')}"><b style="color:#166534">${oks.length}</b> &nbsp;OK (acima de 5%)</td>
+    <td style="${cell('#EFF6FF')}"><b style="color:#1E40AF">${egrs.length}</b> &nbsp;EGR</td>
+    <td style="${cell('#FEF9C3')}"><b style="color:#854D0E">${semD.length}</b> &nbsp;Sem diesel</td>
+    <td style="${cell('#F5F5F5')}"><b>${dados.length}</b> &nbsp;Total</td>
+  </tr>
+  <tr><td colspan="7" style="padding:4px"></td></tr>
+
+  <tr><td colspan="7" style="${sec('#064E3B')}">Resumo por Operacao</td></tr>
+  <tr>
+    <td colspan="2" style="${thGrn}">Operacao</td>
+    <td style="${thGrn}">Total</td>
+    <td style="${th}background-color:#991B1B;">Abaixo 5%</td>
+    <td style="${thGrn}">OK</td>
+    <td style="${thGrn}">Diesel (L)</td>
+    <td style="${thGrn}">% Media Arla</td>
+  </tr>
+  ${Object.entries(porOp).sort((a,b)=>b[1].fail-a[1].fail).map(([op,d],i)=>{
+    const bg = i%2===0?'#F0FFF4':'#FFFFFF';
+    const pm = d.diesel>0?(d.arla/d.diesel*100).toFixed(1):'—';
+    const pmColor = pm!=='—'&&parseFloat(pm)<5?'#CC0000':'#166534';
+    return `<tr>
+      <td colspan="2" style="${cell(bg)}">${op}</td>
+      <td style="${numC(bg,null)}">${d.total}</td>
+      <td style="${d.fail>0?base+'background-color:#FEE2E2;color:#991B1B;font-weight:bold;text-align:center;':numC(bg,null)}">${d.fail||'—'}</td>
+      <td style="${d.ok>0?base+'background-color:#DCFCE7;color:#166534;font-weight:bold;text-align:center;':numC(bg,null)}">${d.ok||'—'}</td>
+      <td style="${numC(bg,null)}">${fmtN(d.diesel)}</td>
+      <td style="${numC(bg,pmColor)}">${pm}${pm!=='—'?'%':''}</td>
+    </tr>`;
+  }).join('')}
+  <tr><td colspan="7" style="padding:4px"></td></tr>
+
+  ${fails.length?`
+  <tr><td colspan="7" style="${sec('#991B1B')}">Abaixo de 5% (${fails.length} SRCs)</td></tr>
+  <tr><td style="${th}">Placa</td><td style="${th}">Operacao</td><td style="${th}">Modelo</td><td style="${th}">Diesel (L)</td><td style="${th}">Arla (L)</td><td style="${th}">% Arla</td><td style="${th}">Status</td></tr>
+  ${fails.map((r,i)=>mkLinha(r,i)).join('')}
+  <tr><td colspan="7" style="padding:4px"></td></tr>`:''}
+
+  <tr><td colspan="7" style="${sec('#374151')}">Todos os SRC (${dados.length})</td></tr>
+  <tr><td style="${th}">Placa</td><td style="${th}">Operacao</td><td style="${th}">Modelo</td><td style="${th}">Diesel (L)</td><td style="${th}">Arla (L)</td><td style="${th}">% Arla</td><td style="${th}">Status</td></tr>
+  ${dados.map((r,i)=>mkLinha(r,i)).join('')}
+
+</table>
+</body></html>`;
+
+  const blob = new Blob(['\uFEFF'+html], {type:'application/vnd.ms-excel;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `ignis_arla_${mesLabel.replace(/[^a-zA-Z0-9]/g,'_')}.xls`;
+  a.click(); URL.revokeObjectURL(url);
+  showToast('Excel Arla exportado!', 'success');
+}
 
   const fails = dados.filter(r => r.status === 'FAIL').sort((a,b) => (a.pct||0) - (b.pct||0));
   const oks   = dados.filter(r => r.status === 'OK');
