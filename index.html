@@ -6184,64 +6184,88 @@ function kmGerarEmailDuplo() {
     const excessos = dados.resultados.filter(r => r.status === 'excesso').sort((a,b) => b.diff - a.diff);
     const semSist  = dados.semNoSistema || [];
 
-    const mkTabela = (linhas, corBorda, corFundo) =>
-      `<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid ${corBorda};border-radius:6px;overflow:hidden;margin-bottom:10px">
+    const mkTabela = (titulo, linhas, corTitulo, corBorda, corFundo) =>
+      `<div style="font-size:12px;font-weight:700;color:${corTitulo};margin:10px 0 6px">${titulo}</div>
+      <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid ${corBorda};border-radius:6px;overflow:hidden;margin-bottom:8px">
         <thead><tr style="background:${corFundo}">
-          <th style="padding:6px 8px;text-align:left;font-size:10px;color:#64748b">Placa</th>
-          <th style="padding:6px 8px;text-align:left;font-size:10px;color:#64748b">Operação</th>
-          <th style="padding:6px 8px;text-align:center;font-size:10px;color:#64748b">Dif.</th>
-          <th style="padding:6px 8px;text-align:center;font-size:10px;color:#64748b">Var.%</th>
+          <th style="padding:7px 10px;text-align:left;font-size:10px;color:#64748b;width:90px">Placa</th>
+          <th style="padding:7px 10px;text-align:left;font-size:10px;color:#64748b">Operação</th>
+          <th style="padding:7px 10px;text-align:right;font-size:10px;color:#64748b;width:80px">Diferença</th>
+          <th style="padding:7px 10px;text-align:right;font-size:10px;color:#64748b;width:60px">Var.%</th>
         </tr></thead><tbody>${linhas}</tbody></table>`;
 
-    const linhaAlerta = (r, cor) =>
+    const linhaR = (r, cor) =>
       `<tr style="border-bottom:1px solid #f1f5f9">
-        <td style="padding:6px 8px;font-family:monospace;font-size:11px;font-weight:700;color:#1e293b">${r.placa}</td>
-        <td style="padding:6px 8px;font-size:10px;color:#64748b">${(r.operacao||'—').substring(0,12)}</td>
-        <td style="padding:6px 8px;text-align:center;font-size:11px;font-weight:700;color:${cor}">${(r.diff>=0?'+':'')+fmtKm(r.diff)}</td>
-        <td style="padding:6px 8px;text-align:center;font-size:11px;font-weight:700;color:${cor}">${r.pct!==null?(r.pct>=0?'+':'')+r.pct.toFixed(1)+'%':'—'}</td>
+        <td style="padding:6px 10px;font-family:monospace;font-size:11px;font-weight:700;color:#1e293b">${r.placa}</td>
+        <td style="padding:6px 10px;font-size:11px;color:#475569">${r.operacao||'—'}</td>
+        <td style="padding:6px 10px;text-align:right;font-size:11px;font-weight:700;color:${cor}">${(r.diff>=0?'+':'')+fmtKm(r.diff)}</td>
+        <td style="padding:6px 10px;text-align:right;font-size:11px;font-weight:700;color:${cor}">${r.pct!==null?(r.pct>=0?'+':'')+r.pct.toFixed(1)+'%':'—'}</td>
       </tr>`;
 
-    let html = `<div style="background:#f8fafc;border-radius:6px;padding:10px 12px;margin-bottom:8px;font-size:12px">
-      <div style="font-weight:700;color:#1e293b;margin-bottom:4px">${dados.label}</div>
-      <div style="color:#dc2626"><strong>${alertas.length}</strong> alertas · <strong>${excessos.length}</strong> excessos · <strong>${semSist.length}</strong> ausentes</div>
-    </div>`;
-
-    if (alertas.length) {
-      html += `<div style="font-size:12px;font-weight:700;color:#dc2626;margin-bottom:4px">🔴 KM abaixo do cliente</div>`;
-      html += mkTabela(alertas.map(r => linhaAlerta(r,'#dc2626')).join(''), '#fecaca', '#fef2f2');
-    }
-    if (excessos.length) {
-      html += `<div style="font-size:12px;font-weight:700;color:#ea580c;margin-bottom:4px">🚨 KM acima em excesso</div>`;
-      html += mkTabela(excessos.map(r => linhaAlerta(r,'#ea580c')).join(''), '#fed7aa', '#fff7ed');
-    }
+    let html = '';
+    if (alertas.length)  html += mkTabela('🔴 KM abaixo do cliente (' + alertas.length + ')', alertas.map(r => linhaR(r,'#dc2626')).join(''), '#dc2626','#fecaca','#fef2f2');
+    if (excessos.length) html += mkTabela('🚨 KM acima em excesso (' + excessos.length + ')', excessos.map(r => linhaR(r,'#ea580c')).join(''), '#ea580c','#fed7aa','#fff7ed');
     if (semSist.length) {
-      html += `<div style="font-size:12px;font-weight:700;color:#7c3aed;margin-bottom:4px">🔍 Só no cliente</div>`;
-      html += mkTabela(semSist.map(r =>
+      const linhasSem = semSist.map(r =>
         `<tr style="border-bottom:1px solid #f1f5f9">
-          <td style="padding:6px 8px;font-family:monospace;font-size:11px;font-weight:700;color:#7c3aed">${r.placa}</td>
-          <td colspan="3" style="padding:6px 8px;font-size:10px;color:#64748b">${r.operacao||'—'} · ${fmtKm(r.kmCliente)} km</td>
-        </tr>`
-      ).join(''), '#ddd6fe', '#f5f3ff');
+          <td style="padding:6px 10px;font-family:monospace;font-size:11px;font-weight:700;color:#7c3aed">${r.placa}</td>
+          <td style="padding:6px 10px;font-size:11px;color:#475569">${r.operacao||'—'}</td>
+          <td colspan="2" style="padding:6px 10px;font-size:11px;color:#64748b">${fmtKm(r.kmCliente)} km</td>
+        </tr>`).join('');
+      html += mkTabela('🔍 Só no cliente (' + semSist.length + ')', linhasSem, '#7c3aed','#ddd6fe','#f5f3ff');
     }
+    if (!html) html = '<div style="font-size:12px;color:#64748b;padding:8px 0">✅ Nenhuma ocorrência neste período.</div>';
     return html;
   };
 
   const html = `<!DOCTYPE html><html><body style="margin:0;padding:20px 0;font-family:Arial,sans-serif;background:#e2e8f0">
-  <table width="720" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;border:1px solid #cbd5e1">
-    <tr><td style="background:linear-gradient(135deg,#7f1d1d,#dc2626);padding:20px 24px">
+  <table width="680" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;border:1px solid #cbd5e1;margin:0 auto">
+    <tr><td style="background:linear-gradient(135deg,#7f1d1d,#dc2626);padding:20px 28px">
       <div style="font-size:18px;font-weight:700;color:#fff">📏 Ignis — Comparativo de Períodos</div>
       <div style="font-size:12px;color:#fca5a5;margin-top:3px">${A.label} × ${B.label}</div>
     </td></tr>
-    <tr><td style="padding:16px 24px">
+
+    <!-- RESUMO LADO A LADO -->
+    <tr><td style="padding:16px 28px 0">
       <table width="100%" cellpadding="0" cellspacing="0">
-        <tr valign="top">
-          <td width="48%" style="padding-right:12px">${buildColuna(A)}</td>
-          <td width="4%" style="border-right:2px solid #e2e8f0"></td>
-          <td width="48%" style="padding-left:12px">${buildColuna(B)}</td>
+        <tr>
+          <td width="50%" style="padding:10px 12px;background:#fef2f2;border-radius:8px;border:1px solid #fecaca">
+            <div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">📅 ${A.label}</div>
+            <div style="font-size:13px;color:#dc2626"><strong>${A.resultados.filter(r=>r.status==='alerta').length}</strong> alertas &nbsp;·&nbsp; <strong>${A.resultados.filter(r=>r.status==='excesso').length}</strong> excessos &nbsp;·&nbsp; <strong>${A.semNoSistema.length}</strong> ausentes</div>
+          </td>
+          <td width="4%"></td>
+          <td width="50%" style="padding:10px 12px;background:#fff7ed;border-radius:8px;border:1px solid #fed7aa">
+            <div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px">📅 ${B.label}</div>
+            <div style="font-size:13px;color:#ea580c"><strong>${B.resultados.filter(r=>r.status==='alerta').length}</strong> alertas &nbsp;·&nbsp; <strong>${B.resultados.filter(r=>r.status==='excesso').length}</strong> excessos &nbsp;·&nbsp; <strong>${B.semNoSistema.length}</strong> ausentes</div>
+          </td>
         </tr>
       </table>
     </td></tr>
-    <tr><td style="background:#f8fafc;padding:12px 24px;border-top:1px solid #e2e8f0;text-align:center;font-size:11px;color:#94a3b8">Gerado pelo Ignis</td></tr>
+
+    <!-- PERÍODO A -->
+    <tr><td style="padding:16px 28px 0">
+      <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:10px 14px;margin-bottom:10px">
+        <div style="font-size:13px;font-weight:700;color:#dc2626">📅 ${A.label}</div>
+      </div>
+      ${buildColuna(A)}
+    </td></tr>
+
+    <!-- DIVISOR -->
+    <tr><td style="padding:16px 28px">
+      <table width="100%" cellpadding="0" cellspacing="0">
+        <tr><td style="border-top:2px dashed #e2e8f0"></td></tr>
+      </table>
+    </td></tr>
+
+    <!-- PERÍODO B -->
+    <tr><td style="padding:0 28px 16px">
+      <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;padding:10px 14px;margin-bottom:10px">
+        <div style="font-size:13px;font-weight:700;color:#ea580c">📅 ${B.label}</div>
+      </div>
+      ${buildColuna(B)}
+    </td></tr>
+
+    <tr><td style="background:#f8fafc;padding:12px 28px;border-top:1px solid #e2e8f0;text-align:center;font-size:11px;color:#94a3b8">Gerado pelo Ignis</td></tr>
   </table></body></html>`;
 
   navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }) })]).then(() => {
@@ -6253,6 +6277,8 @@ function kmGerarEmailDuplo() {
 
 function kmReset() {
   window._kmState = { sistema: null, cliente: null };
+  window._kmHistorico = []; // limpa histórico ao iniciar novo comparativo
+  window._kmResultado = null;
   ['km-box-sistema','km-box-cliente'].forEach(id => document.getElementById(id)?.classList.remove('loaded'));
   ['km-sistema-label','km-cliente-label'].forEach(id => { const el = document.getElementById(id); if (el) { el.style.display = 'none'; el.textContent = ''; } });
   document.getElementById('km-resultado').style.display = 'none';
@@ -6263,6 +6289,9 @@ function kmReset() {
   document.getElementById('km-label').value = '';
   const badge = document.getElementById('kmcomp-nav-badge');
   if (badge) badge.style.display = 'none';
+  // Remove grade de margens dinâmica
+  const margensEl = document.getElementById('km-margem-ops-container');
+  if (margensEl) margensEl.innerHTML = '';
   showToast('Pronto para novo comparativo', 'success');
 }
 
