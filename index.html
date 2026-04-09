@@ -1837,8 +1837,20 @@ async function loginEntrar() {
     }
 
     const u = users[login];
-    if (!u || u.hash !== hash) {
-      mostrarLoginErro('Usuário ou senha incorretos.');
+    if (!Object.keys(users).length) {
+      // Firebase sem usuários — banco foi resetado, pede novo cadastro ADM
+      btn.textContent = 'Entrar'; btn.disabled = false;
+      document.getElementById('login-form').style.display = 'none';
+      document.getElementById('login-setup').style.display = 'block';
+      mostrarLoginErro('Nenhum usuário cadastrado. Crie o ADM Master novamente.');
+      return;
+    }
+    if (!u) {
+      mostrarLoginErro('Usuário não encontrado. Verifique o nome de usuário.');
+      btn.textContent = 'Entrar'; btn.disabled = false; return;
+    }
+    if (u.hash !== hash) {
+      mostrarLoginErro('Senha incorreta.');
       btn.textContent = 'Entrar'; btn.disabled = false; return;
     }
 
