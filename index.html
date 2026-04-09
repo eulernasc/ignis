@@ -3289,15 +3289,20 @@ function salvarMaquina() {
 function importarRelatorio(input) {
   const file=input.files[0]; if(!file) return;
   const nomePeriodo = document.getElementById('import-periodo-nome').value.trim() || `Importação ${new Date().toLocaleDateString('pt-BR')}`;
-  // Gerar ID único baseado no nome (slug simples)
   const periodoId = nomePeriodo.toLowerCase().replace(/[^a-z0-9]/g,'_').replace(/_+/g,'_').substring(0,40) + '_' + Date.now();
   const reader=new FileReader();
   reader.onload=function(e){
     try {
       const wb=XLSX.read(e.target.result,{type:'array', dense: true, cellDates: false});
       const ws=wb.Sheets[wb.SheetNames[0]];
-      const data=XLSX.utils.sheet_to_json(ws,{defval:''});
-      const rows=data.filter(r=>r['Operação']||r['Placa']||r['placa']);
+
+      // Lê a planilha por posição de coluna (ignorando as 8 primeiras linhas de cabeçalho/logo)
+      // Col A=0:Operação, B=1:Gestor, C=2:Placa, D=3:Modelo, E=4:Tipo
+      // F=5:Km Ideal, G=6:Km Real, H=7:Var.Km, I=8:Vol.Ideal, J=9:Vol.Real
+      // K=10:Var.Vol, L=11:Vol.Telem, M=12:Média Ideal, N=13:Média Real, O=14:Eficiência
+      const rawData = XLSX.utils.sheet_to_json(ws, {header:1, defval:'', raw:true});
+      // Pula as 8 primeiras linhas + linha de cabeçalho (linha 9 = índice 8) → dados a partir do índice 9
+      const dataRows = rawData.slice(9);
 
       // Remove registros antigos se já existe período com mesmo nome (reimportação)
       const periodoExistente = Object.entries(state.semanas).find(([,p])=>p.label===nomePeriodo);
@@ -3309,15 +3314,21 @@ function importarRelatorio(input) {
       }
 
       let novaMaq=0,metaAtualizada=0,dadosSemana=[];
-      rows.forEach(row=>{
-        const placa=String(row['Placa']||row['placa']||'').trim().toUpperCase();
-        const operacao=String(row['Operação']||row['operacao']||'').trim();
-        const modelo=String(row['Modelo']||row['modelo']||'').trim();
-        const tipo=String(row['Tipo']||row['tipo']||'').trim();
-        const kmReal=parseFloat(row['Km Real']||row['km_real']||0);
-        const volReal=parseFloat(row['Vol. Real']||row['vol_real']||0);
-        const mediaIdeal=parseFloat(row['Média Ideal']||row['Media Ideal']||row['média ideal']||row['media_ideal']||0);
-        if(!placa||!placa.match(/[A-Z]{2,}/)) return;
+      let ignoradas=0;
+      dataRows.forEach(row=>{
+        // Lê por índice de coluna fixo
+        const operacao = String(row[0]||'').trim();   // Coluna A
+        const placa    = String(row[2]||'').trim().toUpperCase(); // Coluna C
+        const modelo   = String(row[3]||'').trim();   // Coluna D
+        const tipo     = String(row[4]||'').trim();   // Coluna E
+        const kmReal   = parseFloat(row[6])||0;       // Coluna G — Km Real
+        const volReal  = parseFloat(row[9])||0;       // Coluna J — Vol. Real
+        const mediaIdeal = parseFloat(row[12])||0;    // Coluna M — Média Ideal
+        // Coluna N (Média Real) e O (Eficiência) lidos mas não usados como filtro
+
+        // Aceita APENAS placas MAQ, TRA ou EMP
+        if(!placa || !placa.match(/^(MAQ|TRA|EMP)/i)) { if(placa) ignoradas++; return; }
+
         const maqExistente=state.maquinas.find(m=>m.placa===placa);
         if(!maqExistente){
           state.maquinas.push({placa,modelo,tipo,operacao,status:'Ativa',meta:mediaIdeal||0});
@@ -3327,9 +3338,8 @@ function importarRelatorio(input) {
           metaAtualizada++;
         }
         if(volReal>0&&kmReal>0){
-          // Usa a data de referência do período (início) em vez da data de importação
           const dataRef = document.getElementById('import-data-ini')?.value || new Date().toISOString().split('T')[0];
-          const entry={placa,data:dataRef,litros:volReal,horas:kmReal,operador:row['Gestor']||'',operacao,modelo,tipo,periodoId};
+          const entry={placa,data:dataRef,litros:volReal,horas:kmReal,operador:'',operacao,modelo,tipo,periodoId};
           dadosSemana.push(entry);
           state.abastecimentos.push(entry);
         }
@@ -3354,6 +3364,7 @@ function importarRelatorio(input) {
           <div style="font-size:15px;font-weight:600;color:var(--green);margin-bottom:8px">✅ "${nomePeriodo}" importado!</div>
           <div style="font-size:13px;color:var(--text2)">🚜 ${novaMaq} nova(s) máquina(s) · ⛽ ${dadosSemana.length} registro(s)</div>
           ${metaAtualizada>0?`<div style="font-size:13px;color:var(--yellow);margin-top:4px">🎯 ${metaAtualizada} meta(s) L/h atualizada(s)</div>`:''}
+          ${ignoradas>0?`<div style="font-size:12px;color:var(--text3);margin-top:4px">⏭ ${ignoradas} linha(s) ignorada(s) (não são MAQ/TRA/EMP)</div>`:''}
           <div style="font-size:12px;color:var(--accent);margin-top:8px">📊 Acesse o Comparativo para analisar os períodos!</div>
         </div>`;
       updateFilters(); renderDashboard();
