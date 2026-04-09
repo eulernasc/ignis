@@ -1220,7 +1220,7 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
           <span style="font-size:16px">⚠️</span>
           <span style="font-size:13px;font-weight:700;color:var(--yellow)">Atenção — margem apertada</span>
         </div>
-        <div style="font-size:12px;color:var(--text2);margin-bottom:10px">Nosso KM está acima do cliente, mas a folga é pequena. Serve como aviso antes de virar problema.</div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:10px">KM O2P está acima do Produtivo, mas a folga é pequena. Serve como aviso antes de virar problema.</div>
         <div style="display:flex;align-items:center;gap:8px">
           <span style="font-size:12px;color:var(--text2)">Zona até:</span>
           <input type="number" id="km-margem-atencao" value="5" min="0" max="50" step="0.5"
@@ -1239,7 +1239,7 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
           <span style="font-size:12px;color:var(--text2)">Acima de:</span>
           <input type="number" id="km-margem-excesso" value="0" min="0" max="99999" step="10"
             style="width:80px;background:var(--bg3);border:1px solid var(--border);color:var(--text);padding:5px 8px;border-radius:6px;font-size:13px;text-align:center;font-family:monospace">
-          <span style="font-size:12px;color:var(--text2)">km acima do cliente</span>
+          <span style="font-size:12px;color:var(--text2)">km acima do Produtivo</span>
         </div>
         <div style="font-size:11px;color:var(--text3);margin-top:6px">💡 Limite global. Use o campo por operação abaixo para definir por cliente. 0 = desativado.</div>
       </div>
@@ -1250,7 +1250,7 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
 
       <!-- Nosso sistema -->
       <div>
-        <div style="font-size:13px;font-weight:700;margin-bottom:10px;color:var(--accent)">📂 Nosso Sistema</div>
+        <div style="font-size:13px;font-weight:700;margin-bottom:10px;color:var(--accent)">📂 KM O2P (Nosso Sistema)</div>
         <div class="km-upload-box" id="km-box-sistema" onclick="document.getElementById('km-file-sistema').click()">
           <div style="font-size:28px;margin-bottom:8px">🗂️</div>
           <div style="font-size:14px;font-weight:600;margin-bottom:4px">Carregar relatório do sistema</div>
@@ -1262,7 +1262,7 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
 
       <!-- Cliente -->
       <div>
-        <div style="font-size:13px;font-weight:700;margin-bottom:10px;color:var(--accent2)">📋 Planilha do Cliente</div>
+        <div style="font-size:13px;font-weight:700;margin-bottom:10px;color:var(--accent2)">📋 KM Produtivo (Cliente)</div>
         <div class="km-upload-box" id="km-box-cliente" onclick="document.getElementById('km-file-cliente').click()">
           <div style="font-size:28px;margin-bottom:8px">📊</div>
           <div style="font-size:14px;font-weight:600;margin-bottom:4px">Carregar planilha padrão do cliente</div>
@@ -6042,7 +6042,7 @@ function kmMostrarMargensOps() {
   const existing = window._kmState.margensOp || {};
   let html = '<div style="background:var(--bg2);border:1px solid rgba(245,158,11,.4);border-radius:12px;padding:16px 20px;margin-bottom:16px">';
   html += '<div style="font-size:14px;font-weight:700;margin-bottom:4px">⚙️ Margem por Operação</div>';
-  html += '<div style="font-size:12px;color:var(--text2);margin-bottom:14px">' + ops.size + ' operação(ões) identificada(s). Mínima = alerta se abaixo · Atenção = zona intermediária · Excesso = limite absoluto de KM acima do cliente.</div>';
+  html += '<div style="font-size:12px;color:var(--text2);margin-bottom:14px">' + ops.size + ' operação(ões) identificada(s). Mínima = alerta se abaixo · Atenção = zona intermediária · Excesso = limite absoluto de KM acima do Produtivo.</div>';
   html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:10px">';
   [...ops].sort().forEach(op => {
     const prev = existing[op] || { min: 0, atencao: 5, excesso: 0 };
@@ -6162,7 +6162,7 @@ function kmBaixarModeloCliente() {
     ['GHI7F89', 1540.0, 'SUZANO ARACRUZ'],
   ]);
   ws['!cols'] = [{ wch: 15 }, { wch: 18 }, { wch: 28 }];
-  XLSX.utils.book_append_sheet(wb, ws, 'KM Cliente');
+  XLSX.utils.book_append_sheet(wb, ws, 'KM Produtivo');
   XLSX.writeFile(wb, 'modelo_km_cliente.xlsx');
   showToast('Modelo baixado!', 'success');
 }
@@ -6269,8 +6269,8 @@ function kmComparar() {
   html += kpiExec('📅 Comparativo', label, new Date().toLocaleDateString('pt-BR'), '#8b90a7');
   html += kpiExec('✅ OK', ok.length + '', 'dentro dos limites', 'var(--green)');
   const opsComMargem = Object.keys(margensOp).length; html += kpiExec('⚠️ Atenção', atencao.length + '', opsComMargem ? 'margem por operação configurada' : 'margem baixa (' + margemMinGlobal + '–' + margemAtencaoGlobal + '%)', 'var(--yellow)');
-  html += kpiExec('🔴 Alerta', alertas.length + '', 'KM abaixo do cliente', 'var(--red)');
-  html += kpiExec('🚨 Excesso', excessos.length + '', 'KM muito acima do cliente', excessos.length > 0 ? 'var(--red)' : 'var(--text3)');
+  html += kpiExec('🔴 Alerta', alertas.length + '', 'KM O2P abaixo do Produtivo', 'var(--red)');
+  html += kpiExec('🚨 Excesso', excessos.length + '', 'KM O2P muito acima do Produtivo', excessos.length > 0 ? 'var(--red)' : 'var(--text3)');
   html += kpiExec('🔍 Sem Correspondência', (semNoSistema.length + semNoCliente.length) + '', semNoSistema.length + ' só no cliente · ' + semNoCliente.length + ' só no sistema', 'var(--accent2)');
   html += '</div>';
 
@@ -6311,7 +6311,7 @@ function kmComparar() {
   html += '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:16px">';
   html += '<div style="padding:14px 20px;border-bottom:1px solid var(--border);font-size:15px;font-weight:700">📍 Resumo por Operação</div>';
   html += '<div style="overflow-x:auto"><table><thead><tr>';
-  html += '<th>Operação</th><th style="text-align:center">Placas</th><th style="text-align:center">KM Sistema</th><th style="text-align:center">KM Cliente</th><th style="text-align:center">Diferença Total</th><th style="text-align:center">🔴 Alerta</th><th style="text-align:center">⚠️ Atenção</th><th style="text-align:center">✅ OK</th>';
+  html += '<th>Operação</th><th style="text-align:center">Placas</th><th style="text-align:center">KM O2P</th><th style="text-align:center">KM Produtivo</th><th style="text-align:center">Diferença Total</th><th style="text-align:center">🔴 Alerta</th><th style="text-align:center">⚠️ Atenção</th><th style="text-align:center">✅ OK</th>';
   html += '</tr></thead><tbody>';
   Object.entries(byOpResumo).sort((a,b) => (b[1].alertas - a[1].alertas) || a[0].localeCompare(b[0])).forEach(([op, d]) => {
     const diff = d.kmS - d.kmC;
@@ -6348,7 +6348,7 @@ function kmComparar() {
   html += '</div></div>';
 
   html += '<div style="overflow-x:auto"><table id="km-tabela"><thead><tr>';
-  html += '<th>Placa</th><th>Operação</th><th style="text-align:center">KM Sistema</th><th style="text-align:center">KM Cliente</th><th style="text-align:center">Diferença</th><th style="text-align:center">Variação %</th><th style="text-align:center">Status</th>';
+  html += '<th>Placa</th><th>Operação</th><th style="text-align:center">KM O2P</th><th style="text-align:center">KM Produtivo</th><th style="text-align:center">Diferença</th><th style="text-align:center">Variação %</th><th style="text-align:center">Status</th>';
   html += '</tr></thead><tbody id="km-tbody">';
 
   resultados.forEach(r => {
@@ -6494,8 +6494,8 @@ function kmExportarExcel() {
     <tr>
       <td style="${S.thBase}width:90px">Placa</td>
       <td style="${S.thBase}">Operação</td>
-      <td style="${S.thBase}width:110px">KM Sistema</td>
-      <td style="${S.thBase}width:110px">KM Cliente</td>
+      <td style="${S.thBase}width:110px">KM O2P</td>
+      <td style="${S.thBase}width:110px">KM Produtivo</td>
       <td style="${S.thBase}width:90px">Diferença</td>
       <td style="${S.thBase}width:75px">Var. %</td>
       <td style="${S.thBase}width:90px">Status</td>
@@ -6553,7 +6553,7 @@ function kmExportarExcel() {
   <tr><td colspan="7" style="padding:4px"></td></tr>
 
   <!-- Seções por status (sem duplicação — cada placa aparece uma vez) -->
-  ${mkSecao(alertas,  'Alertas — KM abaixo do cliente', '#991B1B')}
+  ${mkSecao(alertas,  'Alertas — KM O2P abaixo do Produtivo', '#991B1B')}
   ${mkSecao(excessos, 'Excessos — KM muito acima',      '#9A3412')}
   ${mkSecao(atencao,  'Atenção — margem apertada',       '#854D0E')}
   ${mkSecao(ok,       'OK',                              '#166534')}
@@ -6735,8 +6735,8 @@ function kmCopiarEmail() {
     '<thead><tr style="background:#fef2f2">' +
     '<th style="padding:9px 14px;text-align:left;font-size:11px;color:#64748b;text-transform:uppercase">Placa</th>' +
     '<th style="padding:9px 14px;text-align:left;font-size:11px;color:#64748b;text-transform:uppercase">Operação</th>' +
-    '<th style="padding:9px 14px;text-align:center;font-size:11px;color:#2563eb;text-transform:uppercase">KM Sistema</th>' +
-    '<th style="padding:9px 14px;text-align:center;font-size:11px;color:#7c3aed;text-transform:uppercase">KM Cliente</th>' +
+    '<th style="padding:9px 14px;text-align:center;font-size:11px;color:#2563eb;text-transform:uppercase">KM O2P</th>' +
+    '<th style="padding:9px 14px;text-align:center;font-size:11px;color:#7c3aed;text-transform:uppercase">KM Produtivo</th>' +
     '<th style="padding:9px 14px;text-align:center;font-size:11px;color:#64748b;text-transform:uppercase">Diferença</th>' +
     '<th style="padding:9px 14px;text-align:center;font-size:11px;color:#64748b;text-transform:uppercase">Variação</th>' +
     '</tr></thead><tbody>' + linhas + '</tbody></table>';
@@ -6761,24 +6761,26 @@ function kmCopiarEmail() {
 
   // Resumo no banner
   const partes = [];
-  if (alertas.length)   partes.push('<strong>' + alertas.length + ' placa(s)</strong> com KM abaixo do cliente');
-  if (excessos.length)  partes.push('<strong>' + excessos.length + ' placa(s)</strong> com KM excessivamente acima do cliente');
+  if (alertas.length)   partes.push('<strong>' + alertas.length + ' placa(s)</strong> com KM O2P abaixo do Produtivo');
+  if (excessos.length)  partes.push('<strong>' + excessos.length + ' placa(s)</strong> com KM O2P excessivamente acima do Produtivo');
   if (semNoSistema.length) partes.push('<strong>' + semNoSistema.length + ' placa(s)</strong> ausentes no sistema');
 
+  const _dataGeracao = new Date().toLocaleDateString('pt-BR', {day:'2-digit',month:'long',year:'numeric'});
   const html = '<!DOCTYPE html><html><body style="margin:0;padding:20px 0;font-family:Arial,sans-serif;background:#e2e8f0">' +
     '<table width="680" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;border:1px solid #cbd5e1">' +
-    '<tr><td style="background:linear-gradient(135deg,#7f1d1d,#dc2626);padding:24px 28px">' +
-    '<div style="font-size:20px;font-weight:700;color:#fff">📏 Ignis — Alerta KM</div>' +
-    '<div style="font-size:13px;color:#fca5a5;margin-top:4px">Comparativo KM Sistema × KM Produtivo Cliente · ' + label + '</div>' +
+    '<tr><td style="background:linear-gradient(135deg,#7f1d1d,#dc2626);padding:28px 28px;text-align:center">' +
+    '<div style="font-size:22px;font-weight:800;color:#fff;letter-spacing:1px">Ignis — Alerta KM</div>' +
+    '<div style="font-size:14px;color:#fca5a5;margin-top:6px;font-weight:600">' + label + '</div>' +
+    '<div style="font-size:12px;color:rgba(255,255,255,0.7);margin-top:4px">Comparativo KM O2P × KM Produtivo · Gerado em ' + _dataGeracao + '</div>' +
     '</td></tr>' +
     '<tr><td style="background:#fef2f2;padding:14px 28px;border-bottom:1px solid #fecaca;font-size:13px;color:#dc2626">' +
     '⚠️ ' + partes.join(' · ') +
     '</td></tr>' +
     (alertas.length ? '<tr><td style="padding:20px 28px 8px">' +
-    '<div style="font-size:14px;font-weight:700;color:#dc2626;margin-bottom:12px">🔴 Placas com KM abaixo do cliente</div>' +
+    '<div style="font-size:14px;font-weight:700;color:#dc2626;margin-bottom:12px">🔴 Placas com KM O2P abaixo do Produtivo</div>' +
     tabelaColunas(linhasAlertas) + '</td></tr>' : '') +
     (excessos.length ? '<tr><td style="padding:16px 28px 8px">' +
-    '<div style="font-size:14px;font-weight:700;color:#ea580c;margin-bottom:12px">🚨 Placas com KM excessivamente acima do cliente</div>' +
+    '<div style="font-size:14px;font-weight:700;color:#ea580c;margin-bottom:12px">🚨 Placas com KM O2P excessivamente acima do Produtivo</div>' +
     tabelaColunas(linhasExcessos) + '</td></tr>' : '') +
     (semNoSistema.length ? '<tr><td style="padding:16px 28px 8px">' +
     '<div style="font-size:14px;font-weight:700;color:#7c3aed;margin-bottom:10px">🔍 Placas sem correspondência no sistema</div>' +
@@ -6842,7 +6844,7 @@ function kmGerarEmailDuplo() {
       </tr>`;
 
     let html = '';
-    if (alertas.length)  html += mkTabela('🔴 KM abaixo do cliente (' + alertas.length + ')', alertas.map(r => linhaR(r,'#dc2626')).join(''), '#dc2626','#fecaca','#fef2f2');
+    if (alertas.length)  html += mkTabela('🔴 KM O2P abaixo do Produtivo (' + alertas.length + ')', alertas.map(r => linhaR(r,'#dc2626')).join(''), '#dc2626','#fecaca','#fef2f2');
     if (excessos.length) html += mkTabela('🚨 KM acima em excesso (' + excessos.length + ')', excessos.map(r => linhaR(r,'#ea580c')).join(''), '#ea580c','#fed7aa','#fff7ed');
     if (semSist.length) {
       const linhasSem = semSist.map(r =>
