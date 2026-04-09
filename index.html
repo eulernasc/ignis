@@ -609,7 +609,7 @@ body{overflow-x:hidden;}
             <div id="op-checkboxes"></div>
           </div>
         </div>
-        <select class="filter-select" id="dash-maq-filter" onchange="renderDashboard()"><option value="">Todas as Máquinas</option></select>
+        <select class="filter-select" id="dash-maq-filter" onchange="updateFilters();renderDashboard()"><option value="">Todas as Máquinas</option></select>
         <div class="tab-group">
           <button class="tab-btn active" id="tab-semanal" onclick="setTab('semanal')">Semanal</button>
           <button class="tab-btn" id="tab-mensal" onclick="setTab('mensal')">Mensal</button>
@@ -2104,21 +2104,43 @@ function getMaquina(placa) { return state.maquinas.find(m=>m.placa===placa); }
 
 function updateFilters() {
   const ops=getOperacoes();
+
+  // Filtra operações conforme o filtro de máquina selecionado no dashboard
+  const maqFiltro = document.getElementById('dash-maq-filter')?.value || '';
+  const getOpsParaFiltro = () => {
+    if (!maqFiltro) return ops; // Consolidado — todas as ops
+    const prefixo = maqFiltro === '__tratores__' ? 'TRA'
+                  : maqFiltro === '__maquinas__' ? 'MAQ'
+                  : maqFiltro === '__empilhadeiras__' ? 'EMP'
+                  : null;
+    if (!prefixo) {
+      // Placa individual — retorna só a operação daquela placa
+      const maq = getMaquina(maqFiltro);
+      return maq?.operacao ? [maq.operacao] : ops;
+    }
+    const placasDoPrefixo = new Set(
+      state.maquinas.filter(m => m.placa?.toUpperCase().startsWith(prefixo)).map(m => m.operacao).filter(Boolean)
+    );
+    return ops.filter(o => placasDoPrefixo.has(o));
+  };
+  const opsFiltradas = getOpsParaFiltro();
+
   // Multi-select operações do dashboard
   const cb=document.getElementById('op-checkboxes');
   if(cb){
     const selected=getSelectedOps();
-    cb.innerHTML=ops.map(o=>`
+    cb.innerHTML=opsFiltradas.map(o=>`
       <label style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:13px">
-        <input type="checkbox" class="op-check" value="${o}" ${selected.has(o)?'checked':''} onchange="onOpCheckChange()">
+        <input type="checkbox" class="op-check" value="${o}" ${selected.size===0||selected.has(o)?'checked':''} onchange="onOpCheckChange()">
         ${o.replace(/_/g,' ')}
       </label>`).join('');
     // Sincroniza o "Todas" checkbox
     const allCheck=document.getElementById('op-all-check');
     if(allCheck){
-      const total=ops.length, nChecked=selected.size;
-      allCheck.checked=nChecked===total;
-      allCheck.indeterminate=nChecked>0&&nChecked<total;
+      const checks=document.querySelectorAll('.op-check');
+      const checked=document.querySelectorAll('.op-check:checked');
+      allCheck.checked=checks.length===checked.length;
+      allCheck.indeterminate=checked.length>0&&checked.length<checks.length;
     }
   }
   // Filtro operação único nos outros lugares
