@@ -1587,7 +1587,13 @@ async function syncFromFirebase() {
     updateSyncStatus('syncing');
     const data = await window.fbLoad();
     if (data && data.abastecimentos) {
-      state = { ...state, ...data };
+      // Preserva _users no cache local se Firebase tiver
+      if (data._users && Object.keys(data._users).length) {
+        try { localStorage.setItem('ignis_users_cache', JSON.stringify(data._users)); } catch(e) {}
+      }
+      // Não espalha _users no state (fica só no cache)
+      const { _users, ...rest } = data;
+      state = { ...state, ...rest };
       localStorage.setItem('fueltracker_v3', JSON.stringify(state));
       updateFilters();
       renderDashboard();
@@ -1604,9 +1610,11 @@ async function syncFromFirebase() {
 
 function saveState() {
   localStorage.setItem('fueltracker_v3', JSON.stringify(state));
-  // Salvar no Firebase em background
+  // Salvar no Firebase em background — sempre preserva _users
   if (window.firebaseReady && window.fbSave) {
-    window.fbSave(state).then(ok => {
+    const users = (() => { try { return JSON.parse(localStorage.getItem('ignis_users_cache')||'{}'); } catch(e){ return {}; } })();
+    const dataToSave = Object.keys(users).length ? { ...state, _users: users } : state;
+    window.fbSave(dataToSave).then(ok => {
       if (ok) updateSyncStatus('connected');
       else updateSyncStatus('error');
     });
@@ -1901,8 +1909,18 @@ function authRenderNav() {
 // ── GERENCIAMENTO DE USUÁRIOS ──────────────────────────────────────────────────
 
 async function authCarregarUsuarios() {
-  const data = await window.fbLoad();
-  return data?._users || {};
+  // Usa cache local como fonte primária (populado no login e no sync)
+  const cached = (() => { try { return JSON.parse(localStorage.getItem('ignis_users_cache')||'{}'); } catch(e){ return {}; } })();
+  if (Object.keys(cached).length) return cached;
+  // Fallback: busca direto no Firebase
+  try {
+    const data = await window.fbLoad();
+    const users = data?._users || {};
+    if (Object.keys(users).length) {
+      try { localStorage.setItem('ignis_users_cache', JSON.stringify(users)); } catch(e) {}
+    }
+    return users;
+  } catch(e) { return {}; }
 }
 
 async function authRenderUsuarios() {
