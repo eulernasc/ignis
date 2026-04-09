@@ -490,7 +490,10 @@ body{overflow-x:hidden;}
         <label class="login-label">Usuário</label>
         <input class="login-input" type="text" id="login-user" placeholder="Digite seu usuário" autocomplete="username">
         <label class="login-label">Senha</label>
-        <input class="login-input" type="password" id="login-pass" placeholder="Digite sua senha" autocomplete="current-password" onkeydown="if(event.key==='Enter')loginEntrar()">
+        <div style="position:relative">
+          <input class="login-input" type="password" id="login-pass" placeholder="Digite sua senha" autocomplete="current-password" onkeydown="if(event.key==='Enter')loginEntrar()" style="padding-right:44px">
+          <button type="button" onclick="toggleSenhaLogin()" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:18px;color:var(--text2);padding:0;line-height:1">👁</button>
+        </div>
         <button class="login-btn" onclick="loginEntrar()">Entrar</button>
       </div>
       <!-- Modo: primeiro acesso (cria ADM) -->
@@ -1860,6 +1863,19 @@ function mostrarLoginErro(msg) {
   el.textContent = msg; el.style.display = 'block';
 }
 
+function toggleSenhaLogin() {
+  const input = document.getElementById('login-pass');
+  const btn = input?.nextElementSibling;
+  if (!input) return;
+  if (input.type === 'password') {
+    input.type = 'text';
+    if (btn) btn.textContent = '🙈';
+  } else {
+    input.type = 'password';
+    if (btn) btn.textContent = '👁';
+  }
+}
+
 function loginEntrarApp() {
   document.getElementById('login-screen').style.display = 'none';
   const u = window._authUser;
@@ -2017,9 +2033,11 @@ async function salvarUsuario() {
 
   const existing = users[editId || login] || {};
   const hash = pass ? await sha256(pass) : existing.hash;
+  if (editId && editId !== login) delete users[editId];
   users[login] = { nome: nome||login, hash, role: isAdmin ? 'admin' : 'usuario', perms };
   data._users = users;
   await window.fbSave(data);
+  try { localStorage.setItem('ignis_users_cache', JSON.stringify(users)); } catch(e) {}
   fecharModalUsuario();
   authRenderUsuarios();
   showToast('Usuário salvo com sucesso!', 'success');
@@ -2028,8 +2046,10 @@ async function salvarUsuario() {
 async function confirmarExcluirUsuario(id) {
   if (!confirm(`Excluir o usuário "${id}"? Esta ação não pode ser desfeita.`)) return;
   const data = (await window.fbLoad()) || {};
+  if (!data._users) data._users = {};
   delete data._users[id];
   await window.fbSave(data);
+  try { localStorage.setItem('ignis_users_cache', JSON.stringify(data._users)); } catch(e) {}
   authRenderUsuarios();
   showToast('Usuário excluído.', 'success');
 }
