@@ -5063,13 +5063,30 @@ function arlaEnviarEmailGrupo(grupoId) {
 }
 
 function arlaEnviarEmail() {
-  const dados = window._arlaState.processados.filter(r => r.status === 'FAIL');
-  if (!dados.length) { showToast('Nenhum dado para enviar', 'error'); return; }
-  const html = arlaBuildEmailHTML(dados, 'Geral', '');
+  if (!window._arlaState?.processados?.length) { showToast('Nenhum dado carregado', 'error'); return; }
+
+  // Pega operações selecionadas no filtro
+  const selectedOps = arlaGetSelectedOps(); // Set vazio = todas
+
+  // Filtra só os FAIL das operações selecionadas
+  let dados = window._arlaState.processados.filter(r => r.status === 'FAIL');
+  if (selectedOps.size > 0) {
+    dados = dados.filter(r => selectedOps.has(r.operacao));
+  }
+
+  if (!dados.length) { showToast('Nenhuma máquina abaixo de 5% nas operações selecionadas', 'error'); return; }
+
+  // Nome do grupo para o cabeçalho do e-mail
+  const opsLabel = selectedOps.size === 0
+    ? 'Geral'
+    : [...selectedOps].map(o => o.replace(/_/g,' ')).join(', ');
+
+  const html = arlaBuildEmailHTML(dados, opsLabel, '');
   navigator.clipboard.write([new ClipboardItem({'text/html': new Blob([html], {type:'text/html'})})]).then(() => {
     showToast('✅ Tabela copiada! Cole no e-mail (Ctrl+V)', 'success');
   }).catch(() => showToast('Copie o relatório manualmente', 'error'));
-  const assunto = encodeURIComponent('Ignis — Alerta Controle Arla');
+
+  const assunto = encodeURIComponent('Ignis — Alerta Controle Arla' + (selectedOps.size > 0 ? ' — ' + opsLabel : ''));
   setTimeout(() => window.open('mailto:?subject=' + assunto, '_blank'), 500);
 }
 
