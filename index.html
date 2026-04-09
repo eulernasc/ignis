@@ -460,6 +460,22 @@ body{overflow-x:hidden;}
 .logout-btn{background:none;border:none;color:var(--text3);cursor:pointer;font-size:14px;padding:4px;border-radius:6px;transition:.2s;}
 .logout-btn:hover{color:var(--red);background:rgba(192,57,43,.1);}
 .nav-badge-abs{position:absolute;top:-5px;right:-6px;margin:0 !important;width:15px;height:15px;font-size:9px;}
+
+/* ── VISUAL ENHANCEMENTS ─────────────────────────────────────────── */
+.page{animation:ignis-fadein .25s ease;}
+@keyframes ignis-fadein{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.login-card{animation:ignis-card-in .45s cubic-bezier(.22,.68,0,1.2);}
+@keyframes ignis-card-in{from{opacity:0;transform:scale(.94) translateY(20px)}to{opacity:1;transform:none}}
+@keyframes ignis-kpi-pop{0%{transform:scale(1)}40%{transform:scale(1.13)}100%{transform:scale(1)}}
+.kpi-pop{animation:ignis-kpi-pop .35s ease;}
+table tbody tr{transition:background .15s;}
+table tbody tr:hover td{background:rgba(192,57,43,.07);}
+@keyframes ignis-dot-pulse{0%,100%{box-shadow:0 0 0 0 rgba(42,157,106,.55)}70%{box-shadow:0 0 0 7px rgba(42,157,106,0)}}
+.sync-dot-pulse{animation:ignis-dot-pulse 1.5s infinite;}
+.arla-donut-wrap{display:flex;align-items:center;justify-content:center;gap:20px;padding:12px 0 4px;}
+.arla-donut-legend{display:flex;flex-direction:column;gap:8px;font-size:13px;color:var(--text2);}
+.arla-donut-legend span{display:flex;align-items:center;gap:8px;}
+.arla-donut-legend i{width:11px;height:11px;border-radius:50%;display:inline-block;flex-shrink:0;}
 </style>
 </head>
 <body>
@@ -1058,6 +1074,9 @@ body{overflow-x:hidden;}
           <div class="arla-kpi" style="cursor:pointer;border-color:rgba(34,197,94,.3)" onclick="arlaSetStatusTab('acima',document.getElementById('arla-tab-status-acima'))"><div class="arla-kpi-val" id="arla-kpi-ok" style="color:var(--green)">0</div><div class="arla-kpi-label">Acima de 5% ↗</div></div>
           <div class="arla-kpi"><div class="arla-kpi-val" id="arla-kpi-egr" style="color:var(--text2)">0</div><div class="arla-kpi-label">Ignoradas (EGR)</div></div>
         </div>
+
+        <!-- Donut chart -->
+        <div id="arla-donut-container"></div>
 
         <!-- Tabs de status -->
         <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
@@ -2315,10 +2334,20 @@ function renderDashboard() {
   const totalH=list.reduce((s,a)=>s+(a.horas||0),0);
   const media=totalH>0?totalL/totalH:0;
   const maqAtivas=new Set(list.map(a=>a.placa)).size;
-  document.getElementById('kpi-litros').textContent=totalL.toFixed(0);
-  document.getElementById('kpi-media').textContent=media.toFixed(2);
-  document.getElementById('kpi-horas').textContent=totalH.toFixed(0);
-  document.getElementById('kpi-maquinas').textContent=maqAtivas;
+  const _animKpi = (id, end, dec=0) => {
+    const el = document.getElementById(id); if(!el) return;
+    const from = parseFloat(el.textContent)||0;
+    const diff = end - from; let s = 0; const steps = 28;
+    clearInterval(el._kpiTimer);
+    el._kpiTimer = setInterval(()=>{
+      s++; el.textContent=(from+diff*(s/steps)).toFixed(dec);
+      if(s>=steps){el.textContent=end.toFixed(dec);clearInterval(el._kpiTimer);el.classList.add('kpi-pop');setTimeout(()=>el.classList.remove('kpi-pop'),400);}
+    },14);
+  };
+  _animKpi('kpi-litros',totalL,0);
+  _animKpi('kpi-media',media,2);
+  _animKpi('kpi-horas',totalH,0);
+  _animKpi('kpi-maquinas',maqAtivas,0);
   document.getElementById('kpi-maq-delta').textContent=`${state.maquinas.length} total`;
 
   // Meta ideal média e eficiência
@@ -2638,6 +2667,17 @@ function renderComparativo() {
     const eficIcon = eficP===null?'':eficP>=98?'✅':eficP>=90?'⚠️':'🔴';
     const desvioP = metaP>0&&d.media>0?((d.media-metaP)/metaP*100):null;
 
+    // Sparkline: mostra barras de litros das máquinas no período
+    const sparkVals = d.rows.map(r=>r.litros||0).sort((a,b)=>b-a).slice(0,12);
+    const sparkMax = Math.max(...sparkVals,1);
+    const sparkW = 8, sparkGap = 2, sparkH = 28;
+    const sparkBars = sparkVals.map((v,i)=>{
+      const h = Math.max(2, Math.round(v/sparkMax*sparkH));
+      const color = i===0?'var(--accent)':i<3?'var(--accent2)':'var(--text3)';
+      return `<rect x="${i*(sparkW+sparkGap)}" y="${sparkH-h}" width="${sparkW}" height="${h}" rx="2" fill="${color}" opacity="0.85"/>`;
+    }).join('');
+    const sparkSvgW = sparkVals.length*(sparkW+sparkGap);
+
     html+=`<div class="comp-card">
       <div class="comp-card-title">${d.label}</div>
       <div class="comp-row"><span class="comp-semana">Litros</span><span class="comp-val">${d.totalL.toFixed(0)}L</span>${dL!==null?`<span class="comp-diff ${dL>0?'down':'up'}">${dL>0?'▲':'▼'}${Math.abs(dL).toFixed(1)}%</span>`:''}</div>
@@ -2646,6 +2686,7 @@ function renderComparativo() {
       <div class="comp-row"><span class="comp-semana">Eficiência</span><span class="comp-val" style="color:${eficCor}">${eficP!==null?eficIcon+' '+eficP.toFixed(1)+'%':'—'}</span>${desvioP!==null?`<span class="comp-diff" style="color:${eficCor}">${desvioP>0?'+':''}${desvioP.toFixed(1)}%</span>`:''}</div>
       <div class="comp-row"><span class="comp-semana">Máquinas</span><span class="comp-val">${d.maquinas}</span></div>
       <div class="comp-row"><span class="comp-semana">Horas</span><span class="comp-val">${d.totalH.toFixed(0)}h</span></div>
+      ${sparkVals.length>0?`<div style="margin-top:8px;opacity:.8"><svg width="${sparkSvgW}" height="${sparkH}" viewBox="0 0 ${sparkSvgW} ${sparkH}">${sparkBars}</svg><div style="font-size:9px;color:var(--text3);margin-top:2px">top ${sparkVals.length} máq. por litros</div></div>`:''}
     </div>`;
   });
   html+='</div>';
@@ -3416,7 +3457,7 @@ function updateSyncStatus(status) {
     disconnected:{cls:'',text:'Sem sincronização'}
   };
   const c=configs[status]||configs.disconnected;
-  dot.className='sync-dot'+(c.cls?' '+c.cls:'');
+  dot.className='sync-dot'+(c.cls?' '+c.cls:'')+(status==='syncing'?' sync-dot-pulse':'');
   label.textContent=c.text;
 }
 
@@ -4706,6 +4747,45 @@ function arlaExibirResultado() {
   document.getElementById('arla-kpi-fail').textContent = fail.length;
   document.getElementById('arla-kpi-ok').textContent = ok.length;
   document.getElementById('arla-kpi-egr').textContent = egr.length;
+
+  // Donut chart
+  const donutWrap = document.getElementById('arla-donut-container');
+  if (donutWrap && srcDados.length > 0) {
+    const total = srcDados.length;
+    const pFail = (fail.length/total*100).toFixed(1);
+    const pOk   = (ok.length/total*100).toFixed(1);
+    const pEgr  = (egr.length/total*100).toFixed(1);
+    const semD  = srcDados.filter(r => r.status === 'SEM_DIESEL');
+    const pSem  = (semD.length/total*100).toFixed(1);
+    // SVG donut
+    const r = 48, cx = 60, cy = 60, stroke = 16;
+    const circ = 2 * Math.PI * r;
+    const seg = (pct) => (pct/100) * circ;
+    const segs = [
+      {val:fail.length, color:'#c0392b', label:'Abaixo 5%'},
+      {val:ok.length,   color:'#2a9d6a', label:'OK'},
+      {val:egr.length,  color:'#3b82f6', label:'EGR'},
+      {val:semD.length, color:'#9a8f85', label:'Sem diesel'},
+    ];
+    let offset = 0;
+    const paths = segs.map(s => {
+      const len = seg(s.val/total*100);
+      const d = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${s.color}" stroke-width="${stroke}" stroke-dasharray="${len} ${circ-len}" stroke-dashoffset="${-offset}" transform="rotate(-90 ${cx} ${cy})" style="transition:stroke-dasharray .6s ease"/>`;
+      offset += len; return d;
+    }).join('');
+    donutWrap.innerHTML = `<div class="arla-donut-wrap">
+      <svg width="120" height="120" viewBox="0 0 120 120">
+        <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="var(--bg3)" stroke-width="${stroke}"/>
+        ${paths}
+        <text x="${cx}" y="${cy-6}" text-anchor="middle" fill="var(--text)" font-size="14" font-weight="700">${total}</text>
+        <text x="${cx}" y="${cy+10}" text-anchor="middle" fill="var(--text2)" font-size="9">total</text>
+      </svg>
+      <div class="arla-donut-legend">
+        ${segs.map(s=>`<span><i style="background:${s.color}"></i>${s.label}: <b style="color:var(--text)">${s.val}</b></span>`).join('')}
+      </div>
+    </div>`;
+  }
+
   // Reset status tab to abaixo when loading new data
   window._arlaStatusTab = 'abaixo';
   document.querySelectorAll('.arla-status-tab').forEach(b => { b.style.background='none'; b.style.color='var(--text2)'; b.style.borderColor='var(--border)'; });
