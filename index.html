@@ -1586,13 +1586,23 @@ async function syncFromFirebase() {
   try {
     updateSyncStatus('syncing');
     const data = await window.fbLoad();
-    if (data && data.abastecimentos) {
-      // Preserva _users no cache local se Firebase tiver
-      if (data._users && Object.keys(data._users).length) {
-        try { localStorage.setItem('ignis_users_cache', JSON.stringify(data._users)); } catch(e) {}
-      }
-      // Não espalha _users no state (fica só no cache)
-      const { _users, ...rest } = data;
+    if (!data) { updateSyncStatus('connected'); return; }
+
+    // Preserva _users no cache local se Firebase tiver
+    if (data._users && Object.keys(data._users).length) {
+      try { localStorage.setItem('ignis_users_cache', JSON.stringify(data._users)); } catch(e) {}
+    }
+
+    const { _users, ...rest } = data;
+
+    // Conta registros locais vs Firebase — NUNCA sobrescreve local com menos dados
+    const localAbast  = state.abastecimentos?.length || 0;
+    const remoteAbast = rest.abastecimentos?.length  || 0;
+    const localSem    = Object.keys(state.semanas||{}).length;
+    const remoteSem   = Object.keys(rest.semanas||{}).length;
+
+    if (remoteAbast > localAbast || remoteSem > localSem) {
+      // Firebase tem mais dados — atualiza local
       state = { ...state, ...rest };
       localStorage.setItem('fueltracker_v3', JSON.stringify(state));
       updateFilters();
@@ -1600,6 +1610,10 @@ async function syncFromFirebase() {
       relChecarReincidencia();
       updateSyncStatus('connected');
       showToast('Dados sincronizados do Firebase! ☁️', 'success');
+    } else if (localAbast > remoteAbast || localSem > remoteSem) {
+      // Local tem mais dados — sobe pro Firebase
+      updateSyncStatus('connected');
+      saveState();
     } else {
       updateSyncStatus('connected');
     }
