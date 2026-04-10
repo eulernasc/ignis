@@ -1990,17 +1990,17 @@ function authRenderNav() {
 // ── GERENCIAMENTO DE USUÁRIOS ──────────────────────────────────────────────────
 
 async function authCarregarUsuarios() {
-  // Usa cache local como fonte primária (populado no login e no sync)
-  const cached = (() => { try { return JSON.parse(localStorage.getItem('ignis_users_cache')||'{}'); } catch(e){ return {}; } })();
-  if (Object.keys(cached).length) return cached;
-  // Fallback: busca direto no Firebase
+  // Sempre busca do Firebase para garantir lista atualizada na tela de config
   try {
     const users = await window.fbLoadUsers() || {};
     if (Object.keys(users).length) {
       try { localStorage.setItem('ignis_users_cache', JSON.stringify(users)); } catch(e) {}
     }
     return users;
-  } catch(e) { return {}; }
+  } catch(e) {
+    // Fallback: cache local se Firebase falhar
+    try { return JSON.parse(localStorage.getItem('ignis_users_cache')||'{}'); } catch(e2) { return {}; }
+  }
 }
 
 async function authRenderUsuarios() {
