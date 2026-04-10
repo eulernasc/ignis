@@ -1996,21 +1996,30 @@ function authRenderNav() {
 // ── GERENCIAMENTO DE USUÁRIOS ──────────────────────────────────────────────────
 
 async function authCarregarUsuarios() {
-  // Sempre busca do Firebase para garantir lista atualizada na tela de config
+  // Tenta cache local primeiro (atualizado a cada save) para resposta imediata
+  let cached = {};
+  try { cached = JSON.parse(localStorage.getItem('ignis_users_cache')||'{}'); } catch(e) {}
+  if (Object.keys(cached).length) {
+    // Atualiza do Firebase em background sem bloquear a tela
+    window.fbLoadUsers().then(fb => {
+      if (fb && Object.keys(fb).length) {
+        try { localStorage.setItem('ignis_users_cache', JSON.stringify(fb)); } catch(e) {}
+      }
+    }).catch(()=>{});
+    return cached;
+  }
+  // Cache vazio — busca do Firebase (primeiro acesso)
   try {
     const users = await window.fbLoadUsers() || {};
     if (Object.keys(users).length) {
       try { localStorage.setItem('ignis_users_cache', JSON.stringify(users)); } catch(e) {}
     }
     return users;
-  } catch(e) {
-    // Fallback: cache local se Firebase falhar
-    try { return JSON.parse(localStorage.getItem('ignis_users_cache')||'{}'); } catch(e2) { return {}; }
-  }
+  } catch(e) { return {}; }
 }
 
-async function authRenderUsuarios() {
-  const users = await authCarregarUsuarios();
+async function authRenderUsuarios(usersOverride) {
+  const users = usersOverride || await authCarregarUsuarios();
   const lista = document.getElementById('users-lista');
   if (!lista) return;
   const u = window._authUser;
@@ -2092,7 +2101,7 @@ async function salvarUsuario() {
   users[login] = { nome: nome||login, hash, role: isAdmin ? 'admin' : 'usuario', perms };
   await window.fbSaveUsers(users);
   fecharModalUsuario();
-  authRenderUsuarios();
+  authRenderUsuarios(users);
   showToast('Usuário salvo com sucesso!', 'success');
 }
 
@@ -2101,7 +2110,7 @@ async function confirmarExcluirUsuario(id) {
   const users = await window.fbLoadUsers() || {};
   delete users[id];
   await window.fbSaveUsers(users);
-  authRenderUsuarios();
+  authRenderUsuarios(users);
   showToast('Usuário excluído.', 'success');
 }
 
