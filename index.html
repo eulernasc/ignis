@@ -4021,7 +4021,7 @@ function buildEmailHTML(blocoOps, byOp, labelPeriodo, limite, labelBloco) {
       '<div style="margin-top:10px;font-size:11px;color:#94a3b8">Gerado pelo Ignis · </div>' +
     '</td></tr>' +
 
-    '</table></body></html>';
+    '</table></div></body></html>';
 }
 
 async function enviarBloco(blocoId) {
@@ -5255,7 +5255,7 @@ function arlaBuildEmailHTML(registros, nomeGrupo, mesRef, obs) {
     });
   });
 
-  return '<!DOCTYPE html><html><body style="margin:0;padding:20px 0;font-family:Arial,sans-serif;background:#e2e8f0">' +
+  return '<!DOCTYPE html><html><body style="margin:0;padding:0;font-family:Arial,sans-serif;background:transparent"><div style="clear:both">' +
     '<table width="620" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;border:1px solid #cbd5e1">' +
     '<tr><td style="background:linear-gradient(135deg,#1e3a8a,#1d4ed8);padding:22px 24px">' +
     '<div style="font-size:18px;font-weight:700;color:#fff">🧪 Ignis</div>' +
@@ -6808,7 +6808,7 @@ function kmCopiarEmail() {
 
   const _dataGeracao = new Date().toLocaleDateString('pt-BR', {day:'2-digit',month:'long',year:'numeric'});
   const html = '<!DOCTYPE html><html><body style="margin:0;padding:20px 0;font-family:Arial,sans-serif;background:#e2e8f0">' +
-    '<table width="640" cellpadding="0" cellspacing="0" align="left" style="background:#fff;border-radius:12px;overflow:hidden;border:1px solid #cbd5e1">' +
+    '<table width="640" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;border:1px solid #cbd5e1;margin:0">' +
 
     // Cabeçalho
     '<tr><td style="background:linear-gradient(135deg,#7f1d1d,#dc2626);padding:24px 28px;text-align:center">' +
