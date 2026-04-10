@@ -1787,8 +1787,9 @@ async function loginInit() {
           new Promise(r => window.addEventListener('firebaseReady', r, {once:true})),
           new Promise((_,rej) => setTimeout(()=>rej(),10000))
         ]);
-        const data = await window.fbLoad();
-        if (data?._users && Object.keys(data._users).length) setCached(data._users);
+        // Sincroniza usuários do documento próprio (não mais em `dados`)
+        const fbUsers = await window.fbLoadUsers();
+        if (fbUsers && Object.keys(fbUsers).length) setCached(fbUsers);
       } catch(e) {}
     })();
   }
@@ -1818,16 +1819,14 @@ async function loginCriarAdm() {
     window._authUser = { id: login, ...adm };
     sessionStorage.setItem('ignis_session', JSON.stringify({ id: login, hash }));
 
-    // Salva no Firebase em background
-    (async () => {
-      try {
-        if (!window.firebaseReady) await Promise.race([
-          new Promise(r => window.addEventListener('firebaseReady', r, {once:true})),
-          new Promise((_,rej) => setTimeout(()=>rej(),8000))
-        ]);
-        await window.fbSaveUsers({ [login]: adm });
-      } catch(e) { console.warn('Firebase save ADM (background):', e); }
-    })();
+    // Salva no Firebase (tenta imediato, sem bloquear o login)
+    if (window.firebaseReady) {
+      window.fbSaveUsers({ [login]: adm }).catch(e => console.warn('Firebase save ADM:', e));
+    } else {
+      window.addEventListener('firebaseReady', () => {
+        window.fbSaveUsers({ [login]: adm }).catch(e => console.warn('Firebase save ADM:', e));
+      }, {once:true});
+    }
 
     loginEntrarApp();
   } catch(e) {
@@ -2091,7 +2090,13 @@ async function salvarUsuario() {
   if (!editId && pass.length < 6) { errEl.textContent='Senha deve ter no mínimo 6 caracteres.'; errEl.style.display='block'; return; }
   if (pass && pass !== pass2) { errEl.textContent='As senhas não conferem.'; errEl.style.display='block'; return; }
 
-  const users = await window.fbLoadUsers() || {};
+  // Usa cache como fonte primária — sempre atualizado e não depende de latência do Firestore
+  let users = {};
+  try { users = JSON.parse(localStorage.getItem('ignis_users_cache')||'{}'); } catch(e) {}
+  if (!Object.keys(users).length) {
+    // Cache vazio: tenta Firebase como fallback
+    users = await window.fbLoadUsers() || {};
+  }
 
   if (!editId && users[login]) { errEl.textContent='Este login já existe.'; errEl.style.display='block'; return; }
 
@@ -2107,7 +2112,9 @@ async function salvarUsuario() {
 
 async function confirmarExcluirUsuario(id) {
   if (!confirm(`Excluir o usuário "${id}"? Esta ação não pode ser desfeita.`)) return;
-  const users = await window.fbLoadUsers() || {};
+  let users = {};
+  try { users = JSON.parse(localStorage.getItem('ignis_users_cache')||'{}'); } catch(e) {}
+  if (!Object.keys(users).length) { users = await window.fbLoadUsers() || {}; }
   delete users[id];
   await window.fbSaveUsers(users);
   authRenderUsuarios(users);
