@@ -6800,59 +6800,60 @@ function kmCopiarEmail() {
     '<td colspan="5" style="padding:8px 14px;color:#64748b;font-size:12px">Presente no Produtivo, não encontrada no O2P</td></tr>'
   ).join('');
 
-  // Resumo no banner
-  const partes = [];
-  if (alertas.length)      partes.push('<strong>' + alertas.length + ' placa(s)</strong> com KM O2P abaixo do Produtivo');
-  if (excessos.length)     partes.push('<strong>' + excessos.length + ' placa(s)</strong> com KM O2P excessivamente acima do Produtivo');
-  if (semNoSistema.length) partes.push('<strong>' + semNoSistema.length + ' placa(s)</strong> só no Produtivo (não cruzadas)');
-  if (semNoCliente.length) partes.push('<strong>' + semNoCliente.length + ' placa(s)</strong> só no O2P (não cruzadas)');
-
-  // Aviso de placas não cruzadas
-  const avisoNaoCruzadas = (semNoSistema.length + semNoCliente.length) > 0
-    ? '<tr><td style="background:#fffbeb;padding:12px 28px;border-bottom:1px solid #fde68a;font-size:12px;color:#92400e">' +
-      '⚠️ <strong>' + (semNoSistema.length + semNoCliente.length) + ' placa(s) sem correspondência</strong> foram excluídas dos totais abaixo. ' +
-      (semNoCliente.length ? semNoCliente.length + ' placa(s) só no O2P · ' : '') +
-      (semNoSistema.length ? semNoSistema.length + ' placa(s) só no Produtivo' : '') +
-      '</td></tr>'
-    : '';
-
-  // Card de totais gerais
-  const cardTotais =
-    '<tr><td style="padding:16px 28px 8px">' +
-    '<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:16px 20px;display:table;width:100%;box-sizing:border-box">' +
-    '<div style="font-size:12px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px">Resumo Geral — ' + resultados.length + ' placas cruzadas</div>' +
-    '<table width="100%" cellpadding="0" cellspacing="0">' +
-    '<tr>' +
-    '<td style="width:33%;text-align:center;padding:8px 4px"><div style="font-size:11px;color:#64748b;margin-bottom:4px">KM O2P Total</div><div style="font-size:20px;font-weight:800;color:#2563eb">' + fmtKm(totalO2P) + '</div></td>' +
-    '<td style="width:33%;text-align:center;padding:8px 4px"><div style="font-size:11px;color:#64748b;margin-bottom:4px">KM Produtivo Total</div><div style="font-size:20px;font-weight:800;color:#7c3aed">' + fmtKm(totalProd) + '</div></td>' +
-    '<td style="width:33%;text-align:center;padding:8px 4px"><div style="font-size:11px;color:#64748b;margin-bottom:4px">Diferença Total</div><div style="font-size:20px;font-weight:800;color:' + difColor + '">' + (totalDiff >= 0 ? '+' : '') + fmtKm(totalDiff) + '</div>' +
-    (totalPct !== null ? '<div style="font-size:11px;color:' + difColor + ';margin-top:2px">' + (totalPct >= 0 ? '+' : '') + totalPct.toFixed(1) + '%</div>' : '') +
-    '</td></tr></table></div></td></tr>';
+  // Linha de subtotais compacta
+  const naoCreuzadas = semNoSistema.length + semNoCliente.length;
+  const subInfo = resultados.length + ' placas cruzadas' +
+    (semNoCliente.length ? ' · ' + semNoCliente.length + ' só no O2P' : '') +
+    (semNoSistema.length ? ' · ' + semNoSistema.length + ' só no Produtivo' : '');
 
   const _dataGeracao = new Date().toLocaleDateString('pt-BR', {day:'2-digit',month:'long',year:'numeric'});
   const html = '<!DOCTYPE html><html><body style="margin:0;padding:20px 0;font-family:Arial,sans-serif;background:#e2e8f0">' +
-    '<table width="680" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;border:1px solid #cbd5e1">' +
-    '<tr><td style="background:linear-gradient(135deg,#7f1d1d,#dc2626);padding:28px 28px;text-align:center">' +
-    '<div style="font-size:22px;font-weight:800;color:#fff;letter-spacing:1px">Ignis — Alerta KM</div>' +
-    '<div style="font-size:14px;color:#fca5a5;margin-top:6px;font-weight:600">' + label + '</div>' +
-    '<div style="font-size:12px;color:rgba(255,255,255,0.7);margin-top:4px">Comparativo KM O2P × KM Produtivo · Gerado em ' + _dataGeracao + '</div>' +
+    '<table width="640" cellpadding="0" cellspacing="0" align="center" style="background:#fff;border-radius:12px;overflow:hidden;border:1px solid #cbd5e1">' +
+
+    // Cabeçalho
+    '<tr><td style="background:linear-gradient(135deg,#7f1d1d,#dc2626);padding:24px 28px;text-align:center">' +
+    '<div style="font-size:20px;font-weight:800;color:#fff;letter-spacing:1px">Ignis — Alerta KM</div>' +
+    '<div style="font-size:14px;color:#fca5a5;margin-top:5px;font-weight:600">' + label + '</div>' +
+    '<div style="font-size:11px;color:rgba(255,255,255,0.65);margin-top:3px">Gerado em ' + _dataGeracao + '</div>' +
     '</td></tr>' +
-    '<tr><td style="background:#fef2f2;padding:14px 28px;border-bottom:1px solid #fecaca;font-size:13px;color:#dc2626">' +
-    '⚠️ ' + partes.join(' · ') +
+
+    // Card de totais limpo
+    '<tr><td style="padding:20px 28px 8px">' +
+    '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">' +
+    '<tr>' +
+    '<td style="text-align:center;padding:12px 8px;border-right:1px solid #e2e8f0">' +
+      '<div style="font-size:11px;color:#64748b;margin-bottom:4px">KM O2P</div>' +
+      '<div style="font-size:22px;font-weight:800;color:#2563eb">' + fmtKm(totalO2P) + '</div>' +
+    '</td>' +
+    '<td style="text-align:center;padding:12px 8px;border-right:1px solid #e2e8f0">' +
+      '<div style="font-size:11px;color:#64748b;margin-bottom:4px">KM Produtivo</div>' +
+      '<div style="font-size:22px;font-weight:800;color:#7c3aed">' + fmtKm(totalProd) + '</div>' +
+    '</td>' +
+    '<td style="text-align:center;padding:12px 8px">' +
+      '<div style="font-size:11px;color:#64748b;margin-bottom:4px">Diferença</div>' +
+      '<div style="font-size:22px;font-weight:800;color:' + difColor + '">' + (totalDiff >= 0 ? '+' : '') + fmtKm(totalDiff) + '</div>' +
+      (totalPct !== null ? '<div style="font-size:11px;color:' + difColor + '">' + (totalPct >= 0 ? '+' : '') + totalPct.toFixed(1) + '%</div>' : '') +
+    '</td>' +
+    '</tr></table>' +
+    '<div style="font-size:11px;color:#94a3b8;margin-top:8px;padding-top:8px;border-top:1px solid #f1f5f9">' + subInfo + '</div>' +
     '</td></tr>' +
-    avisoNaoCruzadas +
-    cardTotais +
-    (alertas.length ? '<tr><td style="padding:16px 28px 8px">' +
-    '<div style="font-size:14px;font-weight:700;color:#dc2626;margin-bottom:12px">🔴 Placas com KM O2P abaixo do Produtivo</div>' +
+
+    // Tabelas de alertas
+    (alertas.length ? '<tr><td style="padding:12px 28px 8px">' +
+    '<div style="font-size:13px;font-weight:700;color:#dc2626;margin-bottom:10px">🔴 KM O2P abaixo do Produtivo (' + alertas.length + ')</div>' +
     tabelaColunas(linhasAlertas, alertas) + '</td></tr>' : '') +
-    (excessos.length ? '<tr><td style="padding:16px 28px 8px">' +
-    '<div style="font-size:14px;font-weight:700;color:#ea580c;margin-bottom:12px">🚨 Placas com KM O2P excessivamente acima do Produtivo</div>' +
+
+    (excessos.length ? '<tr><td style="padding:12px 28px 8px">' +
+    '<div style="font-size:13px;font-weight:700;color:#ea580c;margin-bottom:10px">🚨 KM O2P excessivamente acima (' + excessos.length + ')</div>' +
     tabelaColunas(linhasExcessos, excessos) + '</td></tr>' : '') +
-    (semNoSistema.length ? '<tr><td style="padding:16px 28px 8px">' +
-    '<div style="font-size:14px;font-weight:700;color:#7c3aed;margin-bottom:10px">🔍 Placas só no Produtivo (não encontradas no O2P)</div>' +
+
+    (semNoSistema.length ? '<tr><td style="padding:12px 28px 8px">' +
+    '<div style="font-size:13px;font-weight:700;color:#7c3aed;margin-bottom:10px">🔍 Só no Produtivo, não encontradas no O2P (' + semNoSistema.length + ')</div>' +
     '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden">' +
     '<tbody>' + linhasSemSistema + '</tbody></table></td></tr>' : '') +
-    '<tr><td style="background:#f8fafc;padding:14px 28px;border-top:1px solid #e2e8f0;text-align:center;font-size:11px;color:#94a3b8">Gerado pelo Ignis</td></tr>' +
+
+    // Rodapé
+    '<tr><td style="padding:12px 28px;border-top:1px solid #f1f5f9;text-align:center;font-size:11px;color:#94a3b8">Gerado pelo Ignis</td></tr>' +
     '</table></body></html>';
 
   navigator.clipboard.write([new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }) })]).then(() => {
