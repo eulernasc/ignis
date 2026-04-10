@@ -30,30 +30,15 @@ const withTimeout = (promise, ms) => Promise.race([
   new Promise((_, rej) => setTimeout(() => rej(new Error('Firebase timeout '+ms+'ms')), ms))
 ]);
 
+// ── DADOS: documento separado de usuários ────────────────────────
+// fueltracker/dados  → abastecimentos, máquinas, períodos, configs
+// fueltracker/usuarios → SOMENTE usuários (nunca tocado pelo saveState)
+
 window.fbSave = async function(data) {
   try {
-    // SEMPRE preserva _users: lê do Firebase antes de salvar
-    // Isso garante que nunca se perde usuário por race condition ou cache vazio
-    let usersToKeep = data._users || null;
-    if (!usersToKeep || !Object.keys(usersToKeep).length) {
-      try {
-        const snap = await getDoc(doc(db, "fueltracker", "dados"));
-        if (snap.exists()) {
-          const existing = snap.data();
-          if (existing._users && Object.keys(existing._users).length) {
-            usersToKeep = existing._users;
-          }
-        }
-      } catch(e) {}
-    }
-    const dataToSave = usersToKeep && Object.keys(usersToKeep).length
-      ? { ...data, _users: usersToKeep }
-      : data;
-    await withTimeout(setDoc(doc(db, "fueltracker", "dados"), dataToSave), 10000);
-    // Atualiza cache local com os usuários preservados
-    if (usersToKeep && Object.keys(usersToKeep).length) {
-      try { localStorage.setItem('ignis_users_cache', JSON.stringify(usersToKeep)); } catch(e) {}
-    }
+    // Remove _users dos dados — usuários vivem em documento próprio
+    const { _users, ...dadosSemUsuarios } = data;
+    await withTimeout(setDoc(doc(db, "fueltracker", "dados"), dadosSemUsuarios), 10000);
     return true;
   } catch(e) { console.error("Firebase save error:", e); return false; }
 };
@@ -63,6 +48,31 @@ window.fbLoad = async function() {
     const snap = await withTimeout(getDoc(doc(db, "fueltracker", "dados")), 8000);
     return snap.exists() ? snap.data() : null;
   } catch(e) { console.error("Firebase load error:", e); return null; }
+};
+
+// Funções exclusivas para usuários — documento separado e protegido
+window.fbSaveUsers = async function(users) {
+  try {
+    await withTimeout(setDoc(doc(db, "fueltracker", "usuarios"), { _users: users }), 10000);
+    try { localStorage.setItem('ignis_users_cache', JSON.stringify(users)); } catch(e) {}
+    return true;
+  } catch(e) { console.error("Firebase saveUsers error:", e); return false; }
+};
+
+window.fbLoadUsers = async function() {
+  try {
+    const snap = await withTimeout(getDoc(doc(db, "fueltracker", "usuarios")), 8000);
+    if (snap.exists() && snap.data()._users) return snap.data()._users;
+    // Fallback: tenta doc antigo (migração)
+    const snapOld = await withTimeout(getDoc(doc(db, "fueltracker", "dados")), 8000);
+    if (snapOld.exists() && snapOld.data()._users) {
+      const users = snapOld.data()._users;
+      // Migra para o novo documento
+      await window.fbSaveUsers(users);
+      return users;
+    }
+    return null;
+  } catch(e) { console.error("Firebase loadUsers error:", e); return null; }
 };
 
 // Sinaliza pronto apenas após confirmar conexão
@@ -1632,11 +1642,7 @@ async function syncFromFirebase() {
     const data = await window.fbLoad();
     if (!data) { updateSyncStatus('connected'); return; }
 
-    // Preserva _users no cache local se Firebase tiver
-    if (data._users && Object.keys(data._users).length) {
-      try { localStorage.setItem('ignis_users_cache', JSON.stringify(data._users)); } catch(e) {}
-    }
-
+    // _users vivem em documento separado, ignorar se vier aqui
     const { _users, ...rest } = data;
 
     // Conta registros locais vs Firebase — NUNCA sobrescreve local com menos dados
@@ -1741,8 +1747,7 @@ async function loginInit() {
             new Promise((_,rej) => setTimeout(()=>rej(),6000))
           ]);
         }
-        const data = await window.fbLoad();
-        const users = data?._users || {};
+        const users = await window.fbLoadUsers() || {};
         if (Object.keys(users).length) {
           setCached(users);
           // Verifica sessão com dados frescos do Firebase
@@ -1814,9 +1819,7 @@ async function loginCriarAdm() {
           new Promise(r => window.addEventListener('firebaseReady', r, {once:true})),
           new Promise((_,rej) => setTimeout(()=>rej(),8000))
         ]);
-        const data = (await window.fbLoad()) || {};
-        data._users = { [login]: adm };
-        await window.fbSave(data);
+        await window.fbSaveUsers({ [login]: adm });
       } catch(e) { console.warn('Firebase save ADM (background):', e); }
     })();
 
@@ -1866,8 +1869,7 @@ async function loginEntrar() {
           new Promise((_,rej) => setTimeout(()=>rej(new Error('timeout')), 6000))
         ]);
       }
-      const data = await window.fbLoad();
-      users = data?._users || {};
+      users = await window.fbLoadUsers() || {};
       if (Object.keys(users).length) setCached(users);
     } catch(e) {
       if (Object.keys(cached).length) users = cached;
@@ -1993,8 +1995,7 @@ async function authCarregarUsuarios() {
   if (Object.keys(cached).length) return cached;
   // Fallback: busca direto no Firebase
   try {
-    const data = await window.fbLoad();
-    const users = data?._users || {};
+    const users = await window.fbLoadUsers() || {};
     if (Object.keys(users).length) {
       try { localStorage.setItem('ignis_users_cache', JSON.stringify(users)); } catch(e) {}
     }
@@ -2075,8 +2076,7 @@ async function salvarUsuario() {
   if (!editId && pass.length < 6) { errEl.textContent='Senha deve ter no mínimo 6 caracteres.'; errEl.style.display='block'; return; }
   if (pass && pass !== pass2) { errEl.textContent='As senhas não conferem.'; errEl.style.display='block'; return; }
 
-  const data = (await window.fbLoad()) || {};
-  const users = data._users || {};
+  const users = await window.fbLoadUsers() || {};
 
   if (!editId && users[login]) { errEl.textContent='Este login já existe.'; errEl.style.display='block'; return; }
 
@@ -2084,9 +2084,7 @@ async function salvarUsuario() {
   const hash = pass ? await sha256(pass) : existing.hash;
   if (editId && editId !== login) delete users[editId];
   users[login] = { nome: nome||login, hash, role: isAdmin ? 'admin' : 'usuario', perms };
-  data._users = users;
-  await window.fbSave(data);
-  try { localStorage.setItem('ignis_users_cache', JSON.stringify(users)); } catch(e) {}
+  await window.fbSaveUsers(users);
   fecharModalUsuario();
   authRenderUsuarios();
   showToast('Usuário salvo com sucesso!', 'success');
@@ -2094,11 +2092,9 @@ async function salvarUsuario() {
 
 async function confirmarExcluirUsuario(id) {
   if (!confirm(`Excluir o usuário "${id}"? Esta ação não pode ser desfeita.`)) return;
-  const data = (await window.fbLoad()) || {};
-  if (!data._users) data._users = {};
-  delete data._users[id];
-  await window.fbSave(data);
-  try { localStorage.setItem('ignis_users_cache', JSON.stringify(data._users)); } catch(e) {}
+  const users = await window.fbLoadUsers() || {};
+  delete users[id];
+  await window.fbSaveUsers(users);
   authRenderUsuarios();
   showToast('Usuário excluído.', 'success');
 }
