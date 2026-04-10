@@ -32,7 +32,28 @@ const withTimeout = (promise, ms) => Promise.race([
 
 window.fbSave = async function(data) {
   try {
-    await withTimeout(setDoc(doc(db, "fueltracker", "dados"), data), 10000);
+    // SEMPRE preserva _users: lê do Firebase antes de salvar
+    // Isso garante que nunca se perde usuário por race condition ou cache vazio
+    let usersToKeep = data._users || null;
+    if (!usersToKeep || !Object.keys(usersToKeep).length) {
+      try {
+        const snap = await getDoc(doc(db, "fueltracker", "dados"));
+        if (snap.exists()) {
+          const existing = snap.data();
+          if (existing._users && Object.keys(existing._users).length) {
+            usersToKeep = existing._users;
+          }
+        }
+      } catch(e) {}
+    }
+    const dataToSave = usersToKeep && Object.keys(usersToKeep).length
+      ? { ...data, _users: usersToKeep }
+      : data;
+    await withTimeout(setDoc(doc(db, "fueltracker", "dados"), dataToSave), 10000);
+    // Atualiza cache local com os usuários preservados
+    if (usersToKeep && Object.keys(usersToKeep).length) {
+      try { localStorage.setItem('ignis_users_cache', JSON.stringify(usersToKeep)); } catch(e) {}
+    }
     return true;
   } catch(e) { console.error("Firebase save error:", e); return false; }
 };
