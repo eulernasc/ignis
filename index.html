@@ -52,9 +52,10 @@ window.fbLoad = async function() {
 
 // Funções exclusivas para usuários — documento separado e protegido
 window.fbSaveUsers = async function(users) {
+  // Atualiza cache IMEDIATAMENTE — antes mesmo do Firebase responder
+  try { localStorage.setItem('ignis_users_cache', JSON.stringify(users)); } catch(e) {}
   try {
     await withTimeout(setDoc(doc(db, "fueltracker", "usuarios"), { _users: users }), 10000);
-    try { localStorage.setItem('ignis_users_cache', JSON.stringify(users)); } catch(e) {}
     return true;
   } catch(e) { console.error("Firebase saveUsers error:", e); return false; }
 };
@@ -63,14 +64,6 @@ window.fbLoadUsers = async function() {
   try {
     const snap = await withTimeout(getDoc(doc(db, "fueltracker", "usuarios")), 8000);
     if (snap.exists() && snap.data()._users) return snap.data()._users;
-    // Fallback: tenta doc antigo (migração)
-    const snapOld = await withTimeout(getDoc(doc(db, "fueltracker", "dados")), 8000);
-    if (snapOld.exists() && snapOld.data()._users) {
-      const users = snapOld.data()._users;
-      // Migra para o novo documento
-      await window.fbSaveUsers(users);
-      return users;
-    }
     return null;
   } catch(e) { console.error("Firebase loadUsers error:", e); return null; }
 };
@@ -1992,16 +1985,18 @@ function authRenderNav() {
 // ── GERENCIAMENTO DE USUÁRIOS ──────────────────────────────────────────────────
 
 async function authCarregarUsuarios() {
-  // Sempre busca do Firebase para garantir lista atualizada
+  // Cache é a fonte de verdade — atualizado em todo save/delete/login
+  const cached = (() => { try { return JSON.parse(localStorage.getItem('ignis_users_cache')||'{}'); } catch(e){ return {}; } })();
+  if (Object.keys(cached).length) return cached;
+  // Cache vazio = primeiro acesso neste dispositivo → busca Firebase
   try {
     const users = await window.fbLoadUsers() || {};
     if (Object.keys(users).length) {
       try { localStorage.setItem('ignis_users_cache', JSON.stringify(users)); } catch(e) {}
       return users;
     }
-  } catch(e) {}
-  // Firebase falhou — usa cache local como fallback
-  try { return JSON.parse(localStorage.getItem('ignis_users_cache')||'{}'); } catch(e) { return {}; }
+    return {};
+  } catch(e) { return {}; }
 }
 
 async function authRenderUsuarios(usersOverride) {
