@@ -1767,14 +1767,13 @@ async function loginInit() {
             } catch(e) {}
           }
         } else {
-          // Banco vazio → primeiro acesso
+          // Firebase confirmou banco vazio → primeiro acesso
           document.getElementById('login-form').style.display = 'none';
           document.getElementById('login-setup').style.display = 'block';
         }
       } catch(e) {
-        // Firebase falhou e sem cache → mostra setup como fallback
-        document.getElementById('login-form').style.display = 'none';
-        document.getElementById('login-setup').style.display = 'block';
+        // Firebase falhou — NÃO mostra setup. Mantém tela de login normal.
+        console.warn('Firebase indisponível no init:', e);
       }
     })();
   }
@@ -1886,11 +1885,9 @@ async function loginEntrar() {
 
     const u = users[login];
     if (!Object.keys(users).length) {
-      // Firebase sem usuários — banco foi resetado, pede novo cadastro ADM
+      // Firebase sem usuários ou falha — mostra erro, NUNCA abre tela de cadastro
+      mostrarLoginErro('Não foi possível verificar o usuário. Verifique sua conexão e tente novamente.');
       btn.textContent = 'Entrar'; btn.disabled = false;
-      document.getElementById('login-form').style.display = 'none';
-      document.getElementById('login-setup').style.display = 'block';
-      mostrarLoginErro('Nenhum usuário cadastrado. Crie o ADM Master novamente.');
       return;
     }
     if (!u) {
@@ -1995,26 +1992,16 @@ function authRenderNav() {
 // ── GERENCIAMENTO DE USUÁRIOS ──────────────────────────────────────────────────
 
 async function authCarregarUsuarios() {
-  // Tenta cache local primeiro (atualizado a cada save) para resposta imediata
-  let cached = {};
-  try { cached = JSON.parse(localStorage.getItem('ignis_users_cache')||'{}'); } catch(e) {}
-  if (Object.keys(cached).length) {
-    // Atualiza do Firebase em background sem bloquear a tela
-    window.fbLoadUsers().then(fb => {
-      if (fb && Object.keys(fb).length) {
-        try { localStorage.setItem('ignis_users_cache', JSON.stringify(fb)); } catch(e) {}
-      }
-    }).catch(()=>{});
-    return cached;
-  }
-  // Cache vazio — busca do Firebase (primeiro acesso)
+  // Sempre busca do Firebase para garantir lista atualizada
   try {
     const users = await window.fbLoadUsers() || {};
     if (Object.keys(users).length) {
       try { localStorage.setItem('ignis_users_cache', JSON.stringify(users)); } catch(e) {}
+      return users;
     }
-    return users;
-  } catch(e) { return {}; }
+  } catch(e) {}
+  // Firebase falhou — usa cache local como fallback
+  try { return JSON.parse(localStorage.getItem('ignis_users_cache')||'{}'); } catch(e) { return {}; }
 }
 
 async function authRenderUsuarios(usersOverride) {
