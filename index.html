@@ -10,6 +10,7 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getFirestore, doc, setDoc, getDoc, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBdfrSrif-vThP3WqWJF76hhKE7FXGFpL0",
@@ -68,12 +69,16 @@ window.fbLoadUsers = async function() {
   } catch(e) { console.error("Firebase loadUsers error:", e); return null; }
 };
 
-// Sinaliza pronto apenas após confirmar conexão
+// Autentica anonimamente — obrigatório para que as regras do Firestore
+// (allow read, write: if request.auth != null) permitam acesso em qualquer PC
+const auth = getAuth(app);
 try {
-  await withTimeout(getDoc(doc(db, "fueltracker", "dados")), 6000);
+  await signInAnonymously(auth);
+  console.log("Ignis: autenticado anonimamente no Firebase");
 } catch(e) {
-  console.warn("Firebase warm-up falhou, continuando mesmo assim:", e.message);
+  console.warn("Ignis: autenticação anônima falhou:", e.message);
 }
+
 window.firebaseReady = true;
 window.dispatchEvent(new Event('firebaseReady'));
 </script>
