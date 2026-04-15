@@ -1786,7 +1786,13 @@ async function loginInit() {
         ]);
         // Sincroniza usuários do documento próprio (não mais em `dados`)
         const fbUsers = await window.fbLoadUsers();
-        if (fbUsers && Object.keys(fbUsers).length) setCached(fbUsers);
+        if (fbUsers && Object.keys(fbUsers).length) {
+          setCached(fbUsers);
+        } else {
+          // Firebase vazio mas temos usuários locais → sobe para Firebase agora
+          console.log('Ignis: subindo usuários locais para o Firebase...');
+          await window.fbSaveUsers(cachedUsers);
+        }
       } catch(e) {}
     })();
   }
