@@ -3962,8 +3962,15 @@ function buildEmailHTML(blocoOps, byOp, labelPeriodo, limite, labelBloco) {
       const cor = corEfic(m.eficiencia);
       const bg  = i%2===0 ? '#ffffff' : '#f8fafc';
       const isReincidente = window._reincidentesSet && window._reincidentesSet.has(m.placa);
+      const reincSemanas = isReincidente && window._reincidentesMap && window._reincidentesMap[m.placa]
+        ? window._reincidentesMap[m.placa].join(', ')
+        : '';
+      const reincBadge = isReincidente
+        ? ' <span style="background:#fee2e2;color:#dc2626;font-size:10px;padding:2px 5px;border-radius:4px;font-family:Arial;white-space:nowrap">REINCID.</span>' +
+          (reincSemanas ? '<br><span style="font-size:10px;color:#dc2626;font-weight:400">' + reincSemanas + '</span>' : '')
+        : '';
       return '<tr style="background:' + bg + '">' +
-        '<td style="padding:11px 16px;font-weight:700;font-family:monospace;font-size:13px;color:#1e293b;border-bottom:1px solid #e2e8f0">' + m.placa + (isReincidente ? ' <span style="background:#fee2e2;color:#dc2626;font-size:10px;padding:2px 5px;border-radius:4px;font-family:Arial">🔴 REINCID.</span>' : '') + '</td>' +
+        '<td style="padding:11px 16px;font-weight:700;font-family:monospace;font-size:13px;color:#1e293b;border-bottom:1px solid #e2e8f0">' + m.placa + reincBadge + '</td>' +
         '<td style="padding:11px 16px;color:#2563eb;font-weight:600;text-align:center;font-size:13px;border-bottom:1px solid #e2e8f0">' + (m.meta>0?m.meta.toFixed(1)+' L/h':'—') + '</td>' +
         '<td style="padding:11px 16px;font-weight:700;text-align:center;font-size:13px;color:' + cor + ';border-bottom:1px solid #e2e8f0">' + m.mediaReal.toFixed(2) + ' L/h</td>' +
         '<td style="padding:11px 16px;text-align:center;font-size:13px;color:' + cor + ';font-weight:600;border-bottom:1px solid #e2e8f0">+' + m.desvio.toFixed(1) + '%</td>' +
@@ -4042,10 +4049,20 @@ async function enviarBloco(blocoId) {
       const maq = getMaquina(placa); const meta = maq?.meta||0;
       const media = d.h>0?d.l/d.h:0; const efic = meta>0&&media>0?(meta/media)*100:null;
       if(!maqHist[placa]) maqHist[placa]=[];
-      maqHist[placa].push(efic);
+      maqHist[placa].push({ efic, label: p.label || id });
     });
   });
-  window._reincidentesSet = new Set(Object.entries(maqHist).filter(([,hist]) => { const ult=hist.slice(-2); return ult.length>=2&&ult.every(e=>e!==null&&e<limite98); }).map(([placa])=>placa));
+  // Build map: placa -> {semanas: ['Semana 1', 'Semana 2', ...], qtd: N}
+  window._reincidentesMap = {};
+  window._reincidentesSet = new Set();
+  Object.entries(maqHist).forEach(([placa, hist]) => {
+    const ult = hist.slice(-3); // últimos 3 períodos
+    const abaixo = ult.filter(e => e.efic !== null && e.efic < limite98);
+    if (abaixo.length >= 2) {
+      window._reincidentesSet.add(placa);
+      window._reincidentesMap[placa] = abaixo.map(e => e.label);
+    }
+  });
   const bloco = window._relBlocos.find(b => b.id === blocoId);
   if (!bloco) return;
   const destRaw = document.getElementById('rel-email-bloco-' + encodeURIComponent(blocoId))?.value?.trim();
