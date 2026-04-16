@@ -1022,9 +1022,9 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
     <div id="rel-tab-apresentacao" style="display:none">
       <div style="background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:16px">
         <div style="font-size:14px;font-weight:700;margin-bottom:6px">📊 Apresentação Mensal — Máquinas e Tratores</div>
-        <div style="font-size:13px;color:var(--text2);margin-bottom:4px">Gera o PPTX no padrão Expresso Nepomuceno. Dados de Horas/Litros/Operações vêm do Ignis automaticamente. Campos marcados com <strong style="color:var(--accent)">*</strong> são manuais.</div>
+        <div style="font-size:13px;color:var(--text2);margin-bottom:4px">Gera o PPTX no padrão EN. Dados de Horas/Litros vêm do Ignis automaticamente. Campos com <strong style="color:var(--accent)">*</strong> são manuais.</div>
         <div style="font-size:12px;color:var(--yellow);background:rgba(232,148,26,.1);border:1px solid rgba(232,148,26,.3);border-radius:8px;padding:8px 12px;margin-bottom:16px">
-          ⚠️ <strong>Slides 3, 4 e 8</strong> são gerados em branco para preenchimento manual no PowerPoint — esses slides exigem gráficos e dados que não estão disponíveis no Ignis ainda.
+          ⚠️ <strong>Slides 3, 4 e 8</strong> ficam em branco para preenchimento manual no PowerPoint.
         </div>
 
         <div class="form-row" style="margin-bottom:12px">
@@ -1038,10 +1038,10 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
           </div>
           <div class="form-group">
             <label class="form-label">Ano *</label>
-            <input type="number" class="form-input" id="apres-ano" value="2026" min="2020" max="2040">
+            <input type="number" class="form-input" id="apres-ano" value="2026">
           </div>
           <div class="form-group">
-            <label class="form-label">Mês Anterior (comparativo) *</label>
+            <label class="form-label">Mês Anterior *</label>
             <select class="form-input" id="apres-mes-ant">
               <option>Janeiro</option><option>Fevereiro</option><option>Março</option><option>Abril</option>
               <option>Maio</option><option>Junho</option><option>Julho</option><option>Agosto</option>
@@ -1050,7 +1050,19 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
           </div>
         </div>
 
-        <div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">💲 Indicadores Financeiros — Máquinas (Ticket) *</div>
+        <div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">📅 Período Mês Atual (Ignis)</div>
+        <div class="form-row" style="margin-bottom:12px">
+          <div class="form-group"><label class="form-label">Data Inicial</label><input type="date" class="form-input" id="apres-data-ini"></div>
+          <div class="form-group"><label class="form-label">Data Final</label><input type="date" class="form-input" id="apres-data-fim"></div>
+        </div>
+
+        <div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">📅 Período Mês Anterior (Ignis — para comparativo)</div>
+        <div class="form-row" style="margin-bottom:12px">
+          <div class="form-group"><label class="form-label">Data Inicial</label><input type="date" class="form-input" id="apres-data-ant-ini"></div>
+          <div class="form-group"><label class="form-label">Data Final</label><input type="date" class="form-input" id="apres-data-ant-fim"></div>
+        </div>
+
+        <div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">💲 Indicadores Financeiros — Máquinas (Ticket) *</div>
         <div class="form-row" style="margin-bottom:12px">
           <div class="form-group"><label class="form-label">R$/L Máquinas — Atual</label><input type="number" step="0.01" class="form-input" id="apres-rsl-maq" placeholder="5.60"></div>
           <div class="form-group"><label class="form-label">R$/L Máquinas — Anterior</label><input type="number" step="0.01" class="form-input" id="apres-rsl-maq-ant" placeholder="5.53"></div>
@@ -1058,7 +1070,7 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
           <div class="form-group"><label class="form-label">R$/HR Máquinas — Anterior</label><input type="number" step="0.01" class="form-input" id="apres-rshr-maq-ant" placeholder="68.76"></div>
         </div>
 
-        <div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">💲 Indicadores Financeiros — Tratores (Ticket) *</div>
+        <div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">💲 Indicadores Financeiros — Tratores (Ticket) *</div>
         <div class="form-row" style="margin-bottom:12px">
           <div class="form-group"><label class="form-label">R$/L Tratores — Atual</label><input type="number" step="0.01" class="form-input" id="apres-rsl-tra" placeholder="5.63"></div>
           <div class="form-group"><label class="form-label">R$/L Tratores — Anterior</label><input type="number" step="0.01" class="form-input" id="apres-rsl-tra-ant" placeholder="5.62"></div>
@@ -1066,19 +1078,17 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
           <div class="form-group"><label class="form-label">R$/HR Tratores — Anterior</label><input type="number" step="0.01" class="form-input" id="apres-rshr-tra-ant" placeholder="40.85"></div>
         </div>
 
-        <div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">🚗 Totais do Ticket *</div>
+        <div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">🚗 Totais do Ticket *</div>
         <div class="form-row" style="margin-bottom:12px">
-          <div class="form-group"><label class="form-label">Qtd Veículos (Máq+Tra)</label><input type="number" class="form-input" id="apres-veiculos" placeholder="39"></div>
+          <div class="form-group"><label class="form-label">Qtd Veículos</label><input type="number" class="form-input" id="apres-veiculos" placeholder="39"></div>
           <div class="form-group"><label class="form-label">Valor Transacionado (R$)</label><input type="number" step="0.01" class="form-input" id="apres-valor-trans" placeholder="596062"></div>
           <div class="form-group"><label class="form-label">Transações Realizadas</label><input type="number" class="form-input" id="apres-transacoes" placeholder="383"></div>
           <div class="form-group"><label class="form-label">Litros Ticket</label><input type="number" class="form-input" id="apres-litros-ticket" placeholder="107352"></div>
         </div>
 
-        <div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">🌿 CO² e Período dos Dados</div>
-        <div class="form-row" style="margin-bottom:12px">
+        <div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">🌿 CO²</div>
+        <div class="form-row" style="margin-bottom:16px">
           <div class="form-group"><label class="form-label">Emissões CO² Total (ton) *</label><input type="number" step="0.01" class="form-input" id="apres-co2" placeholder="379.8"></div>
-          <div class="form-group"><label class="form-label">Data Inicial (filtro Ignis)</label><input type="date" class="form-input" id="apres-data-ini"></div>
-          <div class="form-group"><label class="form-label">Data Final (filtro Ignis)</label><input type="date" class="form-input" id="apres-data-fim"></div>
         </div>
 
         <button class="btn btn-primary" style="width:100%;padding:13px;font-size:15px" onclick="gerarApresentacao()">📊 Gerar Apresentação .PPTX</button>
@@ -7174,8 +7184,10 @@ async function gerarApresentacao() {
   const mes     = document.getElementById('apres-mes').value;
   const ano     = document.getElementById('apres-ano').value;
   const mesAnt  = document.getElementById('apres-mes-ant').value;
-  const dataIni = document.getElementById('apres-data-ini').value;
-  const dataFim = document.getElementById('apres-data-fim').value;
+  const dataIni    = document.getElementById('apres-data-ini').value;
+  const dataFim    = document.getElementById('apres-data-fim').value;
+  const dataAntIni = document.getElementById('apres-data-ant-ini').value;
+  const dataAntFim = document.getElementById('apres-data-ant-fim').value;
 
   const rslMaq     = parseFloat(document.getElementById('apres-rsl-maq').value)     || 0;
   const rslMaqAnt  = parseFloat(document.getElementById('apres-rsl-maq-ant').value)  || 0;
@@ -7190,169 +7202,175 @@ async function gerarApresentacao() {
   const transacoes = parseInt(document.getElementById('apres-transacoes').value)     || 0;
   const litrosTicket = parseFloat(document.getElementById('apres-litros-ticket').value) || 0;
   const co2Total   = parseFloat(document.getElementById('apres-co2').value)          || 0;
+  // R$/L médio para calcular R$ por operação (média máquinas+tratores)
+  const rslMedio    = rslMaq > 0 ? rslMaq : (rslTra || 0);
+  const rslAntMedio = rslMaqAnt > 0 ? rslMaqAnt : (rslTraAnt || 0);
 
-  // ── Funções de tipo ──────────────────────────────────────────────────────────
-  const getMaquinaObj = (placa) => state.maquinas.find(x => x.placa === placa);
-
-  const isEmpilhadeira = (a) => {
-    const m = getMaquinaObj(a.placa);
-    const t = (m?.tipo || '').toLowerCase();
+  // ── Tipo helpers ────────────────────────────────────────────────────────────
+  const getMaqObj = p => state.maquinas.find(x => x.placa === p);
+  const isEmp = a => {
+    const t = (getMaqObj(a.placa)?.tipo||'').toLowerCase();
     return t.includes('empilh') || (a.placa||'').toUpperCase().startsWith('EMPO');
   };
-
-  const isMaquina = (a) => {
-    if (isEmpilhadeira(a)) return false;
-    const m = getMaquinaObj(a.placa);
-    const t = (m?.tipo || '').toLowerCase();
-    // Tipo explícito definido
-    if (t.includes('maq') || t.includes('máq') || t.includes('machine')) return true;
-    if (t.includes('tra') || t.includes('trat')) return false;
-    // Fallback por prefixo de placa — se não é Trator nem Empilhadeira, é Máquina
+  const isMaq = a => {
+    if(isEmp(a)) return false;
+    const t = (getMaqObj(a.placa)?.tipo||'').toLowerCase();
+    if(t.includes('maq')||t.includes('máq')) return true;
+    if(t.includes('tra')) return false;
     const p = (a.placa||'').toUpperCase();
-    return !p.startsWith('TRA') && !p.startsWith('TRT') && !p.startsWith('T0') && !p.startsWith('T1') && !p.startsWith('T2') && !p.startsWith('T3');
+    return !p.match(/^T(RA|RT|[0-3])/);
+  };
+  const isTra = a => {
+    if(isEmp(a)) return false;
+    const t = (getMaqObj(a.placa)?.tipo||'').toLowerCase();
+    if(t.includes('tra')) return true;
+    if(t.includes('maq')||t.includes('máq')) return false;
+    return !!(a.placa||'').toUpperCase().match(/^T(RA|RT|[0-3])/);
   };
 
-  const isTrator = (a) => {
-    if (isEmpilhadeira(a)) return false;
-    const m = getMaquinaObj(a.placa);
-    const t = (m?.tipo || '').toLowerCase();
-    if (t.includes('tra') || t.includes('trat')) return true;
-    if (t.includes('maq') || t.includes('máq')) return false;
-    const p = (a.placa||'').toUpperCase();
-    return p.startsWith('TRA') || p.startsWith('TRT') || p.startsWith('T0') || p.startsWith('T1') || p.startsWith('T2') || p.startsWith('T3');
+  // ── Filtra e agrupa dados ────────────────────────────────────────────────────
+  const filtrar = (ini, fim) => {
+    let r = state.abastecimentos.filter(a => !isEmp(a));
+    if(ini) r = r.filter(a => a.data >= ini);
+    if(fim) r = r.filter(a => a.data <= fim);
+    return r;
   };
 
-  // ── Filtra abastecimentos ────────────────────────────────────────────────────
-  let abast = [...state.abastecimentos].filter(a => !isEmpilhadeira(a));
-  if (dataIni) abast = abast.filter(a => a.data >= dataIni);
-  if (dataFim) abast = abast.filter(a => a.data <= dataFim);
+  const agruparOps = arr => {
+    const ops = {};
+    arr.forEach(a => {
+      const op = (a.operacao||'').replace(/_/g,' ').trim() || 'Sem Operação';
+      if(!ops[op]) ops[op] = {h:0, l:0};
+      ops[op].h += +a.horas||0;
+      ops[op].l += +a.litros||0;
+    });
+    return ops;
+  };
 
-  const abastMaq = abast.filter(isMaquina);
-  const abastTra = abast.filter(isTrator);
+  const agruparMaq = arr => {
+    const m = {};
+    arr.filter(isMaq).forEach(a => {
+      if(!m[a.placa]) { const x=getMaqObj(a.placa); m[a.placa]={h:0,l:0,modelo:x?.modelo||a.placa}; }
+      m[a.placa].h += +a.horas||0; m[a.placa].l += +a.litros||0;
+    });
+    return m;
+  };
+  const agruparTra = arr => {
+    const m = {};
+    arr.filter(isTra).forEach(a => {
+      if(!m[a.placa]) { const x=getMaqObj(a.placa); m[a.placa]={h:0,l:0,modelo:x?.modelo||a.placa}; }
+      m[a.placa].h += +a.horas||0; m[a.placa].l += +a.litros||0;
+    });
+    return m;
+  };
 
-  const somaH = arr => arr.reduce((s,a) => s+(+a.horas||0), 0);
-  const somaL = arr => arr.reduce((s,a) => s+(+a.litros||0), 0);
+  const abastAtual = filtrar(dataIni, dataFim);
+  const abastAnt   = filtrar(dataAntIni, dataAntFim);
 
-  const hMaq = somaH(abastMaq);  const lMaq = somaL(abastMaq);
-  const hTra = somaH(abastTra);  const lTra = somaL(abastTra);
-  const hTotal = hMaq + hTra;    const lTotal = lMaq + lTra;
-  const mediaLhMaq = hMaq > 0 ? lMaq/hMaq : 0;
-  const mediaLhTra = hTra > 0 ? lTra/hTra : 0;
+  const opsAtual = agruparOps(abastAtual);
+  const opsAnt   = agruparOps(abastAnt);
+  const porMaqAtual = agruparMaq(abastAtual);
+  const porTraAtual = agruparTra(abastAtual);
 
-  // Por operação (sem empilhadeiras)
-  const ops = {};
-  abast.forEach(a => {
-    const op = (a.operacao||'').replace(/_/g,' ').trim() || 'Sem Operação';
-    if (!ops[op]) ops[op] = {h:0, l:0};
-    ops[op].h += +a.horas||0;
-    ops[op].l += +a.litros||0;
-  });
+  const somaH = arr => arr.reduce((s,a)=>s+(+a.horas||0),0);
+  const somaL = arr => arr.reduce((s,a)=>s+(+a.litros||0),0);
+  const hAtual=somaH(abastAtual), lAtual=somaL(abastAtual);
+  const hAnt=somaH(abastAnt),    lAnt=somaL(abastAnt);
+  const hMaq=somaH(abastAtual.filter(isMaq)), lMaq=somaL(abastAtual.filter(isMaq));
+  const hTra=somaH(abastAtual.filter(isTra)), lTra=somaL(abastAtual.filter(isTra));
+  const mediaLhMaq = hMaq>0 ? lMaq/hMaq : 0;
+  const mediaLhTra = hTra>0 ? lTra/hTra : 0;
 
-  // Por máquina individual
-  const porMaq = {}, porTra = {};
-  abastMaq.forEach(a => {
-    if (!porMaq[a.placa]) { const m = getMaquinaObj(a.placa); porMaq[a.placa] = {h:0,l:0,modelo:m?.modelo||a.placa}; }
-    porMaq[a.placa].h += +a.horas||0; porMaq[a.placa].l += +a.litros||0;
-  });
-  abastTra.forEach(a => {
-    if (!porTra[a.placa]) { const m = getMaquinaObj(a.placa); porTra[a.placa] = {h:0,l:0,modelo:m?.modelo||a.placa}; }
-    porTra[a.placa].h += +a.horas||0; porTra[a.placa].l += +a.litros||0;
-  });
-
-  const fmt  = n => (+n).toLocaleString('pt-BR',{maximumFractionDigits:0});
-  const fmtD = n => (+n).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const fmt  = n => (+n||0).toLocaleString('pt-BR',{maximumFractionDigits:0});
+  const fmtD = n => (+n||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
   const fmtR = n => 'R$ '+fmtD(n);
-  const seta = (a,b) => a>=b ? '▲' : '▼';
+  const seta = (a,b) => (+a)>=(+b)?'▲':'▼';
+  const pct  = (a,b) => b!==0 ? (((a-b)/b)*100).toFixed(2)+'%' : '-';
+  const difR = (a,b) => { const d=a-b; return (d>=0?'':'-')+'R$ '+fmtD(Math.abs(d)); };
 
-  // Cores EN
-  const ORA='D45C1A', DRK='1A1A1A', WHT='FFFFFF', GRY='F4F4F4', G2='666666', GRN='2D9E5F', BLU='1A3A5C', RED='C0392B';
+  const ORA='D45C1A', DRK='1A1A1A', WHT='FFFFFF', GRY='F4F4F4', G2='666666', BLU='1A3A5C', GRN='2D9E5F';
 
   try {
     const pptx = new PptxGenJS();
     pptx.layout = 'LAYOUT_WIDE';
 
-    // ── Helper capa ────────────────────────────────────────────────────────────
     const addCover = (slide, titulo, sub) => {
-      slide.addShape(pptx.ShapeType.rect, {x:0,y:0,w:'100%',h:'100%',fill:{color:DRK}});
-      slide.addShape(pptx.ShapeType.rect, {x:9.5,y:0,w:3.83,h:'100%',fill:{color:ORA}});
-      for(let i=0;i<8;i++) slide.addShape(pptx.ShapeType.rect, {x:9.5,y:i*0.95,w:3.83,h:0.47,fill:{color:'C04A10'},line:{color:'C04A10'}});
-      slide.addText('EN', {x:0.5,y:0.4,w:2,h:0.9,fontSize:52,bold:true,color:ORA,fontFace:'Arial Black'});
-      slide.addText('EXPRESSO NEPOMUCENO', {x:0.5,y:1.25,w:7,h:0.35,fontSize:11,color:'888888',charSpacing:3});
-      slide.addShape(pptx.ShapeType.line, {x:0.5,y:1.65,w:7,h:0,line:{color:ORA,width:2}});
-      slide.addText(titulo, {x:0.5,y:2.1,w:8.7,h:1.8,fontSize:36,bold:true,color:WHT,wrap:true});
-      if(sub) slide.addText(sub, {x:0.5,y:4.0,w:7,h:0.5,fontSize:16,color:'BBBBBB'});
-      slide.addText('INDICADORES COMBUSTÍVEL', {x:0.5,y:6.9,w:7,h:0.4,fontSize:9,color:'555555',charSpacing:2});
+      slide.addShape(pptx.ShapeType.rect,{x:0,y:0,w:'100%',h:'100%',fill:{color:DRK}});
+      slide.addShape(pptx.ShapeType.rect,{x:9.5,y:0,w:3.83,h:'100%',fill:{color:ORA}});
+      for(let i=0;i<8;i++) slide.addShape(pptx.ShapeType.rect,{x:9.5,y:i*0.95,w:3.83,h:0.47,fill:{color:'C04A10'},line:{color:'C04A10'}});
+      slide.addText('EN',{x:0.5,y:0.4,w:2,h:0.9,fontSize:52,bold:true,color:ORA,fontFace:'Arial Black'});
+      slide.addText('EXPRESSO NEPOMUCENO',{x:0.5,y:1.25,w:7,h:0.35,fontSize:11,color:'888888',charSpacing:3});
+      slide.addShape(pptx.ShapeType.line,{x:0.5,y:1.65,w:7,h:0,line:{color:ORA,width:2}});
+      slide.addText(titulo,{x:0.5,y:2.1,w:8.7,h:1.8,fontSize:36,bold:true,color:WHT,wrap:true});
+      if(sub) slide.addText(sub,{x:0.5,y:4.0,w:7,h:0.5,fontSize:16,color:'BBBBBB'});
+      slide.addText('INDICADORES COMBUSTÍVEL',{x:0.5,y:6.9,w:7,h:0.4,fontSize:9,color:'555555',charSpacing:2});
     };
 
-    // ── Helper slide conteúdo ──────────────────────────────────────────────────
     const addCS = (titulo, num) => {
       const s = pptx.addSlide();
-      s.addShape(pptx.ShapeType.rect, {x:0,y:0,w:'100%',h:'100%',fill:{color:WHT}});
-      s.addShape(pptx.ShapeType.rect, {x:0,y:0,w:'100%',h:1.0,fill:{color:ORA}});
-      s.addText(titulo, {x:0.4,y:0.12,w:12,h:0.75,fontSize:18,bold:true,color:WHT});
-      s.addText(String(num), {x:12.7,y:0.12,w:0.5,h:0.75,fontSize:18,bold:true,color:WHT,align:'right'});
-      s.addShape(pptx.ShapeType.rect, {x:0,y:1.0,w:'100%',h:0.05,fill:{color:'DDDDDD'}});
-      s.addText('EXPRESSO NEPOMUCENO — INDICADORES COMBUSTÍVEL — '+mes.toUpperCase()+'/'+ano, {x:0.3,y:7.15,w:12,h:0.3,fontSize:7,color:'AAAAAA'});
+      s.addShape(pptx.ShapeType.rect,{x:0,y:0,w:'100%',h:'100%',fill:{color:WHT}});
+      s.addShape(pptx.ShapeType.rect,{x:0,y:0,w:'100%',h:1.0,fill:{color:ORA}});
+      s.addText(titulo,{x:0.4,y:0.12,w:12,h:0.75,fontSize:18,bold:true,color:WHT});
+      s.addText(String(num),{x:12.7,y:0.12,w:0.5,h:0.75,fontSize:18,bold:true,color:WHT,align:'right'});
+      s.addShape(pptx.ShapeType.rect,{x:0,y:1.0,w:'100%',h:0.05,fill:{color:'DDDDDD'}});
+      s.addText('EXPRESSO NEPOMUCENO — INDICADORES COMBUSTÍVEL — '+mes.toUpperCase()+'/'+ano,{x:0.3,y:7.15,w:12,h:0.3,fontSize:7,color:'AAAAAA'});
       return s;
     };
 
-    // ── Helper KPI card ────────────────────────────────────────────────────────
-    const kpi = (s, x, y, w, h, label, val, sub, bg) => {
-      s.addShape(pptx.ShapeType.roundRect, {x,y,w,h,fill:{color:bg||GRY},rectRadius:0.05,line:{color:'DDDDDD',width:1}});
-      s.addText(label, {x,y:y+0.07,w,h:0.28,fontSize:8,color:G2,align:'center',bold:true,charSpacing:1});
-      s.addText(val,   {x,y:y+0.3, w,h:0.55,fontSize:18,bold:true,color:DRK,align:'center'});
-      if(sub) s.addText(sub, {x,y:y+0.8,w,h:0.22,fontSize:8,color:G2,align:'center'});
+    const kpi = (s,x,y,w,h,label,val,sub,bg) => {
+      s.addShape(pptx.ShapeType.roundRect,{x,y,w,h,fill:{color:bg||GRY},rectRadius:0.05,line:{color:'DDDDDD',width:1}});
+      s.addText(label,{x,y:y+0.07,w,h:0.28,fontSize:8,color:G2,align:'center',bold:true,charSpacing:1});
+      s.addText(val,  {x,y:y+0.3, w,h:0.55,fontSize:18,bold:true,color:DRK,align:'center'});
+      if(sub) s.addText(sub,{x,y:y+0.8,w,h:0.22,fontSize:8,color:G2,align:'center'});
     };
 
-    // ── SLIDE 1 — Capa ─────────────────────────────────────────────────────────
-    const s1 = pptx.addSlide();
-    addCover(s1, 'INDICADORES COMBUSTÍVEL', mes.toUpperCase()+' / '+ano);
+    // ── S1 Capa ────────────────────────────────────────────────────────────────
+    const s1 = pptx.addSlide(); addCover(s1,'INDICADORES COMBUSTÍVEL',mes.toUpperCase()+' / '+ano);
 
-    // ── SLIDE 2 — Farol Geral ──────────────────────────────────────────────────
-    const s2 = addCS('FAROL GERAL — MÁQUINAS E TRATORES', 2);
-    s2.addShape(pptx.ShapeType.roundRect, {x:0.4,y:1.15,w:1.5,h:0.28,fill:{color:ORA},rectRadius:0.08});
-    s2.addText('● Máquinas', {x:0.4,y:1.15,w:1.5,h:0.28,fontSize:9,color:WHT,align:'center'});
-    s2.addShape(pptx.ShapeType.roundRect, {x:2.05,y:1.15,w:1.3,h:0.28,fill:{color:BLU},rectRadius:0.08});
-    s2.addText('● Tratores', {x:2.05,y:1.15,w:1.3,h:0.28,fontSize:9,color:WHT,align:'center'});
-    const ky=1.55, kh=1.15;
-    kpi(s2,0.3, ky,2.4,kh,'HORAS TRABALHADAS',fmt(hTotal)+'h','Maq: '+fmt(hMaq)+'  Tra: '+fmt(hTra));
-    kpi(s2,2.85,ky,2.4,kh,'LITROS (IGNIS)',fmt(lTotal)+'L','Ticket: '+fmt(litrosTicket)+'L');
+    // ── S2 Farol Geral ─────────────────────────────────────────────────────────
+    const s2 = addCS('FAROL GERAL — MÁQUINAS E TRATORES',2);
+    s2.addShape(pptx.ShapeType.roundRect,{x:0.4,y:1.15,w:1.5,h:0.28,fill:{color:ORA},rectRadius:0.08});
+    s2.addText('● Máquinas',{x:0.4,y:1.15,w:1.5,h:0.28,fontSize:9,color:WHT,align:'center'});
+    s2.addShape(pptx.ShapeType.roundRect,{x:2.05,y:1.15,w:1.3,h:0.28,fill:{color:BLU},rectRadius:0.08});
+    s2.addText('● Tratores',{x:2.05,y:1.15,w:1.3,h:0.28,fontSize:9,color:WHT,align:'center'});
+    const ky=1.55,kh=1.15;
+    kpi(s2,0.3, ky,2.4,kh,'HORAS TRABALHADAS',fmt(hAtual)+'h','Maq: '+fmt(hMaq)+'  Tra: '+fmt(hTra));
+    kpi(s2,2.85,ky,2.4,kh,'LITROS (IGNIS)',fmt(lAtual)+'L','Ticket: '+fmt(litrosTicket)+'L');
     kpi(s2,5.4, ky,2.4,kh,'VALOR TRANSACIONADO',fmtR(valorTrans),fmt(veiculos)+' veíc · '+fmt(transacoes)+' trans');
     kpi(s2,7.95,ky,2.4,kh,'MÉDIA L/H MAQ',fmtD(mediaLhMaq)+' L/h','Tratores: '+fmtD(mediaLhTra)+' L/h');
-    kpi(s2,10.5,ky,2.5,kh,'R$/L MÁQUINAS',fmtD(rslMaq),seta(rslMaq,rslMaqAnt)+' ant: '+fmtD(rslMaqAnt), rslMaq<=rslMaqAnt?'E8F5E9':'FFEBEE');
+    kpi(s2,10.5,ky,2.5,kh,'R$/L MÁQUINAS',fmtD(rslMaq),seta(rslMaq,rslMaqAnt)+' ant: '+fmtD(rslMaqAnt),rslMaq<=rslMaqAnt?'E8F5E9':'FFEBEE');
     const ky2=2.85;
-    kpi(s2,0.3, ky2,3.1,kh,'R$/HR MÁQUINAS',fmtD(rshrMaq),seta(rshrMaq,rshrMaqAnt)+' ant: '+fmtD(rshrMaqAnt), rshrMaq<=rshrMaqAnt?'E8F5E9':'FFEBEE');
-    kpi(s2,3.55,ky2,3.1,kh,'R$/L TRATORES',fmtD(rslTra),seta(rslTra,rslTraAnt)+' ant: '+fmtD(rslTraAnt), rslTra<=rslTraAnt?'E8F5E9':'FFEBEE');
-    kpi(s2,6.8, ky2,3.1,kh,'R$/HR TRATORES',fmtD(rshrTra),seta(rshrTra,rshrTraAnt)+' ant: '+fmtD(rshrTraAnt), rshrTra<=rshrTraAnt?'E8F5E9':'FFEBEE');
+    kpi(s2,0.3, ky2,3.1,kh,'R$/HR MÁQUINAS',fmtD(rshrMaq),seta(rshrMaq,rshrMaqAnt)+' ant: '+fmtD(rshrMaqAnt),rshrMaq<=rshrMaqAnt?'E8F5E9':'FFEBEE');
+    kpi(s2,3.55,ky2,3.1,kh,'R$/L TRATORES', fmtD(rslTra), seta(rslTra,rslTraAnt)+' ant: '+fmtD(rslTraAnt), rslTra<=rslTraAnt?'E8F5E9':'FFEBEE');
+    kpi(s2,6.8, ky2,3.1,kh,'R$/HR TRATORES',fmtD(rshrTra),seta(rshrTra,rshrTraAnt)+' ant: '+fmtD(rshrTraAnt),rshrTra<=rshrTraAnt?'E8F5E9':'FFEBEE');
     kpi(s2,10.05,ky2,3.0,kh,'CO² TOTAL (ton)',fmtD(co2Total),'Máquinas + Tratores','E8F5E9');
-    s2.addText('Comparativo: '+mesAnt+'/'+ano+' → '+mes+'/'+ano, {x:0.3,y:4.1,w:12,h:0.3,fontSize:9,color:'888888',italic:true});
+    s2.addText('Comparativo: '+mesAnt+'/'+ano+' → '+mes+'/'+ano,{x:0.3,y:4.1,w:12,h:0.3,fontSize:9,color:'888888',italic:true});
 
-    // ── SLIDE 3 — Indicadores Específicos (placeholder) ───────────────────────
-    const s3 = addCS('INDICADORES ESPECÍFICOS | MÁQUINAS E TRATORES', 3);
-    s3.addShape(pptx.ShapeType.rect, {x:0.3,y:1.2,w:12.7,h:5.6,fill:{color:'F9F9F9'},line:{color:'EEEEEE'}});
-    s3.addText('📊  Inserir gráficos de indicadores específicos manualmente', {x:0.3,y:3.6,w:12.7,h:0.8,fontSize:14,color:'AAAAAA',align:'center'});
+    // ── S3 placeholder ─────────────────────────────────────────────────────────
+    const s3=addCS('INDICADORES ESPECÍFICOS | MÁQUINAS E TRATORES',3);
+    s3.addShape(pptx.ShapeType.rect,{x:0.3,y:1.2,w:12.7,h:5.6,fill:{color:'F9F9F9'},line:{color:'EEEEEE'}});
+    s3.addText('📊  Inserir gráficos de indicadores específicos manualmente',{x:0.3,y:3.6,w:12.7,h:0.8,fontSize:14,color:'AAAAAA',align:'center'});
 
-    // ── SLIDE 4 — Calendário de Gastos (placeholder) ──────────────────────────
-    const s4 = addCS('CALENDÁRIO DE GASTOS — MÁQUINAS E TRATORES', 4);
-    s4.addShape(pptx.ShapeType.rect, {x:0.3,y:1.2,w:12.7,h:5.6,fill:{color:'F9F9F9'},line:{color:'EEEEEE'}});
-    s4.addText('📅  Inserir calendário de gastos diários manualmente', {x:0.3,y:3.6,w:12.7,h:0.8,fontSize:14,color:'AAAAAA',align:'center'});
+    // ── S4 placeholder ─────────────────────────────────────────────────────────
+    const s4=addCS('CALENDÁRIO DE GASTOS — MÁQUINAS E TRATORES',4);
+    s4.addShape(pptx.ShapeType.rect,{x:0.3,y:1.2,w:12.7,h:5.6,fill:{color:'F9F9F9'},line:{color:'EEEEEE'}});
+    s4.addText('📅  Inserir calendário de gastos diários manualmente',{x:0.3,y:3.6,w:12.7,h:0.8,fontSize:14,color:'AAAAAA',align:'center'});
 
-    // ── SLIDE 5 — CO² ──────────────────────────────────────────────────────────
-    const s5 = addCS('EMISSÕES DE CO² — MÁQUINAS E TRATORES', 5);
-    s5.addShape(pptx.ShapeType.roundRect, {x:3.5,y:1.8,w:6.3,h:3.8,fill:{color:'E8F5E9'},rectRadius:0.1,line:{color:'C8E6C9'}});
-    s5.addText('🌿', {x:3.5,y:2.0,w:6.3,h:0.8,fontSize:40,align:'center'});
-    s5.addText('Máquinas e Tratores', {x:3.5,y:2.85,w:6.3,h:0.45,fontSize:15,bold:true,color:DRK,align:'center'});
-    s5.addText(fmtD(co2Total)+' toneladas de CO²', {x:3.5,y:3.35,w:6.3,h:0.75,fontSize:32,bold:true,color:GRN,align:'center'});
-    s5.addText('Emissões acumuladas no período de '+mes+'/'+ano, {x:0.3,y:5.55,w:12.7,h:0.4,fontSize:12,color:G2,align:'center',italic:true});
+    // ── S5 CO² ─────────────────────────────────────────────────────────────────
+    const s5=addCS('EMISSÕES DE CO² — MÁQUINAS E TRATORES',5);
+    s5.addShape(pptx.ShapeType.roundRect,{x:3.5,y:1.8,w:6.3,h:3.8,fill:{color:'E8F5E9'},rectRadius:0.1,line:{color:'C8E6C9'}});
+    s5.addText('🌿',{x:3.5,y:2.0,w:6.3,h:0.8,fontSize:40,align:'center'});
+    s5.addText('Máquinas e Tratores',{x:3.5,y:2.85,w:6.3,h:0.45,fontSize:15,bold:true,color:DRK,align:'center'});
+    s5.addText(fmtD(co2Total)+' toneladas de CO²',{x:3.5,y:3.35,w:6.3,h:0.75,fontSize:32,bold:true,color:GRN,align:'center'});
+    s5.addText('Emissões acumuladas — '+mes+'/'+ano,{x:0.3,y:5.55,w:12.7,h:0.4,fontSize:12,color:G2,align:'center',italic:true});
 
-    // ── SLIDE 6 — Horas/Litros/Média MÁQUINAS ─────────────────────────────────
-    const s6 = addCS('HORAS / LITROS / MÉDIA — MÁQUINAS', 6);
-    const mList = Object.entries(porMaq).sort((a,b)=>b[1].h-a[1].h);
-    if(mList.length > 0) {
-      const cw = 12.7/mList.length;
-      const maxH = Math.max(...mList.map(([,v])=>v.h),1);
-      mList.forEach(([placa,v],i) => {
-        const cx = 0.3+i*cw, bH = Math.max(0.1,(v.h/maxH)*3.2), bY = 4.7-bH;
+    // ── S6 Horas/Litros Máquinas ───────────────────────────────────────────────
+    const s6=addCS('HORAS / LITROS / MÉDIA — MÁQUINAS',6);
+    const mList=Object.entries(porMaqAtual).sort((a,b)=>b[1].h-a[1].h);
+    if(mList.length>0){
+      const cw=12.7/mList.length, maxH=Math.max(...mList.map(([,v])=>v.h),1);
+      mList.forEach(([placa,v],i)=>{
+        const cx=0.3+i*cw,bH=Math.max(0.1,(v.h/maxH)*3.2),bY=4.7-bH;
         s6.addShape(pptx.ShapeType.rect,{x:cx+cw*0.12,y:bY,w:cw*0.76,h:bH,fill:{color:i%2===0?ORA:BLU}});
         s6.addText(fmt(v.h)+'h',{x:cx,y:bY-0.32,w:cw,h:0.3,fontSize:7,bold:true,color:DRK,align:'center'});
         s6.addText(placa,{x:cx,y:4.75,w:cw,h:0.28,fontSize:7,color:DRK,align:'center'});
@@ -7364,14 +7382,13 @@ async function gerarApresentacao() {
     s6.addText('TOTAL — Horas: '+fmt(hMaq)+'h   |   Litros: '+fmt(lMaq)+'L   |   Média: '+fmtD(mediaLhMaq)+' L/h',{x:0.3,y:5.55,w:12.7,h:0.85,fontSize:13,bold:true,color:WHT,align:'center'});
     if(mList.length===0) s6.addText('Nenhum dado de Máquinas no período.',{x:0.3,y:3.2,w:12.7,h:0.8,fontSize:13,color:'AAAAAA',align:'center'});
 
-    // ── SLIDE 7 — Horas/Litros/Média TRATORES ─────────────────────────────────
-    const s7 = addCS('HORAS / LITROS / MÉDIA — TRATORES', 7);
-    const tList = Object.entries(porTra).sort((a,b)=>b[1].h-a[1].h);
-    if(tList.length > 0) {
-      const cw = 12.7/tList.length;
-      const maxH = Math.max(...tList.map(([,v])=>v.h),1);
-      tList.forEach(([placa,v],i) => {
-        const cx = 0.3+i*cw, bH = Math.max(0.1,(v.h/maxH)*3.2), bY = 4.7-bH;
+    // ── S7 Horas/Litros Tratores ───────────────────────────────────────────────
+    const s7=addCS('HORAS / LITROS / MÉDIA — TRATORES',7);
+    const tList=Object.entries(porTraAtual).sort((a,b)=>b[1].h-a[1].h);
+    if(tList.length>0){
+      const cw=12.7/tList.length, maxH=Math.max(...tList.map(([,v])=>v.h),1);
+      tList.forEach(([placa,v],i)=>{
+        const cx=0.3+i*cw,bH=Math.max(0.1,(v.h/maxH)*3.2),bY=4.7-bH;
         s7.addShape(pptx.ShapeType.rect,{x:cx+cw*0.12,y:bY,w:cw*0.76,h:bH,fill:{color:i%2===0?BLU:ORA}});
         s7.addText(fmt(v.h)+'h',{x:cx,y:bY-0.32,w:cw,h:0.3,fontSize:7,bold:true,color:DRK,align:'center'});
         s7.addText(placa,{x:cx,y:4.75,w:cw,h:0.28,fontSize:7,color:DRK,align:'center'});
@@ -7383,41 +7400,83 @@ async function gerarApresentacao() {
     s7.addText('TOTAL — Horas: '+fmt(hTra)+'h   |   Litros: '+fmt(lTra)+'L   |   Média: '+fmtD(mediaLhTra)+' L/h',{x:0.3,y:5.55,w:12.7,h:0.85,fontSize:13,bold:true,color:WHT,align:'center'});
     if(tList.length===0) s7.addText('Nenhum dado de Tratores no período.',{x:0.3,y:3.2,w:12.7,h:0.8,fontSize:13,color:'AAAAAA',align:'center'});
 
-    // ── SLIDE 8 — Indicadores de Custos (placeholder) ─────────────────────────
-    const s8 = addCS('INDICADORES DE CUSTOS — MÁQUINAS E TRATORES', 8);
+    // ── S8 placeholder ─────────────────────────────────────────────────────────
+    const s8=addCS('INDICADORES DE CUSTOS — MÁQUINAS E TRATORES',8);
     s8.addShape(pptx.ShapeType.rect,{x:0.3,y:1.2,w:12.7,h:5.6,fill:{color:'F9F9F9'},line:{color:'EEEEEE'}});
     s8.addText('💰  Inserir comparativo de custos manualmente',{x:0.3,y:3.6,w:12.7,h:0.8,fontSize:14,color:'AAAAAA',align:'center'});
 
-    // ── SLIDE 9 — Gastos por Operação ─────────────────────────────────────────
-    const s9 = addCS('GASTOS POR OPERAÇÃO — MÁQUINAS E TRATORES', 9);
-    const opRows = Object.entries(ops).sort((a,b)=>b[1].h-a[1].h);
-    const hW = [4.5,1.8,1.8,2.0,2.1];
-    const hdrs = ['Operação','Horas','Litros','R$/L (ticket)','R$/HR (ticket)'];
-    let rx=0.3;
-    hdrs.forEach((h,i)=>{ s9.addShape(pptx.ShapeType.rect,{x:rx,y:1.2,w:hW[i],h:0.42,fill:{color:ORA}}); s9.addText(h,{x:rx,y:1.2,w:hW[i],h:0.42,fontSize:9,bold:true,color:WHT,align:'center'}); rx+=hW[i]; });
-    opRows.forEach(([op,v],ri)=>{
-      const ry=1.65+ri*0.44; if(ry>6.5) return;
-      const bg=ri%2===0?GRY:WHT;
-      let cx=0.3;
-      [op, fmt(v.h)+'h', fmt(v.l)+'L', fmtD(rslMaq), fmtD(rshrMaq)].forEach((c,ci)=>{
-        s9.addShape(pptx.ShapeType.rect,{x:cx,y:ry,w:hW[ci],h:0.41,fill:{color:bg},line:{color:'DDDDDD'}});
-        s9.addText(c,{x:cx+0.05,y:ry,w:hW[ci]-0.1,h:0.41,fontSize:9,color:DRK,align:ci===0?'left':'center'});
-        cx+=hW[ci];
-      });
-    });
-    const trY=1.65+Math.min(opRows.length,13)*0.44;
-    if(trY<6.8){
-      s9.addShape(pptx.ShapeType.rect,{x:0.3,y:trY,w:12.2,h:0.42,fill:{color:ORA}});
-      s9.addText('TOTAL',{x:0.35,y:trY,w:4.4,h:0.42,fontSize:9,bold:true,color:WHT});
-      s9.addText(fmt(hTotal)+'h',{x:4.8,y:trY,w:1.8,h:0.42,fontSize:9,bold:true,color:WHT,align:'center'});
-      s9.addText(fmt(lTotal)+'L',{x:6.6,y:trY,w:1.8,h:0.42,fontSize:9,bold:true,color:WHT,align:'center'});
-    }
-    if(opRows.length===0) s9.addText('Nenhum dado no período.',{x:0.3,y:3.2,w:12.7,h:0.8,fontSize:13,color:'AAAAAA',align:'center'});
+    // ── S9 Gastos por Operação — COMPARATIVO COMPLETO ─────────────────────────
+    const s9=addCS('INDICADORES DOS GASTOS POR OPERAÇÃO — MÁQUINAS E TRATORES',9);
 
-    // ── SLIDE 10 — Encerramento ────────────────────────────────────────────────
-    const s10 = pptx.addSlide();
-    addCover(s10, 'OBRIGADO!', mes.toUpperCase()+' / '+ano);
-    s10.addText('Gestão Inteligente de Frotas', {x:0.5,y:5.2,w:8,h:0.5,fontSize:14,color:'888888',italic:true});
+    // Monta lista unificada de operações (união de ant+atual)
+    const todasOps = [...new Set([...Object.keys(opsAtual),...Object.keys(opsAnt)])].sort();
+
+    // Cabeçalho — linha 1 (grupos)
+    // Colunas: Operações(2.8) | Horas Trabalhadas(1.1+1.1) | Comp%(0.9) | Litros(1.1+1.1) | Comp(0.9) | R$Trans(1.5+1.5) | Comp(1.2)
+    const cOp=2.8, cMes=1.1, cComp=0.9, cR=1.5, cCompR=1.2;
+    const cols=[cOp, cMes,cMes,cComp, cMes,cMes,cComp, cR,cR,cCompR];
+    const xs=[0.1];
+    cols.forEach((w,i)=>xs.push(xs[i]+w));
+
+    const hdrY=1.15, hdrH=0.32, rowH=0.38;
+
+    // Fundo cabeçalho
+    s9.addShape(pptx.ShapeType.rect,{x:0.1,y:hdrY,w:12.9,h:hdrH*2+0.01,fill:{color:BLU}});
+
+    // Linha 1 grupos
+    [['Operações',cOp],['Horas Trabalhadas',cMes*2+cComp],['Litros',cMes*2+cComp],['R$ Transacionado',cR*2+cCompR]].reduce((cx,[lbl,w])=>{
+      s9.addText(lbl,{x:cx,y:hdrY,w,h:hdrH,fontSize:8,bold:true,color:WHT,align:'center',valign:'middle'});
+      return cx+w;
+    },0.1);
+
+    // Linha 2 sub-colunas
+    const subHdrs=[['Operações',cOp],[mesAnt.slice(0,3),cMes],[mes.slice(0,3),cMes],['Comp%',cComp],[mesAnt.slice(0,3),cMes],[mes.slice(0,3),cMes],['Comp',cComp],[mesAnt.slice(0,3),cR],[mes.slice(0,3),cR],['Comp',cCompR]];
+    subHdrs.reduce((cx,[lbl,w])=>{
+      s9.addText(lbl,{x:cx,y:hdrY+hdrH,w,h:hdrH,fontSize:7,bold:true,color:'CCDDFF',align:'center',valign:'middle'});
+      return cx+w;
+    },0.1);
+
+    // Linhas de dados
+    const visOps = todasOps.slice(0,11); // max 11 linhas para caber
+    let totalHAnt=0,totalHAtual=0,totalLAnt=0,totalLAtual=0,totalRAnt=0,totalRAtual=0;
+
+    visOps.forEach((op,ri)=>{
+      const ry=hdrY+hdrH*2+ri*rowH+0.05;
+      const dA=opsAnt[op]||{h:0,l:0};
+      const dB=opsAtual[op]||{h:0,l:0};
+      const rA=dA.l*rslAntMedio, rB=dB.l*rslMedio;
+      totalHAnt+=dA.h; totalHAtual+=dB.h;
+      totalLAnt+=dA.l; totalLAtual+=dB.l;
+      totalRAnt+=rA;   totalRAtual+=rB;
+      const bg=ri%2===0?GRY:WHT;
+      s9.addShape(pptx.ShapeType.rect,{x:0.1,y:ry,w:12.9,h:rowH-0.02,fill:{color:bg},line:{color:'DDDDDD'}});
+      const vals=[op,fmt(dA.h),fmt(dB.h),pct(dB.h,dA.h),fmt(dA.l),fmt(dB.l),pct(dB.l,dA.l),fmtR(rA),fmtR(rB),difR(rB,rA)];
+      vals.reduce((cx,v,ci)=>{
+        const w=cols[ci];
+        const isNeg=ci>=7&&(+v.replace(/[^0-9.-]/g,'')<0||v.startsWith('-'));
+        const isComp=ci===3||ci===6;
+        const numVal=parseFloat(v.replace(',','.').replace(/[^0-9.-]/g,''));
+        const cor = isComp ? (numVal>=0?GRN:'D0021B') : DRK;
+        s9.addText(v,{x:cx+0.03,y:ry,w:w-0.06,h:rowH-0.02,fontSize:7.5,color:cor,align:ci===0?'left':'center',valign:'middle'});
+        return cx+w;
+      },0.1);
+    });
+
+    // Total
+    const totY=hdrY+hdrH*2+visOps.length*rowH+0.1;
+    if(totY<7.0){
+      s9.addShape(pptx.ShapeType.rect,{x:0.1,y:totY,w:12.9,h:rowH,fill:{color:BLU}});
+      const totVals=['TOTAL',fmt(totalHAnt),fmt(totalHAtual),pct(totalHAtual,totalHAnt),fmt(totalLAnt),fmt(totalLAtual),pct(totalLAtual,totalLAnt),fmtR(totalRAnt),fmtR(totalRAtual),difR(totalRAtual,totalRAnt)];
+      totVals.reduce((cx,v,ci)=>{
+        s9.addText(v,{x:cx+0.03,y:totY,w:cols[ci]-0.06,h:rowH,fontSize:7.5,bold:true,color:WHT,align:ci===0?'left':'center',valign:'middle'});
+        return cx+cols[ci];
+      },0.1);
+    }
+    if(todasOps.length===0) s9.addText('Nenhum dado no período.',{x:0.3,y:3.2,w:12.7,h:0.8,fontSize:13,color:'AAAAAA',align:'center'});
+
+    // ── S10 Encerramento ───────────────────────────────────────────────────────
+    const s10=pptx.addSlide(); addCover(s10,'OBRIGADO!',mes.toUpperCase()+' / '+ano);
+    s10.addText('Gestão Inteligente de Frotas',{x:0.5,y:5.2,w:8,h:0.5,fontSize:14,color:'888888',italic:true});
 
     await pptx.writeFile({fileName:'Ignis_Apresentacao_'+mes+'_'+ano+'.pptx'});
     status.textContent = '✅ Apresentação gerada com sucesso!';
