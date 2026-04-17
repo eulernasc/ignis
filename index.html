@@ -7,10 +7,9 @@
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔥</text></svg>">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, doc, setDoc, getDoc, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, doc, setDoc, getDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
 const firebaseConfig = {
@@ -79,6 +78,43 @@ try {
 } catch(e) {
   console.warn("Ignis: autenticação anônima falhou:", e.message);
 }
+
+// ── LISTENER EM TEMPO REAL ────────────────────────────────────────────────────
+// Quando qualquer usuário salvar dados, todos os outros recebem automaticamente
+window._ignisListenerAtivo = false;
+window.iniciarListenerTempoReal = function() {
+  if (window._ignisListenerAtivo) return;
+  window._ignisListenerAtivo = true;
+
+  onSnapshot(doc(db, "fueltracker", "dados"), (snap) => {
+    if (!snap.exists()) return;
+    const data = snap.data();
+    const { _users, ...rest } = data;
+
+    // Ignora se foi este próprio usuário quem salvou (evita loop)
+    // Compara usando timestamp — se o Firebase tem dado mais recente, aplica
+    const tsFirebase = rest._savedAt || 0;
+    const tsLocal    = window._ultimoSaveAt || 0;
+
+    if (tsFirebase > tsLocal + 2000) {
+      // Outro usuário salvou — atualiza tela
+      try {
+        if (typeof state !== 'undefined') {
+          Object.assign(state, rest);
+          delete state._savedAt;
+          localStorage.setItem('fueltracker_v3', JSON.stringify(state));
+          if (typeof updateFilters === 'function')   updateFilters();
+          if (typeof renderDashboard === 'function') renderDashboard();
+          if (typeof relChecarReincidencia === 'function') relChecarReincidencia();
+          if (typeof updateSyncStatus === 'function') updateSyncStatus('connected');
+          if (typeof showToast === 'function') showToast('🔄 Dados atualizados por outro usuário', 'info');
+        }
+      } catch(e) { console.warn('Listener update error:', e); }
+    }
+  }, (err) => {
+    console.warn('Ignis listener erro:', err.message);
+  });
+};
 
 window.firebaseReady = true;
 window.dispatchEvent(new Event('firebaseReady'));
@@ -897,7 +933,6 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
       <button class="arla-tab active" id="rel-tab-btn-analise" onclick="relSetTab('analise',this)">🔍 Análise</button>
       <button class="arla-tab" id="rel-tab-btn-grupos" onclick="relSetTab('grupos',this)">📧 Grupos de E-mail</button>
       <button class="arla-tab" id="rel-tab-btn-executivo" onclick="relSetTab('executivo',this)">💰 Relatório Executivo</button>
-      <button class="arla-tab" id="rel-tab-btn-apresentacao" onclick="relSetTab('apresentacao',this)">📊 Apresentação Mensal</button>
     </div>
 
     <!-- ABA ANÁLISE -->
@@ -1016,105 +1051,6 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
         <button class="btn btn-primary" style="width:100%;padding:12px" onclick="renderExecutivo()">💰 Calcular Relatório Executivo</button>
       </div>
       <div id="executivo-resultado"></div>
-    </div>
-
-    <!-- ABA APRESENTAÇÃO MENSAL -->
-    <div id="rel-tab-apresentacao" style="display:none">
-      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:16px">
-        <div style="font-size:14px;font-weight:700;margin-bottom:6px">📊 Apresentação Mensal — Máquinas e Tratores</div>
-        <div style="font-size:13px;color:var(--text2);margin-bottom:4px">Placas EMP excluídas automaticamente. Slides 6 e 7 geram gráfico consolidado por mês.</div>
-        <div style="font-size:12px;color:var(--yellow);background:rgba(232,148,26,.1);border:1px solid rgba(232,148,26,.3);border-radius:8px;padding:8px 12px;margin-bottom:16px">⚠️ <strong>Slides 3, 4 e 8</strong> ficam em branco para preenchimento manual.</div>
-
-        <!-- CABEÇALHO MÊS/ANO -->
-        <div class="form-row" style="margin-bottom:12px">
-          <div class="form-group"><label class="form-label">Mês Atual *</label><select class="form-input" id="apres-mes"><option>Janeiro</option><option>Fevereiro</option><option>Março</option><option>Abril</option><option>Maio</option><option>Junho</option><option>Julho</option><option>Agosto</option><option>Setembro</option><option>Outubro</option><option>Novembro</option><option>Dezembro</option></select></div>
-          <div class="form-group"><label class="form-label">Ano *</label><input type="number" class="form-input" id="apres-ano" value="2026"></div>
-          <div class="form-group"><label class="form-label">Mês Anterior (comparativo slide 9) *</label><select class="form-input" id="apres-mes-ant"><option>Janeiro</option><option>Fevereiro</option><option>Março</option><option>Abril</option><option>Maio</option><option>Junho</option><option>Julho</option><option>Agosto</option><option>Setembro</option><option>Outubro</option><option>Novembro</option><option>Dezembro</option></select></div>
-        </div>
-
-        <!-- PERÍODO IGNIS -->
-        <div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">📅 Período Mês Atual (Ignis)</div>
-        <div class="form-row" style="margin-bottom:12px">
-          <div class="form-group"><label class="form-label">Data Inicial</label><input type="date" class="form-input" id="apres-data-ini"></div>
-          <div class="form-group"><label class="form-label">Data Final</label><input type="date" class="form-input" id="apres-data-fim"></div>
-        </div>
-        <div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">📅 Período Mês Anterior (comparativo slide 9)</div>
-        <div class="form-row" style="margin-bottom:12px">
-          <div class="form-group"><label class="form-label">Data Inicial</label><input type="date" class="form-input" id="apres-data-ant-ini"></div>
-          <div class="form-group"><label class="form-label">Data Final</label><input type="date" class="form-input" id="apres-data-ant-fim"></div>
-        </div>
-
-        <!-- HISTÓRICO MÁQUINAS 5 MESES -->
-        <div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">📊 Histórico Máquinas — 5 meses (slide 6) * <span style="font-weight:400;text-transform:none;font-size:11px">— Mês 5 vem do Ignis automaticamente</span></div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:4px">
-          <div style="font-size:11px;color:var(--text3);font-weight:600">Mês</div>
-          <div style="font-size:11px;color:var(--text3);font-weight:600">Horas Trabalhadas</div>
-          <div style="font-size:11px;color:var(--text3);font-weight:600">Litros Abastecidos</div>
-        </div>
-        <div id="hist-maq-rows">
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:6px"><input type="text" class="form-input" id="maq-m1-nome" placeholder="SET" style="font-size:13px"><input type="number" class="form-input" id="maq-m1-h" placeholder="11034" style="font-size:13px"><input type="number" class="form-input" id="maq-m1-l" placeholder="144972" style="font-size:13px"></div>
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:6px"><input type="text" class="form-input" id="maq-m2-nome" placeholder="OUT" style="font-size:13px"><input type="number" class="form-input" id="maq-m2-h" placeholder="11783" style="font-size:13px"><input type="number" class="form-input" id="maq-m2-l" placeholder="148414" style="font-size:13px"></div>
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:6px"><input type="text" class="form-input" id="maq-m3-nome" placeholder="NOV" style="font-size:13px"><input type="number" class="form-input" id="maq-m3-h" placeholder="10273" style="font-size:13px"><input type="number" class="form-input" id="maq-m3-l" placeholder="128598" style="font-size:13px"></div>
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:6px"><input type="text" class="form-input" id="maq-m4-nome" placeholder="DEZ" style="font-size:13px"><input type="number" class="form-input" id="maq-m4-h" placeholder="8993" style="font-size:13px"><input type="number" class="form-input" id="maq-m4-l" placeholder="110530" style="font-size:13px"></div>
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px;opacity:0.6"><input type="text" class="form-input" id="maq-m5-nome" placeholder="MAR (auto)" disabled style="font-size:13px"><input type="number" class="form-input" id="maq-m5-h" placeholder="Auto Ignis" disabled style="font-size:13px"><input type="number" class="form-input" id="maq-m5-l" placeholder="Auto Ignis" disabled style="font-size:13px"></div>
-        </div>
-
-        <!-- HISTÓRICO TRATORES 5 MESES -->
-        <div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px">📊 Histórico Tratores — 5 meses (slide 7) * <span style="font-weight:400;text-transform:none;font-size:11px">— Mês 5 vem do Ignis automaticamente</span></div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:4px">
-          <div style="font-size:11px;color:var(--text3);font-weight:600">Mês</div>
-          <div style="font-size:11px;color:var(--text3);font-weight:600">Horas Trabalhadas</div>
-          <div style="font-size:11px;color:var(--text3);font-weight:600">Litros Abastecidos</div>
-        </div>
-        <div id="hist-tra-rows">
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:6px"><input type="text" class="form-input" id="tra-m1-nome" placeholder="SET" style="font-size:13px"><input type="number" class="form-input" id="tra-m1-h" placeholder="900" style="font-size:13px"><input type="number" class="form-input" id="tra-m1-l" placeholder="7720" style="font-size:13px"></div>
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:6px"><input type="text" class="form-input" id="tra-m2-nome" placeholder="OUT" style="font-size:13px"><input type="number" class="form-input" id="tra-m2-h" placeholder="883" style="font-size:13px"><input type="number" class="form-input" id="tra-m2-l" placeholder="6903" style="font-size:13px"></div>
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:6px"><input type="text" class="form-input" id="tra-m3-nome" placeholder="NOV" style="font-size:13px"><input type="number" class="form-input" id="tra-m3-h" placeholder="778" style="font-size:13px"><input type="number" class="form-input" id="tra-m3-l" placeholder="5814" style="font-size:13px"></div>
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:6px"><input type="text" class="form-input" id="tra-m4-nome" placeholder="DEZ" style="font-size:13px"><input type="number" class="form-input" id="tra-m4-h" placeholder="635" style="font-size:13px"><input type="number" class="form-input" id="tra-m4-l" placeholder="4610" style="font-size:13px"></div>
-          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px;opacity:0.6"><input type="text" class="form-input" id="tra-m5-nome" placeholder="MAR (auto)" disabled style="font-size:13px"><input type="number" class="form-input" id="tra-m5-h" placeholder="Auto Ignis" disabled style="font-size:13px"><input type="number" class="form-input" id="tra-m5-l" placeholder="Auto Ignis" disabled style="font-size:13px"></div>
-        </div>
-
-        <!-- FINANCEIROS -->
-        <div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">💲 Indicadores Financeiros — Máquinas *</div>
-        <div class="form-row" style="margin-bottom:12px">
-          <div class="form-group"><label class="form-label">R$/L — Atual</label><input type="number" step="0.01" class="form-input" id="apres-rsl-maq" placeholder="5.93"></div>
-          <div class="form-group"><label class="form-label">R$/L — Anterior</label><input type="number" step="0.01" class="form-input" id="apres-rsl-maq-ant" placeholder="5.56"></div>
-          <div class="form-group"><label class="form-label">R$/HR — Atual</label><input type="number" step="0.01" class="form-input" id="apres-rshr-maq" placeholder="72.08"></div>
-          <div class="form-group"><label class="form-label">R$/HR — Anterior</label><input type="number" step="0.01" class="form-input" id="apres-rshr-maq-ant" placeholder="70.46"></div>
-        </div>
-        <div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">💲 Indicadores Financeiros — Tratores *</div>
-        <div class="form-row" style="margin-bottom:12px">
-          <div class="form-group"><label class="form-label">R$/L — Atual</label><input type="number" step="0.01" class="form-input" id="apres-rsl-tra" placeholder="5.89"></div>
-          <div class="form-group"><label class="form-label">R$/L — Anterior</label><input type="number" step="0.01" class="form-input" id="apres-rsl-tra-ant" placeholder="5.45"></div>
-          <div class="form-group"><label class="form-label">R$/HR — Atual</label><input type="number" step="0.01" class="form-input" id="apres-rshr-tra" placeholder="42.05"></div>
-          <div class="form-group"><label class="form-label">R$/HR — Anterior</label><input type="number" step="0.01" class="form-input" id="apres-rshr-tra-ant" placeholder="39.50"></div>
-        </div>
-
-        <!-- TOTAIS TICKET -->
-        <div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">🚗 Totais do Ticket *</div>
-        <div class="form-row" style="margin-bottom:12px">
-          <div class="form-group"><label class="form-label">Qtd Veículos</label><input type="number" class="form-input" id="apres-veiculos" placeholder="33"></div>
-          <div class="form-group"><label class="form-label">Valor Transacionado (R$)</label><input type="number" step="0.01" class="form-input" id="apres-valor-trans" placeholder="668174"></div>
-          <div class="form-group"><label class="form-label">Transações Realizadas</label><input type="number" class="form-input" id="apres-transacoes" placeholder="368"></div>
-          <div class="form-group"><label class="form-label">Litros Ticket</label><input type="number" class="form-input" id="apres-litros-ticket" placeholder="87995"></div>
-        </div>
-
-        <!-- CO2 -->
-        <div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">🌿 CO² — 3 meses para gráfico de tendência *</div>
-        <div class="form-row" style="margin-bottom:4px">
-          <div class="form-group"><label class="form-label">Mês -2 (nome)</label><input type="text" class="form-input" id="apres-co2-m2-nome" placeholder="Janeiro"></div>
-          <div class="form-group"><label class="form-label">CO² Mês -2 (ton)</label><input type="number" step="0.01" class="form-input" id="apres-co2-m2" placeholder="185.9"></div>
-          <div class="form-group"><label class="form-label">Mês -1 (nome)</label><input type="text" class="form-input" id="apres-co2-m1-nome" placeholder="Fevereiro"></div>
-          <div class="form-group"><label class="form-label">CO² Mês -1 (ton)</label><input type="number" step="0.01" class="form-input" id="apres-co2-m1" placeholder="188.5"></div>
-        </div>
-        <div class="form-row" style="margin-bottom:16px">
-          <div class="form-group"><label class="form-label">CO² Mês Atual (ton)</label><input type="number" step="0.01" class="form-input" id="apres-co2" placeholder="199.8"></div>
-          <div class="form-group"><label class="form-label">Qtd Placas com Emissões</label><input type="number" class="form-input" id="apres-co2-placas" placeholder="36"></div>
-        </div>
-
-        <button class="btn btn-primary" style="width:100%;padding:13px;font-size:15px" onclick="gerarApresentacao()">📊 Gerar Apresentação .PPTX</button>
-        <div id="apres-status" style="margin-top:10px;font-size:13px;color:var(--text2);text-align:center"></div>
-      </div>
     </div>
   </div>
 
@@ -1750,27 +1686,40 @@ async function syncFromFirebase() {
     // _users vivem em documento separado, ignorar se vier aqui
     const { _users, ...rest } = data;
 
-    // Conta registros locais vs Firebase — NUNCA sobrescreve local com menos dados
-    const localAbast  = state.abastecimentos?.length || 0;
-    const remoteAbast = rest.abastecimentos?.length  || 0;
-    const localSem    = Object.keys(state.semanas||{}).length;
-    const remoteSem   = Object.keys(rest.semanas||{}).length;
+    // ── LAST WRITE WINS ──────────────────────────────────────────────────────
+    // Usa timestamp para decidir: Firebase tem dados mais recentes → aplica
+    // Local tem dados mais recentes → sobe pro Firebase
+    const tsFirebase = rest._savedAt || 0;
+    const tsLocal    = (() => {
+      try {
+        const s = localStorage.getItem('fueltracker_v3');
+        return s ? (JSON.parse(s)._savedAt || 0) : 0;
+      } catch(e) { return 0; }
+    })();
 
-    if (remoteAbast > localAbast || remoteSem > localSem) {
-      // Firebase tem mais dados — atualiza local
-      state = { ...state, ...rest };
+    const dataLimpa = { ...rest };
+    delete dataLimpa._savedAt;
+
+    if (tsFirebase >= tsLocal) {
+      // Firebase tem dado igual ou mais novo — usa Firebase
+      state = { ...state, ...dataLimpa };
+      state._savedAt = tsFirebase;
       localStorage.setItem('fueltracker_v3', JSON.stringify(state));
+      window._ultimoSaveAt = tsFirebase;
       updateFilters();
       renderDashboard();
       relChecarReincidencia();
       updateSyncStatus('connected');
-      showToast('Dados sincronizados do Firebase! ☁️', 'success');
-    } else if (localAbast > remoteAbast || localSem > remoteSem) {
-      // Local tem mais dados — sobe pro Firebase
+      if (tsFirebase > tsLocal) showToast('Dados sincronizados do Firebase! ☁️', 'success');
+    } else {
+      // Local é mais novo — sobe pro Firebase
       updateSyncStatus('connected');
       saveState();
-    } else {
-      updateSyncStatus('connected');
+    }
+
+    // Ativa listener em tempo real após primeira sincronização
+    if (typeof window.iniciarListenerTempoReal === 'function') {
+      window.iniciarListenerTempoReal();
     }
   } catch(e) {
     updateSyncStatus('error');
@@ -1779,10 +1728,13 @@ async function syncFromFirebase() {
 
 function saveState() {
   localStorage.setItem('fueltracker_v3', JSON.stringify(state));
-  // Salvar no Firebase em background — sempre preserva _users
+  // Salvar no Firebase com timestamp — qualquer outro usuário receberá via listener
   if (window.firebaseReady && window.fbSave) {
+    const agora = Date.now();
+    window._ultimoSaveAt = agora;
     const users = (() => { try { return JSON.parse(localStorage.getItem('ignis_users_cache')||'{}'); } catch(e){ return {}; } })();
-    const dataToSave = Object.keys(users).length ? { ...state, _users: users } : state;
+    const dataToSave = { ...state, _savedAt: agora };
+    if (Object.keys(users).length) dataToSave._users = users;
     window.fbSave(dataToSave).then(ok => {
       if (ok) updateSyncStatus('connected');
       else updateSyncStatus('error');
@@ -5465,7 +5417,6 @@ function relSetTab(tab, el) {
   document.getElementById('rel-tab-analise').style.display = tab === 'analise' ? '' : 'none';
   document.getElementById('rel-tab-grupos').style.display = tab === 'grupos' ? '' : 'none';
   document.getElementById('rel-tab-executivo').style.display = tab === 'executivo' ? '' : 'none';
-  document.getElementById('rel-tab-apresentacao').style.display = tab === 'apresentacao' ? '' : 'none';
   document.querySelectorAll('#page-relatorio .arla-tab').forEach(b => b.classList.remove('active'));
   if (el) el.classList.add('active');
   if (tab === 'grupos') relgRender();
@@ -7195,339 +7146,6 @@ function setCompMaq(el) {
   const tabFin = document.getElementById('comp-tab-financeiro');
   if (tabFin && tabFin.style.display !== 'none') renderCompFinanceiro();
   else renderComparativo();
-}
-
-// ── APRESENTAÇÃO MENSAL ───────────────────────────────────────────────────────
-async function gerarApresentacao() {
-  const status = document.getElementById('apres-status');
-  status.textContent = '⏳ Gerando apresentação...';
-
-  const mes      = document.getElementById('apres-mes').value;
-  const ano      = document.getElementById('apres-ano').value;
-  const mesAnt   = document.getElementById('apres-mes-ant').value;
-  const dataIni    = document.getElementById('apres-data-ini').value;
-  const dataFim    = document.getElementById('apres-data-fim').value;
-  const dataAntIni = document.getElementById('apres-data-ant-ini').value;
-  const dataAntFim = document.getElementById('apres-data-ant-fim').value;
-
-  const rslMaq     = parseFloat(document.getElementById('apres-rsl-maq').value)     || 0;
-  const rslMaqAnt  = parseFloat(document.getElementById('apres-rsl-maq-ant').value)  || 0;
-  const rshrMaq    = parseFloat(document.getElementById('apres-rshr-maq').value)     || 0;
-  const rshrMaqAnt = parseFloat(document.getElementById('apres-rshr-maq-ant').value) || 0;
-  const rslTra     = parseFloat(document.getElementById('apres-rsl-tra').value)     || 0;
-  const rslTraAnt  = parseFloat(document.getElementById('apres-rsl-tra-ant').value)  || 0;
-  const rshrTra    = parseFloat(document.getElementById('apres-rshr-tra').value)     || 0;
-  const rshrTraAnt = parseFloat(document.getElementById('apres-rshr-tra-ant').value) || 0;
-  const veiculos   = parseInt(document.getElementById('apres-veiculos').value)       || 0;
-  const valorTrans = parseFloat(document.getElementById('apres-valor-trans').value)  || 0;
-  const transacoes = parseInt(document.getElementById('apres-transacoes').value)     || 0;
-  const litrosTicket = parseFloat(document.getElementById('apres-litros-ticket').value) || 0;
-
-  const co2M2Nome = document.getElementById('apres-co2-m2-nome').value || 'Mês -2';
-  const co2M2     = parseFloat(document.getElementById('apres-co2-m2').value)    || 0;
-  const co2M1Nome = document.getElementById('apres-co2-m1-nome').value || 'Mês -1';
-  const co2M1     = parseFloat(document.getElementById('apres-co2-m1').value)    || 0;
-  const co2Atual  = parseFloat(document.getElementById('apres-co2').value)       || 0;
-  const co2Placas = parseInt(document.getElementById('apres-co2-placas').value)  || 0;
-  const co2PerPlaca = co2Placas > 0 ? co2Atual/co2Placas : 0;
-
-  // Histórico Máquinas 4 meses manuais
-  const gV = id => { const el=document.getElementById(id); return el ? (el.value||'') : ''; };
-  const gN = id => parseFloat(gV(id)) || 0;
-  const maqHist = [
-    {nome:gV('maq-m1-nome')||'Mês 1', h:gN('maq-m1-h'), l:gN('maq-m1-l')},
-    {nome:gV('maq-m2-nome')||'Mês 2', h:gN('maq-m2-h'), l:gN('maq-m2-l')},
-    {nome:gV('maq-m3-nome')||'Mês 3', h:gN('maq-m3-h'), l:gN('maq-m3-l')},
-    {nome:gV('maq-m4-nome')||'Mês 4', h:gN('maq-m4-h'), l:gN('maq-m4-l')},
-  ];
-  const traHist = [
-    {nome:gV('tra-m1-nome')||'Mês 1', h:gN('tra-m1-h'), l:gN('tra-m1-l')},
-    {nome:gV('tra-m2-nome')||'Mês 2', h:gN('tra-m2-h'), l:gN('tra-m2-l')},
-    {nome:gV('tra-m3-nome')||'Mês 3', h:gN('tra-m3-h'), l:gN('tra-m3-l')},
-    {nome:gV('tra-m4-nome')||'Mês 4', h:gN('tra-m4-h'), l:gN('tra-m4-l')},
-  ];
-
-  // ── Filtra Ignis (sem EMP) ─────────────────────────────────────────────────
-  const isEmp = a => (a.placa||'').toUpperCase().startsWith('EMP');
-  const getMaqObj = p => state.maquinas.find(x => x.placa === p);
-  const isMaq = a => {
-    if(isEmp(a)) return false;
-    const t = (getMaqObj(a.placa)?.tipo||'').toLowerCase();
-    if(t.includes('maq')||t.includes('máq')) return true;
-    if(t.includes('tra')) return false;
-    return !(a.placa||'').toUpperCase().match(/^TRA|^TRT/);
-  };
-  const isTra = a => {
-    if(isEmp(a)) return false;
-    const t = (getMaqObj(a.placa)?.tipo||'').toLowerCase();
-    if(t.includes('tra')) return true;
-    if(t.includes('maq')||t.includes('máq')) return false;
-    return !!(a.placa||'').toUpperCase().match(/^TRA|^TRT/);
-  };
-
-  const filtrar = (ini,fim) => {
-    let r = state.abastecimentos.filter(a=>!isEmp(a));
-    if(ini) r=r.filter(a=>a.data>=ini);
-    if(fim) r=r.filter(a=>a.data<=fim);
-    return r;
-  };
-  const agruparOps = arr => {
-    const ops={};
-    arr.forEach(a=>{
-      const op=(a.operacao||'').replace(/_/g,' ').trim()||'Sem Operação';
-      if(!ops[op]) ops[op]={h:0,l:0};
-      ops[op].h+=+a.horas||0; ops[op].l+=+a.litros||0;
-    });
-    return ops;
-  };
-
-  const abastAtual = filtrar(dataIni, dataFim);
-  const abastAnt   = filtrar(dataAntIni, dataAntFim);
-  const opsAtual = agruparOps(abastAtual);
-  const opsAnt   = agruparOps(abastAnt);
-
-  const somaH = arr => arr.reduce((s,a)=>s+(+a.horas||0),0);
-  const somaL = arr => arr.reduce((s,a)=>s+(+a.litros||0),0);
-  const hAtual=somaH(abastAtual), lAtual=somaL(abastAtual);
-  const hMaq=somaH(abastAtual.filter(isMaq)), lMaq=somaL(abastAtual.filter(isMaq));
-  const hTra=somaH(abastAtual.filter(isTra)), lTra=somaL(abastAtual.filter(isTra));
-  const mediaLhMaq=hMaq>0?lMaq/hMaq:0, mediaLhTra=hTra>0?lTra/hTra:0;
-
-  // Adiciona mês atual ao histórico
-  const mesLabel = mes.slice(0,3).toUpperCase();
-  maqHist.push({nome:mesLabel, h:hMaq, l:lMaq});
-  traHist.push({nome:mesLabel, h:hTra, l:lTra});
-
-  const rslMedio=rslMaq||rslTra||0, rslAntMedio=rslMaqAnt||rslTraAnt||0;
-
-  const fmt  = n => (+n||0).toLocaleString('pt-BR',{maximumFractionDigits:0});
-  const fmtD = n => (+n||0).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2});
-  const fmtR = n => 'R$ '+fmtD(n);
-  const seta = (a,b) => (+a)>=(+b)?'▲':'▼';
-  const pct  = (a,b) => b!==0?(((a-b)/b)*100).toFixed(2)+'%':'-';
-  const difR = (a,b) => { const d=a-b; return (d>=0?'R$ ':'-R$ ')+fmtD(Math.abs(d)); };
-
-  const ORA='D45C1A', DRK='1A1A1A', WHT='FFFFFF', GRY='F4F4F4', G2='666666', BLU='1A3A5C', GRN='2D9E5F';
-  const CHART_BLU='0070C0', CHART_LBL='00B0F0', CHART_ORA='ED7D31';
-
-  try {
-    const pptx = new PptxGenJS();
-    pptx.layout = 'LAYOUT_WIDE';
-
-    const addCover = (s,titulo,sub) => {
-      s.addShape(pptx.ShapeType.rect,{x:0,y:0,w:'100%',h:'100%',fill:{color:DRK}});
-      s.addShape(pptx.ShapeType.rect,{x:9.5,y:0,w:3.83,h:'100%',fill:{color:ORA}});
-      for(let i=0;i<8;i++) s.addShape(pptx.ShapeType.rect,{x:9.5,y:i*0.95,w:3.83,h:0.47,fill:{color:'C04A10'},line:{color:'C04A10'}});
-      s.addText('EN',{x:0.5,y:0.4,w:2,h:0.9,fontSize:52,bold:true,color:ORA,fontFace:'Arial Black'});
-      s.addText('EXPRESSO NEPOMUCENO',{x:0.5,y:1.25,w:7,h:0.35,fontSize:11,color:'888888',charSpacing:3});
-      s.addShape(pptx.ShapeType.line,{x:0.5,y:1.65,w:7,h:0,line:{color:ORA,width:2}});
-      s.addText(titulo,{x:0.5,y:2.1,w:8.7,h:1.8,fontSize:36,bold:true,color:WHT,wrap:true});
-      if(sub) s.addText(sub,{x:0.5,y:4.0,w:7,h:0.5,fontSize:16,color:'BBBBBB'});
-      s.addText('INDICADORES COMBUSTÍVEL',{x:0.5,y:6.9,w:7,h:0.4,fontSize:9,color:'555555',charSpacing:2});
-    };
-
-    const addCS = (titulo,num) => {
-      const s=pptx.addSlide();
-      s.addShape(pptx.ShapeType.rect,{x:0,y:0,w:'100%',h:'100%',fill:{color:WHT}});
-      s.addShape(pptx.ShapeType.rect,{x:0,y:0,w:'100%',h:1.0,fill:{color:ORA}});
-      s.addText(titulo,{x:0.4,y:0.12,w:12,h:0.75,fontSize:18,bold:true,color:WHT});
-      s.addText(String(num),{x:12.7,y:0.12,w:0.5,h:0.75,fontSize:18,bold:true,color:WHT,align:'right'});
-      s.addShape(pptx.ShapeType.rect,{x:0,y:1.0,w:'100%',h:0.05,fill:{color:'DDDDDD'}});
-      s.addText('EXPRESSO NEPOMUCENO — INDICADORES COMBUSTÍVEL — '+mes.toUpperCase()+'/'+ano,{x:0.3,y:7.15,w:12,h:0.3,fontSize:7,color:'AAAAAA'});
-      return s;
-    };
-
-    const kpi=(s,x,y,w,h,label,val,sub,bg)=>{
-      s.addShape(pptx.ShapeType.roundRect,{x,y,w,h,fill:{color:bg||GRY},rectRadius:0.05,line:{color:'DDDDDD',width:1}});
-      s.addText(label,{x,y:y+0.07,w,h:0.28,fontSize:8,color:G2,align:'center',bold:true,charSpacing:1});
-      s.addText(val,  {x,y:y+0.3, w,h:0.55,fontSize:18,bold:true,color:DRK,align:'center'});
-      if(sub) s.addText(sub,{x,y:y+0.8,w,h:0.22,fontSize:8,color:G2,align:'center'});
-    };
-
-    // ── S1 Capa ────────────────────────────────────────────────────────────────
-    const s1=pptx.addSlide(); addCover(s1,'INDICADORES COMBUSTÍVEL',mes.toUpperCase()+' / '+ano);
-
-    // ── S2 Farol Geral ─────────────────────────────────────────────────────────
-    const s2=addCS('FAROL GERAL — MÁQUINAS E TRATORES',2);
-    s2.addShape(pptx.ShapeType.roundRect,{x:0.4,y:1.15,w:1.5,h:0.28,fill:{color:ORA},rectRadius:0.08});
-    s2.addText('● Máquinas',{x:0.4,y:1.15,w:1.5,h:0.28,fontSize:9,color:WHT,align:'center'});
-    s2.addShape(pptx.ShapeType.roundRect,{x:2.05,y:1.15,w:1.3,h:0.28,fill:{color:BLU},rectRadius:0.08});
-    s2.addText('● Tratores',{x:2.05,y:1.15,w:1.3,h:0.28,fontSize:9,color:WHT,align:'center'});
-    const ky=1.55,kh=1.15;
-    kpi(s2,0.3, ky,2.4,kh,'HORAS TRABALHADAS',fmt(hAtual)+'h','Maq: '+fmt(hMaq)+'  Tra: '+fmt(hTra));
-    kpi(s2,2.85,ky,2.4,kh,'LITROS (IGNIS)',fmt(lAtual)+'L','Ticket: '+fmt(litrosTicket)+'L');
-    kpi(s2,5.4, ky,2.4,kh,'VALOR TRANSACIONADO',fmtR(valorTrans),fmt(veiculos)+' veíc · '+fmt(transacoes)+' trans');
-    kpi(s2,7.95,ky,2.4,kh,'MÉDIA L/H MAQ',fmtD(mediaLhMaq)+' L/h','Tratores: '+fmtD(mediaLhTra)+' L/h');
-    kpi(s2,10.5,ky,2.5,kh,'R$/L MÁQUINAS',fmtD(rslMaq),seta(rslMaq,rslMaqAnt)+' ant: '+fmtD(rslMaqAnt),rslMaq<=rslMaqAnt?'E8F5E9':'FFEBEE');
-    kpi(s2,0.3, 2.85,3.1,kh,'R$/HR MÁQUINAS',fmtD(rshrMaq),seta(rshrMaq,rshrMaqAnt)+' ant: '+fmtD(rshrMaqAnt),rshrMaq<=rshrMaqAnt?'E8F5E9':'FFEBEE');
-    kpi(s2,3.55,2.85,3.1,kh,'R$/L TRATORES', fmtD(rslTra), seta(rslTra,rslTraAnt)+' ant: '+fmtD(rslTraAnt), rslTra<=rslTraAnt?'E8F5E9':'FFEBEE');
-    kpi(s2,6.8, 2.85,3.1,kh,'R$/HR TRATORES',fmtD(rshrTra),seta(rshrTra,rshrTraAnt)+' ant: '+fmtD(rshrTraAnt),rshrTra<=rshrTraAnt?'E8F5E9':'FFEBEE');
-    kpi(s2,10.05,2.85,3.0,kh,'CO² TOTAL (ton)',fmtD(co2Atual),'Máquinas + Tratores','E8F5E9');
-    s2.addText('Comparativo: '+mesAnt+'/'+ano+' → '+mes+'/'+ano,{x:0.3,y:4.1,w:12,h:0.3,fontSize:9,color:'888888',italic:true});
-
-    // ── S3 placeholder ─────────────────────────────────────────────────────────
-    const s3=addCS('INDICADORES ESPECÍFICOS | MÁQUINAS E TRATORES',3);
-    s3.addShape(pptx.ShapeType.rect,{x:0.3,y:1.2,w:12.7,h:5.6,fill:{color:'F9F9F9'},line:{color:'EEEEEE'}});
-    s3.addText('📊  Inserir gráficos de indicadores específicos manualmente',{x:0.3,y:3.6,w:12.7,h:0.8,fontSize:14,color:'AAAAAA',align:'center'});
-
-    // ── S4 placeholder ─────────────────────────────────────────────────────────
-    const s4=addCS('CALENDÁRIO DE GASTOS — MÁQUINAS E TRATORES',4);
-    s4.addShape(pptx.ShapeType.rect,{x:0.3,y:1.2,w:12.7,h:5.6,fill:{color:'F9F9F9'},line:{color:'EEEEEE'}});
-    s4.addText('📅  Inserir calendário de gastos diários manualmente',{x:0.3,y:3.6,w:12.7,h:0.8,fontSize:14,color:'AAAAAA',align:'center'});
-
-    // ── S5 CO² com tendência ────────────────────────────────────────────────────
-    const s5=addCS('EMISSÕES DE CO² — MÁQUINAS E TRATORES',5);
-    const co2Meses=[[co2M2Nome,co2M2],[co2M1Nome,co2M1],[mes,co2Atual]];
-    co2Meses.forEach(([nome,val],i)=>{
-      const cx=0.4+i*4.3;
-      s5.addShape(pptx.ShapeType.roundRect,{x:cx,y:1.15,w:3.8,h:1.1,fill:{color:'E8F5E9'},rectRadius:0.08,line:{color:'C8E6C9'}});
-      s5.addText(nome.toUpperCase(),{x:cx,y:1.2,w:3.8,h:0.28,fontSize:9,bold:true,color:'2D6A4F',align:'center',charSpacing:1});
-      s5.addText(fmtD(val)+' ton',{x:cx,y:1.48,w:3.8,h:0.55,fontSize:22,bold:true,color:GRN,align:'center'});
-      s5.addText('CO²e',{x:cx,y:2.0,w:3.8,h:0.22,fontSize:9,color:G2,align:'center'});
-    });
-    s5.addShape(pptx.ShapeType.roundRect,{x:0.4,y:2.45,w:5.8,h:0.8,fill:{color:GRY},rectRadius:0.06,line:{color:'DDDDDD'}});
-    s5.addText('Placas com Emissões',{x:0.4,y:2.5,w:5.8,h:0.25,fontSize:9,color:G2,align:'center',bold:true});
-    s5.addText(fmt(co2Placas),{x:0.4,y:2.75,w:5.8,h:0.4,fontSize:20,bold:true,color:DRK,align:'center'});
-    s5.addShape(pptx.ShapeType.roundRect,{x:7.0,y:2.45,w:5.8,h:0.8,fill:{color:GRY},rectRadius:0.06,line:{color:'DDDDDD'}});
-    s5.addText('CO²e por Placa (ton)',{x:7.0,y:2.5,w:5.8,h:0.25,fontSize:9,color:G2,align:'center',bold:true});
-    s5.addText(fmtD(co2PerPlaca)+' ton',{x:7.0,y:2.75,w:5.8,h:0.4,fontSize:20,bold:true,color:DRK,align:'center'});
-    const maxCO2=Math.max(co2M2,co2M1,co2Atual,1);
-    s5.addText('Evolução CO²e (Ton)',{x:0.4,y:3.4,w:12.5,h:0.3,fontSize:11,bold:true,color:DRK,align:'center'});
-    co2Meses.forEach(([nome,val],i)=>{
-      const cx=1.5+i*3.8, bH=Math.max(0.05,(val/maxCO2)*2.2);
-      s5.addShape(pptx.ShapeType.roundRect,{x:cx,y:6.1-bH,w:2.5,h:bH,fill:{color:GRN},rectRadius:0.05});
-      s5.addText(fmtD(val),{x:cx,y:6.1-bH-0.32,w:2.5,h:0.28,fontSize:10,bold:true,color:DRK,align:'center'});
-      s5.addText(nome,{x:cx,y:6.15,w:2.5,h:0.28,fontSize:9,color:G2,align:'center'});
-    });
-
-    // ── S6 HORAS/LITROS/MÉDIA MÁQUINAS — gráfico consolidado por mês ───────────
-    const s6 = addCS('INDICADORES GASTOS MÁQUINAS — '+mes.toUpperCase()+'\nHORAS / LITROS / MÉDIA MÁQUINAS', 6);
-    // Título secundário
-    s6.addText('HORAS / LITROS / MÉDIA MÁQUINAS',{x:0.3,y:1.05,w:12.7,h:0.4,fontSize:13,bold:true,color:DRK,align:'center'});
-
-    const maqLabels = maqHist.map(m=>m.nome);
-    const maqHoras  = maqHist.map(m=>m.h);
-    const maqLitros = maqHist.map(m=>m.l);
-    const maqMedia  = maqHist.map(m=>m.h>0 ? parseFloat((m.l/m.h).toFixed(2)) : 0);
-
-    s6.addChart(pptx.ChartType.bar, [
-      {name:'Horas Trabalhadas', labels:maqLabels, values:maqHoras},
-      {name:'Litros Abastecidos', labels:maqLabels, values:maqLitros},
-      {name:'Média Mensal', labels:maqLabels, values:maqMedia},
-    ], {
-      x:0.2, y:1.45, w:12.9, h:5.3,
-      barGrouping: 'clustered',
-      chartColors: [CHART_LBL, CHART_BLU, CHART_ORA],
-      showValue: true,
-      dataLabelFontSize: 8,
-      dataLabelColor: DRK,
-      dataLabelPosition: 'outEnd',
-      barGapWidthPct: 50,
-      catAxisLabelFontSize: 10,
-      catAxisLabelColor: DRK,
-      valAxisLabelFontSize: 9,
-      showLegend: true,
-      legendPos: 'r',
-      legendFontSize: 10,
-      legendColor: DRK,
-      plotAreaFillColor: WHT,
-      valAxisMinVal: 0,
-    });
-
-    // Rodapé total máquinas
-    s6.addShape(pptx.ShapeType.rect,{x:0.2,y:6.8,w:12.9,h:0.55,fill:{color:ORA}});
-    s6.addText('TOTAL — Horas: '+fmt(hMaq)+'h   |   Litros: '+fmt(lMaq)+'L   |   Média: '+fmtD(mediaLhMaq)+' L/h',{x:0.2,y:6.8,w:12.9,h:0.55,fontSize:12,bold:true,color:WHT,align:'center',valign:'middle'});
-
-    // ── S7 HORAS/LITROS/MÉDIA TRATORES — gráfico consolidado por mês ───────────
-    const s7 = addCS('INDICADORES GASTOS TRATORES — '+mes.toUpperCase()+'\nHORAS / LITROS / MÉDIA TRATORES', 7);
-    s7.addText('HORAS / LITROS / MÉDIA TRATORES',{x:0.3,y:1.05,w:12.7,h:0.4,fontSize:13,bold:true,color:DRK,align:'center'});
-
-    const traLabels = traHist.map(m=>m.nome);
-    const traHoras  = traHist.map(m=>m.h);
-    const traLitros = traHist.map(m=>m.l);
-    const traMedia  = traHist.map(m=>m.h>0 ? parseFloat((m.l/m.h).toFixed(2)) : 0);
-
-    s7.addChart(pptx.ChartType.bar, [
-      {name:'Horas Trabalhadas', labels:traLabels, values:traHoras},
-      {name:'Litros Abastecidos', labels:traLabels, values:traLitros},
-      {name:'Média Mensal', labels:traLabels, values:traMedia},
-    ], {
-      x:0.2, y:1.45, w:12.9, h:5.3,
-      barGrouping: 'clustered',
-      chartColors: [CHART_LBL, CHART_BLU, CHART_ORA],
-      showValue: true,
-      dataLabelFontSize: 8,
-      dataLabelColor: DRK,
-      dataLabelPosition: 'outEnd',
-      barGapWidthPct: 50,
-      catAxisLabelFontSize: 10,
-      catAxisLabelColor: DRK,
-      valAxisLabelFontSize: 9,
-      showLegend: true,
-      legendPos: 'r',
-      legendFontSize: 10,
-      legendColor: DRK,
-      plotAreaFillColor: WHT,
-      valAxisMinVal: 0,
-    });
-
-    s7.addShape(pptx.ShapeType.rect,{x:0.2,y:6.8,w:12.9,h:0.55,fill:{color:BLU}});
-    s7.addText('TOTAL — Horas: '+fmt(hTra)+'h   |   Litros: '+fmt(lTra)+'L   |   Média: '+fmtD(mediaLhTra)+' L/h',{x:0.2,y:6.8,w:12.9,h:0.55,fontSize:12,bold:true,color:WHT,align:'center',valign:'middle'});
-
-    // ── S8 placeholder ─────────────────────────────────────────────────────────
-    const s8=addCS('INDICADORES DE CUSTOS — MÁQUINAS E TRATORES',8);
-    s8.addShape(pptx.ShapeType.rect,{x:0.3,y:1.2,w:12.7,h:5.6,fill:{color:'F9F9F9'},line:{color:'EEEEEE'}});
-    s8.addText('💰  Inserir comparativo de custos manualmente',{x:0.3,y:3.6,w:12.7,h:0.8,fontSize:14,color:'AAAAAA',align:'center'});
-
-    // ── S9 Gastos por Operação ─────────────────────────────────────────────────
-    const s9=addCS('INDICADORES DOS GASTOS POR OPERAÇÃO — MÁQUINAS E TRATORES',9);
-    const todasOps=[...new Set([...Object.keys(opsAtual),...Object.keys(opsAnt)])].sort();
-    const cOp=2.8,cMes2=1.1,cComp=0.9,cR=1.5,cCompR=1.2;
-    const cols=[cOp,cMes2,cMes2,cComp,cMes2,cMes2,cComp,cR,cR,cCompR];
-    const hdrY=1.15,hdrH=0.3,rowH=0.37;
-    s9.addShape(pptx.ShapeType.rect,{x:0.1,y:hdrY,w:12.9,h:hdrH*2,fill:{color:BLU}});
-    [['Operações',cOp],['Horas Trabalhadas',cMes2*2+cComp],['Litros',cMes2*2+cComp],['R$ Transacionado',cR*2+cCompR]].reduce((cx,[l,w])=>{
-      s9.addText(l,{x:cx,y:hdrY,w,h:hdrH,fontSize:8,bold:true,color:WHT,align:'center',valign:'middle'});
-      return cx+w;
-    },0.1);
-    [['',cOp],[mesAnt.slice(0,3),cMes2],[mes.slice(0,3),cMes2],['Comp%',cComp],[mesAnt.slice(0,3),cMes2],[mes.slice(0,3),cMes2],['Comp',cComp],[mesAnt.slice(0,3),cR],[mes.slice(0,3),cR],['Comp',cCompR]].reduce((cx,[l,w])=>{
-      s9.addText(l,{x:cx,y:hdrY+hdrH,w,h:hdrH,fontSize:7,bold:true,color:'CCDDFF',align:'center',valign:'middle'});
-      return cx+w;
-    },0.1);
-    let totHA=0,totHB=0,totLA=0,totLB=0,totRA=0,totRB=0;
-    todasOps.slice(0,12).forEach((op,ri)=>{
-      const ry=hdrY+hdrH*2+ri*rowH+0.03;
-      const dA=opsAnt[op]||{h:0,l:0}, dB=opsAtual[op]||{h:0,l:0};
-      const rA=dA.l*rslAntMedio, rB=dB.l*rslMedio;
-      totHA+=dA.h;totHB+=dB.h;totLA+=dA.l;totLB+=dB.l;totRA+=rA;totRB+=rB;
-      s9.addShape(pptx.ShapeType.rect,{x:0.1,y:ry,w:12.9,h:rowH-0.02,fill:{color:ri%2===0?GRY:WHT},line:{color:'DDDDDD'}});
-      [op,fmt(dA.h),fmt(dB.h),pct(dB.h,dA.h),fmt(dA.l),fmt(dB.l),pct(dB.l,dA.l),fmtR(rA),fmtR(rB),difR(rB,rA)].reduce((cx,v,ci)=>{
-        const w=cols[ci],isComp=ci===3||ci===6||ci===9;
-        const nv=parseFloat((v||'').toString().replace(',','.').replace(/[^0-9.-]/g,''));
-        s9.addText(v,{x:cx+0.03,y:ry,w:w-0.06,h:rowH-0.02,fontSize:7.5,color:isComp?(nv>=0?GRN:'C0392B'):DRK,align:ci===0?'left':'center',valign:'middle'});
-        return cx+w;
-      },0.1);
-    });
-    const totY=hdrY+hdrH*2+Math.min(todasOps.length,12)*rowH+0.08;
-    if(totY<7.1){
-      s9.addShape(pptx.ShapeType.rect,{x:0.1,y:totY,w:12.9,h:rowH,fill:{color:BLU}});
-      [['TOTAL',cOp],[fmt(totHA),cMes2],[fmt(totHB),cMes2],[pct(totHB,totHA),cComp],[fmt(totLA),cMes2],[fmt(totLB),cMes2],[pct(totLB,totLA),cComp],[fmtR(totRA),cR],[fmtR(totRB),cR],[difR(totRB,totRA),cCompR]].reduce((cx,[v,w])=>{
-        s9.addText(v,{x:cx+0.03,y:totY,w:w-0.06,h:rowH,fontSize:7.5,bold:true,color:WHT,align:'center',valign:'middle'});
-        return cx+w;
-      },0.1);
-    }
-    if(todasOps.length===0) s9.addText('Nenhum dado.',{x:0.3,y:3.2,w:12.7,h:0.8,fontSize:13,color:'AAAAAA',align:'center'});
-
-    // ── S10 Encerramento ───────────────────────────────────────────────────────
-    const s10=pptx.addSlide(); addCover(s10,'OBRIGADO!',mes.toUpperCase()+' / '+ano);
-    s10.addText('Gestão Inteligente de Frotas',{x:0.5,y:5.2,w:8,h:0.5,fontSize:14,color:'888888',italic:true});
-
-    await pptx.writeFile({fileName:'Ignis_Apresentacao_'+mes+'_'+ano+'.pptx'});
-    status.textContent = '✅ Apresentação gerada com sucesso!';
-  } catch(e) {
-    console.error('Erro:', e);
-    status.textContent = '❌ Erro: '+e.message;
-  }
 }
 
 // ── INIT — feito após login em loginEntrarApp() ───────────────────────────────
