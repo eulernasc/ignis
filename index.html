@@ -9,7 +9,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, doc, setDoc, getDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBdfrSrif-vThP3WqWJF76hhKE7FXGFpL0",
@@ -66,36 +66,6 @@ window.fbLoadUsers = async function() {
     if (snap.exists() && snap.data()._users) return snap.data()._users;
     return null;
   } catch(e) { console.error("Firebase loadUsers error:", e); return null; }
-};
-
-// ── LISTENER EM TEMPO REAL ────────────────────────────────────────────────────
-window._ignisListenerAtivo = false;
-window._ultimoSaveAt = 0;
-
-window.iniciarListenerTempoReal = function() {
-  if (window._ignisListenerAtivo) return;
-  window._ignisListenerAtivo = true;
-  onSnapshot(doc(db, "fueltracker", "dados"), (snap) => {
-    if (!snap.exists()) return;
-    const { _users, ...rest } = snap.data();
-    const tsFirebase = rest._savedAt || 0;
-    const tsLocal    = window._ultimoSaveAt || 0;
-    if (tsFirebase > tsLocal + 3000) {
-      try {
-        if (typeof state !== 'undefined') {
-          const d = { ...rest }; delete d._savedAt;
-          state = { ...state, ...d };
-          localStorage.setItem('fueltracker_v3', JSON.stringify(state));
-          window._ultimoSaveAt = tsFirebase;
-          if (typeof updateFilters === 'function')         updateFilters();
-          if (typeof renderDashboard === 'function')       renderDashboard();
-          if (typeof relChecarReincidencia === 'function') relChecarReincidencia();
-          if (typeof updateSyncStatus === 'function')      updateSyncStatus('connected');
-          if (typeof showToast === 'function')             showToast('🔄 Dados atualizados por outro usuário', 'info');
-        }
-      } catch(e) { console.warn('Listener erro:', e); }
-    }
-  }, (err) => { console.warn('Listener erro:', err.message); });
 };
 
 window.firebaseReady = true;
@@ -1663,50 +1633,57 @@ async function syncFromFirebase() {
   try {
     updateSyncStatus('syncing');
     const data = await window.fbLoad();
-    if (!data) {
-      updateSyncStatus('connected');
-      window.iniciarListenerTempoReal();
-      return;
-    }
+    if (!data) { updateSyncStatus('connected'); return; }
+
     const { _users, ...rest } = data;
-    const dataLimpa = { ...rest };
-    delete dataLimpa._savedAt;
 
-    const tsFirebase = rest._savedAt || 0;
-    const tsLocal = (() => {
-      try { const s=localStorage.getItem('fueltracker_v3'); return s?(JSON.parse(s)._savedAt||0):0; } catch(e){return 0;}
-    })();
+    // Verifica se tem dados locais reais
+    const localAbast   = state.abastecimentos?.length || 0;
+    const localSem     = Object.keys(state.semanas||{}).length;
+    const localMaq     = state.maquinas?.length || 0;
+    const temDadosLocal = localAbast > 0 || localSem > 0 || localMaq > 0;
 
-    if (tsFirebase >= tsLocal) {
-      state = { ...state, ...dataLimpa };
-      state._savedAt = tsFirebase;
+    const remoteAbast  = rest.abastecimentos?.length || 0;
+    const remoteSem    = Object.keys(rest.semanas||{}).length;
+    const remoteTotal  = remoteAbast + remoteSem;
+
+    if (!temDadosLocal && remoteTotal > 0) {
+      // Computador novo sem dados — sempre carrega do Firebase
+      state = { ...state, ...rest };
       localStorage.setItem('fueltracker_v3', JSON.stringify(state));
-      window._ultimoSaveAt = tsFirebase;
       updateFilters();
       renderDashboard();
       relChecarReincidencia();
-      if (tsFirebase > 0 && tsFirebase > tsLocal) showToast('Dados sincronizados! ☁️', 'success');
-    } else {
+      updateSyncStatus('connected');
+      showToast('Dados carregados do Firebase! ☁️', 'success');
+    } else if (remoteAbast > localAbast || remoteSem > localSem) {
+      // Firebase tem mais dados — atualiza local
+      state = { ...state, ...rest };
+      localStorage.setItem('fueltracker_v3', JSON.stringify(state));
+      updateFilters();
+      renderDashboard();
+      relChecarReincidencia();
+      updateSyncStatus('connected');
+      showToast('Dados sincronizados do Firebase! ☁️', 'success');
+    } else if (temDadosLocal && (localAbast > remoteAbast || localSem > remoteSem)) {
+      // Local tem mais dados — sobe pro Firebase
+      updateSyncStatus('connected');
       saveState();
+    } else {
+      updateSyncStatus('connected');
     }
-    updateSyncStatus('connected');
-    window.iniciarListenerTempoReal();
   } catch(e) {
     console.error('syncFromFirebase erro:', e);
     updateSyncStatus('error');
-    // Mesmo com erro tenta o listener
-    setTimeout(() => window.iniciarListenerTempoReal(), 3000);
   }
 }
 
 function saveState() {
   localStorage.setItem('fueltracker_v3', JSON.stringify(state));
+  // Salvar no Firebase em background — sempre preserva _users
   if (window.firebaseReady && window.fbSave) {
-    const agora = Date.now();
-    window._ultimoSaveAt = agora;
     const users = (() => { try { return JSON.parse(localStorage.getItem('ignis_users_cache')||'{}'); } catch(e){ return {}; } })();
-    const dataToSave = { ...state, _savedAt: agora };
-    if (Object.keys(users).length) dataToSave._users = users;
+    const dataToSave = Object.keys(users).length ? { ...state, _users: users } : state;
     window.fbSave(dataToSave).then(ok => {
       if (ok) updateSyncStatus('connected');
       else updateSyncStatus('error');
