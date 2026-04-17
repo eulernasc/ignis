@@ -10,7 +10,6 @@
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getFirestore, doc, setDoc, getDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
-import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBdfrSrif-vThP3WqWJF76hhKE7FXGFpL0",
@@ -69,16 +68,6 @@ window.fbLoadUsers = async function() {
   } catch(e) { console.error("Firebase loadUsers error:", e); return null; }
 };
 
-// Autentica anonimamente — obrigatório para que as regras do Firestore
-// (allow read, write: if request.auth != null) permitam acesso em qualquer PC
-const auth = getAuth(app);
-try {
-  await signInAnonymously(auth);
-  console.log("Ignis: autenticado anonimamente");
-} catch(e) {
-  console.warn("Ignis: auth anônimo falhou:", e.message);
-}
-
 // ── LISTENER EM TEMPO REAL ────────────────────────────────────────────────────
 window._ignisListenerAtivo = false;
 window._ultimoSaveAt = 0;
@@ -86,21 +75,16 @@ window._ultimoSaveAt = 0;
 window.iniciarListenerTempoReal = function() {
   if (window._ignisListenerAtivo) return;
   window._ignisListenerAtivo = true;
-  console.log("Ignis: listener tempo real ativado");
-
   onSnapshot(doc(db, "fueltracker", "dados"), (snap) => {
     if (!snap.exists()) return;
     const { _users, ...rest } = snap.data();
     const tsFirebase = rest._savedAt || 0;
     const tsLocal    = window._ultimoSaveAt || 0;
-
-    // Só aplica se outro usuário salvou (diferença > 3 segundos para evitar loop)
     if (tsFirebase > tsLocal + 3000) {
       try {
         if (typeof state !== 'undefined') {
-          const dataLimpa = { ...rest };
-          delete dataLimpa._savedAt;
-          state = { ...state, ...dataLimpa };
+          const d = { ...rest }; delete d._savedAt;
+          state = { ...state, ...d };
           localStorage.setItem('fueltracker_v3', JSON.stringify(state));
           window._ultimoSaveAt = tsFirebase;
           if (typeof updateFilters === 'function')         updateFilters();
@@ -111,9 +95,7 @@ window.iniciarListenerTempoReal = function() {
         }
       } catch(e) { console.warn('Listener erro:', e); }
     }
-  }, (err) => {
-    console.warn('Ignis listener erro:', err.message);
-  });
+  }, (err) => { console.warn('Listener erro:', err.message); });
 };
 
 window.firebaseReady = true;
@@ -641,7 +623,7 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
   </div>
   <div class="sync-status">
     <div class="sync-dot" id="sync-dot"></div>
-    <span id="sync-label" class="sync-label" style="color:var(--text2)">Conectando...</span>
+    <span id="sync-label" class="sync-label" style="color:var(--text2)">Sincronizando...</span>
   </div>
 </aside>
 
@@ -1681,8 +1663,11 @@ async function syncFromFirebase() {
   try {
     updateSyncStatus('syncing');
     const data = await window.fbLoad();
-    if (!data) { updateSyncStatus('connected'); window.iniciarListenerTempoReal(); return; }
-
+    if (!data) {
+      updateSyncStatus('connected');
+      window.iniciarListenerTempoReal();
+      return;
+    }
     const { _users, ...rest } = data;
     const dataLimpa = { ...rest };
     delete dataLimpa._savedAt;
@@ -1693,7 +1678,6 @@ async function syncFromFirebase() {
     })();
 
     if (tsFirebase >= tsLocal) {
-      // Firebase é mais recente ou igual — aplica
       state = { ...state, ...dataLimpa };
       state._savedAt = tsFirebase;
       localStorage.setItem('fueltracker_v3', JSON.stringify(state));
@@ -1703,7 +1687,6 @@ async function syncFromFirebase() {
       relChecarReincidencia();
       if (tsFirebase > 0 && tsFirebase > tsLocal) showToast('Dados sincronizados! ☁️', 'success');
     } else {
-      // Local é mais recente — sobe pro Firebase
       saveState();
     }
     updateSyncStatus('connected');
@@ -1711,6 +1694,8 @@ async function syncFromFirebase() {
   } catch(e) {
     console.error('syncFromFirebase erro:', e);
     updateSyncStatus('error');
+    // Mesmo com erro tenta o listener
+    setTimeout(() => window.iniciarListenerTempoReal(), 3000);
   }
 }
 
@@ -3564,9 +3549,9 @@ function updateSyncStatus(status) {
   const configs = {
     connected:    {cls:'connected', text:'Firebase sincronizado ☁️'},
     syncing:      {cls:'syncing',   text:'Sincronizando...'},
-    error:        {cls:'error',     text:'Erro na sincronização'},
+    error:        {cls:'error',     text:'Erro de conexão'},
     idle:         {cls:'connected', text:'Firebase ativo ☁️'},
-    disconnected: {cls:'',          text:'Sem conexão Firebase'},
+    disconnected: {cls:'',          text:'Sem conexão'},
   };
   const c = configs[status] || configs.disconnected;
   dot.className = 'sync-dot' + (c.cls ? ' '+c.cls : '') + (status==='syncing' ? ' sync-dot-pulse' : '');
