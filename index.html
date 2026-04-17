@@ -1639,49 +1639,61 @@ async function syncFromFirebase() {
 
     const { _users, ...rest } = data;
     const tsFirebase = rest._savedAt || 0;
+    const tsLocal    = window._ultimoSaveAt || 0;
 
-    // Timestamp salvo localmente nesta sessão
-    const tsLocal = window._ultimoSaveAt || 0;
-
-    // Verifica se tem dados locais reais (além do default vazio)
-    const temDadosLocal = (state.abastecimentos?.length || 0) > 0
-                       || Object.keys(state.semanas||{}).length > 0
-                       || (state.maquinas?.length || 0) > 0;
-
-    const temDadosFirebase = (rest.abastecimentos?.length || 0) > 0
+    const temDadosLocal    = (state.abastecimentos?.length||0) > 0
+                          || Object.keys(state.semanas||{}).length > 0
+                          || (state.maquinas?.length||0) > 0
+                          || (state.arlaMeses?.length||0) > 0;
+    const temDadosFirebase = (rest.abastecimentos?.length||0) > 0
                           || Object.keys(rest.semanas||{}).length > 0
-                          || (rest.maquinas?.length || 0) > 0;
+                          || (rest.maquinas?.length||0) > 0
+                          || (rest.arlaMeses?.length||0) > 0;
 
-    if (!temDadosLocal && temDadosFirebase) {
-      // Computador sem dados — carrega Firebase sempre
-      aplicarDadosFirebase(rest);
-      showToast('Dados carregados! ☁️', 'success');
-    } else if (tsFirebase > tsLocal) {
-      // Firebase foi salvo depois — aplica (inclui deleções!)
-      aplicarDadosFirebase(rest);
-      if (temDadosFirebase) showToast('Dados sincronizados! ☁️', 'success');
+    const deveAplicar = (!temDadosLocal && temDadosFirebase) || (tsFirebase > tsLocal);
+
+    if (deveAplicar && temDadosFirebase) {
+      const dados = { ...rest };
+      delete dados._savedAt;
+      state = { ...state, ...dados };
+      state._savedAt = tsFirebase;
+      localStorage.setItem('fueltracker_v3', JSON.stringify(state));
+      window._ultimoSaveAt = tsFirebase;
+
+      // Re-inicializa TUDO que depende do state
+      updateFilters();
+      renderDashboard();
+      relChecarReincidencia();
+
+      // ── CHAVE: re-inicializa Arla com dados do Firebase ──────────────────
+      if (typeof arlaInit === 'function') {
+        // Reseta o _arlaState para forçar recarga do state atualizado
+        window._arlaState.meses = [];
+        window._arlaState.processados = [];
+        window._arlaState.mesAtual = null;
+        arlaInit();
+        if (typeof arlaChecarLembrete === 'function') arlaChecarLembrete();
+        // Se aba Arla estiver aberta, re-renderiza
+        const pArla = document.getElementById('page-arla');
+        if (pArla && pArla.style.display !== 'none') {
+          if (typeof arlaRenderRelatorio === 'function') arlaRenderRelatorio();
+        }
+      }
+
+      updateSyncStatus('connected');
+      if (!temDadosLocal) showToast('Dados carregados! ☁️', 'success');
+      else showToast('Dados sincronizados! ☁️', 'success');
+
     } else if (temDadosLocal && tsLocal > tsFirebase) {
-      // Local foi salvo depois — sobe pro Firebase
       saveState();
+      updateSyncStatus('connected');
+    } else {
+      updateSyncStatus('connected');
     }
-    // Se iguais: nada a fazer
-    updateSyncStatus('connected');
   } catch(e) {
     console.error('syncFromFirebase erro:', e);
     updateSyncStatus('error');
   }
-}
-
-function aplicarDadosFirebase(rest) {
-  const dados = { ...rest };
-  delete dados._savedAt;
-  state = { ...state, ...dados };
-  localStorage.setItem('fueltracker_v3', JSON.stringify(state));
-  window._ultimoSaveAt = rest._savedAt || 0;
-  updateFilters();
-  renderDashboard();
-  relChecarReincidencia();
-  updateSyncStatus('connected');
 }
 
 function saveState() {
