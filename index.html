@@ -760,20 +760,10 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
 
     <!-- ABA COMPARATIVO -->
     <div id="comp-tab-periodos">
-      <!-- Seletor de períodos -->
+      <!-- Seletor de períodos: só aparece quando há filtro de data -->
       <div id="comp-periodo-selector" style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:16px;display:none">
-        <!-- Linha de chips selecionados + botão abrir -->
-        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-          <div id="comp-chips-selecionados" style="display:flex;flex-wrap:wrap;gap:6px;flex:1"></div>
-          <button onclick="compToggleLista()" id="comp-btn-toggle" style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:6px 12px;cursor:pointer;font-size:12px;color:var(--text2);display:flex;align-items:center;gap:5px;white-space:nowrap">
-            📅 <span id="comp-btn-toggle-label">Selecionar períodos</span>
-          </button>
-        </div>
-        <!-- Lista colapsável -->
-        <div id="comp-lista-wrapper" style="display:none;margin-top:12px;border-top:1px solid var(--border);padding-top:12px">
-          <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px">Selecione até 5 períodos para comparar:</div>
-          <div id="comp-periodo-checkboxes" style="display:flex;flex-wrap:wrap;gap:8px"></div>
-        </div>
+        <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px">Períodos no intervalo selecionado:</div>
+        <div id="comp-periodo-checkboxes" style="display:flex;flex-wrap:wrap;gap:8px"></div>
       </div>
       <div id="comparativo-content"></div>
     </div>
@@ -2701,29 +2691,16 @@ function renderComparativo() {
     ? todosPeriodos.filter(([id]) => _periodosSelec.has(id))
     : todosPeriodos;
 
-  // Mostrar seletor de períodos
-  selectorDiv.style.display = 'block';
-
-  // Renderiza chips dos selecionados
-  const chipsDiv = document.getElementById('comp-chips-selecionados');
-  if (chipsDiv) {
-    const sel = todosPeriodos.filter(([id]) => _periodosSelec.has(id));
-    if (sel.length) {
-      chipsDiv.innerHTML = sel.map(([id, p]) =>
-        `<span style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;background:rgba(192,57,43,.15);border:1px solid var(--accent);border-radius:6px;font-size:12px;font-weight:500">
-          ${p.label||id}
-          <span onclick="togglePeriodoComp('${id}',{checked:false})" style="cursor:pointer;color:var(--text3);font-size:14px;line-height:1" title="Remover">×</span>
-        </span>`
-      ).join('');
-    } else {
-      chipsDiv.innerHTML = '<span style="font-size:12px;color:var(--text3);font-style:italic">Nenhum período selecionado</span>';
+  // Sem filtro de data → esconde seletor e auto-seleciona o mais recente
+  if (!compDtIni && !compDtFim) {
+    selectorDiv.style.display = 'none';
+    if (_periodosSelec.size === 0) {
+      const maisRecente = todosPeriodos[todosPeriodos.length - 1];
+      if (maisRecente) _periodosSelec.add(maisRecente[0]);
     }
-  }
-
-  // Sem filtro de data → inicializa com o mais recente se vazia
-  if (!compDtIni && !compDtFim && _periodosSelec.size === 0) {
-    const maisRecente = todosPeriodos[todosPeriodos.length - 1];
-    if (maisRecente) _periodosSelec.add(maisRecente[0]);
+  } else {
+    // Tem filtro de data → mostra seletor
+    selectorDiv.style.display = 'block';
   }
 
   // Se tem filtro mas nenhum período bateu → avisa
@@ -2733,13 +2710,15 @@ function renderComparativo() {
     return;
   }
 
-  // Renderizar checkboxes — só os períodos visíveis
-  checkboxDiv.innerHTML = periodosVisiveis.map(([id, p]) => `
-    <label style="display:inline-flex;align-items:center;gap:7px;padding:7px 12px;background:${_periodosSelec.has(id)?'rgba(192,57,43,.15)':'var(--bg3)'};border:1px solid ${_periodosSelec.has(id)?'var(--accent)':'var(--border)'};border-radius:8px;cursor:pointer;font-size:12px;font-weight:500;transition:.2s">
-      <input type="checkbox" style="accent-color:var(--accent)" ${_periodosSelec.has(id)?'checked':''} onchange="togglePeriodoComp('${id}',this)">
-      ${p.label||id}
-      <span style="color:var(--text3);font-size:10px">${(p.registros||[]).length} maq.</span>
-    </label>`).join('');
+  // Renderizar checkboxes — só quando seletor visível
+  if (compDtIni || compDtFim) {
+    checkboxDiv.innerHTML = periodosVisiveis.map(([id, p]) => `
+      <label style="display:inline-flex;align-items:center;gap:7px;padding:7px 12px;background:${_periodosSelec.has(id)?'rgba(192,57,43,.15)':'var(--bg3)'};border:1px solid ${_periodosSelec.has(id)?'var(--accent)':'var(--border)'};border-radius:8px;cursor:pointer;font-size:12px;font-weight:500;transition:.2s">
+        <input type="checkbox" style="accent-color:var(--accent)" ${_periodosSelec.has(id)?'checked':''} onchange="togglePeriodoComp('${id}',this)">
+        ${p.label||id}
+        <span style="color:var(--text3);font-size:10px">${(p.registros||[]).length} maq.</span>
+      </label>`).join('');
+  }
 
   // Períodos para comparar = selecionados (com ou sem filtro de data)
   const selecionadosFiltrados = todosPeriodos.filter(([id])=>_periodosSelec.has(id));
@@ -3100,15 +3079,6 @@ function compFinRenderMensal(dados, fmtR) {
   html += '<div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">Saldo Líquido</div><div style="font-size:16px;font-weight:700;color:' + (totLiq > 0 ? 'var(--red)' : 'var(--green)') + '">' + fmtR(totLiq) + '</div></div>';
   html += '</div>';
   return html;
-}
-
-function compToggleLista() {
-  const wrapper = document.getElementById('comp-lista-wrapper');
-  const label   = document.getElementById('comp-btn-toggle-label');
-  if (!wrapper) return;
-  const aberto = wrapper.style.display !== 'none';
-  wrapper.style.display = aberto ? 'none' : 'block';
-  if (label) label.textContent = aberto ? 'Selecionar períodos' : 'Fechar lista';
 }
 
 function togglePeriodoComp(id, checkbox) {
