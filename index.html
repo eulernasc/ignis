@@ -761,8 +761,8 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
     <!-- ABA COMPARATIVO -->
     <div id="comp-tab-periodos">
       <!-- Seletor de períodos -->
-      <div id="comp-periodo-selector" style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:16px;display:none">
-        <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px">Períodos no intervalo — selecione até 5:</div>
+      <div id="comp-periodo-selector" style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:16px;display:none">
+        <div style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px">Selecione até 5 períodos para comparar:</div>
         <div id="comp-periodo-checkboxes" style="display:flex;flex-wrap:wrap;gap:8px"></div>
       </div>
       <div id="comparativo-content"></div>
@@ -2231,10 +2231,10 @@ function updateFilters() {
   // Multi-select operações do dashboard
   const cb=document.getElementById('op-checkboxes');
   if(cb){
-    const selected=getSelectedOps();
+    const selected=getSelectedOps(); // null=todas, Set=específicas/nenhuma
     cb.innerHTML=opsFiltradas.map(o=>`
       <label style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:13px">
-        <input type="checkbox" class="op-check" value="${o}" ${selected.size===0||selected.has(o)?'checked':''} onchange="onOpCheckChange()">
+        <input type="checkbox" class="op-check" value="${o}" ${selected===null||selected.has(o)?'checked':''} onchange="onOpCheckChange()">
         ${o.replace(/_/g,' ')}
       </label>`).join('');
     // Sincroniza o "Todas" checkbox
@@ -2300,8 +2300,13 @@ function updateFilters() {
 }
 
 function getSelectedOps() {
-  const checks=document.querySelectorAll('.op-check:checked');
-  return new Set([...checks].map(c=>c.value));
+  const allCheck = document.getElementById('op-all-check');
+  const checks = [...document.querySelectorAll('.op-check')];
+  const checked = checks.filter(c => c.checked);
+  // "Todas" marcado sem indeterminate → null = sem filtro (todas)
+  if (allCheck && allCheck.checked && !allCheck.indeterminate) return null;
+  // Nenhuma marcada → Set vazio (nenhuma = mostrar nada)
+  return new Set(checked.map(c => c.value));
 }
 
 function toggleOpDropdown() {
@@ -2408,8 +2413,13 @@ function getFilteredAbast(opF,maqF) {
       });
     }
   }
-  if(opF instanceof Set && opF.size>0) {
+  if (opF === null) {
+    // null = todas as operações, sem filtro
+  } else if(opF instanceof Set && opF.size > 0) {
     list=list.filter(a=>opF.has(getMaquina(a.placa)?.operacao||a.operacao||''));
+  } else if(opF instanceof Set && opF.size === 0) {
+    // Set vazio = nenhuma selecionada = não mostrar nada
+    list = [];
   } else if(typeof opF==='string' && opF) {
     list=list.filter(a=>(getMaquina(a.placa)?.operacao||a.operacao||'')===opF);
   }
@@ -2688,21 +2698,18 @@ function renderComparativo() {
   if ((compDtIni || compDtFim) && filtroAtual !== _ultimoFiltroData) {
     _ultimoFiltroData = filtroAtual;
     _periodosSelec = new Set(
-      todosPeriodos
-        .filter(([id, p]) => {
-          const pIni = p.dataIni||'';
-          const pFim = p.dataFim||p.dataIni||'';
-          if(!pIni) return false;
-          if(compDtFim && pIni > compDtFim) return false;
-          if(compDtIni && pFim && pFim < compDtIni) return false;
-          return true;
-        })
-        .map(([id]) => id)
+      todosPeriodos.filter(([id, p]) => {
+        const pIni = p.dataIni||'', pFim = p.dataFim||p.dataIni||'';
+        if(!pIni) return false;
+        if(compDtFim && pIni > compDtFim) return false;
+        if(compDtIni && pFim && pFim < compDtIni) return false;
+        return true;
+      }).map(([id]) => id)
     );
   }
   if (!compDtIni && !compDtFim) _ultimoFiltroData = '';
 
-  // Sem filtro de data → esconde seletor, auto-seleciona mais recente
+  // Sem data → esconde seletor e auto-seleciona mais recente
   if (!compDtIni && !compDtFim) {
     selectorDiv.style.display = 'none';
     if (_periodosSelec.size === 0) {
@@ -2713,11 +2720,10 @@ function renderComparativo() {
     selectorDiv.style.display = 'block';
   }
 
-  // Períodos visíveis nos checkboxes
+  // Períodos visíveis
   const periodosVisiveis = (compDtIni || compDtFim)
     ? todosPeriodos.filter(([id, p]) => {
-        const pIni = p.dataIni||'';
-        const pFim = p.dataFim||p.dataIni||'';
+        const pIni = p.dataIni||'', pFim = p.dataFim||p.dataIni||'';
         if(!pIni) return false;
         if(compDtFim && pIni > compDtFim) return false;
         if(compDtIni && pFim && pFim < compDtIni) return false;
