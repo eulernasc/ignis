@@ -2641,6 +2641,7 @@ function renderRanking(list) {
 
 // ── COMPARATIVO ───────────────────────────────────────────────────────────────
 let _periodosSelec = new Set();
+let _ultimoFiltroData = '';
 
 function renderComparativo() {
   updateFilters();
@@ -2668,30 +2669,39 @@ function renderComparativo() {
   const clearBtn = document.getElementById('comp-date-clear');
   if(clearBtn) clearBtn.style.display = (compDtIni||compDtFim) ? 'inline-flex' : 'none';
 
-  // Se tem filtro de data → auto-seleciona APENAS períodos que realmente se sobrepõem ao intervalo
-  if(compDtIni || compDtFim) {
+  // Se tem filtro de data E o filtro mudou → auto-seleciona períodos do intervalo
+  const filtroAtual = compDtIni + '|' + compDtFim;
+  if((compDtIni || compDtFim) && filtroAtual !== _ultimoFiltroData) {
+    _ultimoFiltroData = filtroAtual;
     _periodosSelec = new Set(
       todosPeriodos
         .filter(([id, p]) => {
           const pIni = p.dataIni||'';
           const pFim = p.dataFim||p.dataIni||'';
-          // Se o período não tem datas de referência, não inclui quando há filtro ativo
           if(!pIni) return false;
-          // Sobreposição real: período começa antes do fim do filtro E termina depois do início do filtro
-          if(compDtFim && pIni > compDtFim) return false; // período começa depois do fim do filtro
-          if(compDtIni && pFim && pFim < compDtIni) return false; // período termina antes do início do filtro
+          if(compDtFim && pIni > compDtFim) return false;
+          if(compDtIni && pFim && pFim < compDtIni) return false;
           return true;
         })
         .map(([id]) => id)
     );
   }
+  // Limpa o rastro quando não tem data
+  if(!compDtIni && !compDtFim) _ultimoFiltroData = '';
 
-  // Períodos a exibir nos checkboxes: se tem filtro de data → só os filtrados; senão → todos
+  // Períodos a exibir nos checkboxes
   const periodosVisiveis = (compDtIni || compDtFim)
-    ? todosPeriodos.filter(([id]) => _periodosSelec.has(id))
+    ? todosPeriodos.filter(([id]) => _periodosSelec.has(id) || todosPeriodos.find(([i,p]) => {
+        if(i!==id) return false;
+        const pIni=p.dataIni||'', pFim=p.dataFim||p.dataIni||'';
+        if(!pIni) return false;
+        if(compDtFim && pIni > compDtFim) return false;
+        if(compDtIni && pFim && pFim < compDtIni) return false;
+        return true;
+      }))
     : todosPeriodos;
 
-  // Sem filtro de data → esconde seletor e auto-seleciona o mais recente
+  // Sem filtro de data → esconde seletor, auto-seleciona mais recente
   if (!compDtIni && !compDtFim) {
     selectorDiv.style.display = 'none';
     if (_periodosSelec.size === 0) {
@@ -2699,7 +2709,6 @@ function renderComparativo() {
       if (maisRecente) _periodosSelec.add(maisRecente[0]);
     }
   } else {
-    // Tem filtro de data → mostra seletor
     selectorDiv.style.display = 'block';
   }
 
@@ -2710,15 +2719,13 @@ function renderComparativo() {
     return;
   }
 
-  // Renderizar checkboxes — só quando seletor visível
-  if (compDtIni || compDtFim) {
-    checkboxDiv.innerHTML = periodosVisiveis.map(([id, p]) => `
-      <label style="display:inline-flex;align-items:center;gap:7px;padding:7px 12px;background:${_periodosSelec.has(id)?'rgba(192,57,43,.15)':'var(--bg3)'};border:1px solid ${_periodosSelec.has(id)?'var(--accent)':'var(--border)'};border-radius:8px;cursor:pointer;font-size:12px;font-weight:500;transition:.2s">
-        <input type="checkbox" style="accent-color:var(--accent)" ${_periodosSelec.has(id)?'checked':''} onchange="togglePeriodoComp('${id}',this)">
-        ${p.label||id}
-        <span style="color:var(--text3);font-size:10px">${(p.registros||[]).length} maq.</span>
-      </label>`).join('');
-  }
+  // Renderizar checkboxes — só os períodos visíveis
+  checkboxDiv.innerHTML = periodosVisiveis.map(([id, p]) => `
+    <label style="display:inline-flex;align-items:center;gap:7px;padding:7px 12px;background:${_periodosSelec.has(id)?'rgba(192,57,43,.15)':'var(--bg3)'};border:1px solid ${_periodosSelec.has(id)?'var(--accent)':'var(--border)'};border-radius:8px;cursor:pointer;font-size:12px;font-weight:500;transition:.2s">
+      <input type="checkbox" style="accent-color:var(--accent)" ${_periodosSelec.has(id)?'checked':''} onchange="togglePeriodoComp('${id}',this)">
+      ${p.label||id}
+      <span style="color:var(--text3);font-size:10px">${(p.registros||[]).length} maq.</span>
+    </label>`).join('');
 
   // Períodos para comparar = selecionados (com ou sem filtro de data)
   const selecionadosFiltrados = todosPeriodos.filter(([id])=>_periodosSelec.has(id));
