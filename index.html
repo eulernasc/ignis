@@ -761,8 +761,8 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
     <!-- ABA COMPARATIVO -->
     <div id="comp-tab-periodos">
       <!-- Seletor de períodos -->
-      <div id="comp-periodo-selector" style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:16px;display:none">
-        <div style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px">Selecione até 5 períodos para comparar:</div>
+      <div id="comp-periodo-selector" style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:16px;display:none">
+        <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px">Períodos no intervalo — selecione até 5:</div>
         <div id="comp-periodo-checkboxes" style="display:flex;flex-wrap:wrap;gap:8px"></div>
       </div>
       <div id="comparativo-content"></div>
@@ -2655,6 +2655,7 @@ function renderRanking(list) {
 
 // ── COMPARATIVO ───────────────────────────────────────────────────────────────
 let _periodosSelec = new Set();
+let _ultimoFiltroData = '';
 
 function renderComparativo() {
   updateFilters();
@@ -2682,37 +2683,47 @@ function renderComparativo() {
   const clearBtn = document.getElementById('comp-date-clear');
   if(clearBtn) clearBtn.style.display = (compDtIni||compDtFim) ? 'inline-flex' : 'none';
 
-  // Se tem filtro de data → auto-seleciona APENAS períodos que realmente se sobrepõem ao intervalo
-  if(compDtIni || compDtFim) {
+  // Se tem filtro de data E mudou → auto-seleciona períodos do intervalo
+  const filtroAtual = compDtIni + '|' + compDtFim;
+  if ((compDtIni || compDtFim) && filtroAtual !== _ultimoFiltroData) {
+    _ultimoFiltroData = filtroAtual;
     _periodosSelec = new Set(
       todosPeriodos
         .filter(([id, p]) => {
           const pIni = p.dataIni||'';
           const pFim = p.dataFim||p.dataIni||'';
-          // Se o período não tem datas de referência, não inclui quando há filtro ativo
           if(!pIni) return false;
-          // Sobreposição real: período começa antes do fim do filtro E termina depois do início do filtro
-          if(compDtFim && pIni > compDtFim) return false; // período começa depois do fim do filtro
-          if(compDtIni && pFim && pFim < compDtIni) return false; // período termina antes do início do filtro
+          if(compDtFim && pIni > compDtFim) return false;
+          if(compDtIni && pFim && pFim < compDtIni) return false;
           return true;
         })
         .map(([id]) => id)
     );
   }
+  if (!compDtIni && !compDtFim) _ultimoFiltroData = '';
 
-  // Períodos a exibir nos checkboxes: se tem filtro de data → só os filtrados; senão → todos
-  const periodosVisiveis = (compDtIni || compDtFim)
-    ? todosPeriodos.filter(([id]) => _periodosSelec.has(id))
-    : todosPeriodos;
-
-  // Mostrar seletor de períodos
-  selectorDiv.style.display = 'block';
-
-  // Sem filtro de data → inicializa com o mais recente se vazia
-  if (!compDtIni && !compDtFim && _periodosSelec.size === 0) {
-    const maisRecente = todosPeriodos[todosPeriodos.length - 1];
-    if (maisRecente) _periodosSelec.add(maisRecente[0]);
+  // Sem filtro de data → esconde seletor, auto-seleciona mais recente
+  if (!compDtIni && !compDtFim) {
+    selectorDiv.style.display = 'none';
+    if (_periodosSelec.size === 0) {
+      const maisRecente = todosPeriodos[todosPeriodos.length - 1];
+      if (maisRecente) _periodosSelec.add(maisRecente[0]);
+    }
+  } else {
+    selectorDiv.style.display = 'block';
   }
+
+  // Períodos visíveis nos checkboxes
+  const periodosVisiveis = (compDtIni || compDtFim)
+    ? todosPeriodos.filter(([id, p]) => {
+        const pIni = p.dataIni||'';
+        const pFim = p.dataFim||p.dataIni||'';
+        if(!pIni) return false;
+        if(compDtFim && pIni > compDtFim) return false;
+        if(compDtIni && pFim && pFim < compDtIni) return false;
+        return true;
+      })
+    : todosPeriodos;
 
   // Se tem filtro mas nenhum período bateu → avisa
   if ((compDtIni || compDtFim) && _periodosSelec.size === 0) {
