@@ -760,9 +760,9 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
 
     <!-- ABA COMPARATIVO -->
     <div id="comp-tab-periodos">
-      <!-- Seletor de períodos: só aparece quando há filtro de data -->
-      <div id="comp-periodo-selector" style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:16px;display:none">
-        <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px">Períodos no intervalo selecionado:</div>
+      <!-- Seletor de períodos -->
+      <div id="comp-periodo-selector" style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:16px;display:none">
+        <div style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px">Selecione até 5 períodos para comparar:</div>
         <div id="comp-periodo-checkboxes" style="display:flex;flex-wrap:wrap;gap:8px"></div>
       </div>
       <div id="comparativo-content"></div>
@@ -787,7 +787,8 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
     </div>
     <div class="filters">
       <select class="filter-select" id="abast-op-filter" onchange="renderAbastecimentos()" style="flex:1;min-width:130px"><option value="">Todas as Operações</option></select>
-      <select class="filter-select" id="abast-maq-filter" onchange="renderAbastecimentos()" style="flex:1;min-width:130px"><option value="">Todas as Máquinas</option></select>
+      <input type="text" class="filter-input" id="abast-placa-busca" placeholder="🔍 Buscar placa..." oninput="renderAbastecimentos()" style="flex:1;min-width:130px">
+      <select class="filter-select" id="abast-periodo-filter" onchange="renderAbastecimentos()" style="flex:1;min-width:160px"><option value="">Todos os Períodos</option></select>
       <input type="date" class="filter-input" id="abast-data-ini" onchange="renderAbastecimentos()" style="flex:1;min-width:130px">
       <input type="date" class="filter-input" id="abast-data-fim" onchange="renderAbastecimentos()" style="flex:1;min-width:130px">
       <button class="btn btn-secondary btn-sm" onclick="limparFiltrosAbast()">✕ Limpar</button>
@@ -2270,7 +2271,7 @@ function updateFilters() {
       allCheck.indeterminate=nChecked>0&&nChecked<ops.length;
     }
   }
-  ['dash-maq-filter','abast-maq-filter'].forEach(id=>{
+  ['dash-maq-filter'].forEach(id=>{
     const sel=document.getElementById(id); if(!sel) return;
     const val=sel.value;
     sel.innerHTML='<option value="">Consolidado (sem EMP)</option>' +
@@ -2281,6 +2282,19 @@ function updateFilters() {
       state.maquinas.map(m=>`<option value="${m.placa}">${m.placa}</option>`).join('');
     sel.value=val;
   });
+  // Popular filtro de períodos em Abastecimentos
+  const periodoSel = document.getElementById('abast-periodo-filter');
+  if (periodoSel) {
+    const valP = periodoSel.value;
+    const periodos = Object.entries(state.semanas)
+      .sort((a,b) => (b[1].dataIni||b[0]).localeCompare(a[1].dataIni||a[0]));
+    periodoSel.innerHTML = '<option value="">Todos os Períodos</option>' +
+      periodos.map(([id,p]) => {
+        const ref = p.dataIni ? ` · ${new Date(p.dataIni+'T00:00:00').toLocaleDateString('pt-BR')}${p.dataFim?' a '+new Date(p.dataFim+'T00:00:00').toLocaleDateString('pt-BR'):''}` : '';
+        return `<option value="${id}">${p.label||id}${ref}</option>`;
+      }).join('');
+    periodoSel.value = valP;
+  }
   const sel=document.getElementById('abast-placa');
   if(sel) sel.innerHTML='<option value="">Selecione a máquina</option>'+state.maquinas.map(m=>`<option value="${m.placa}">${m.placa}</option>`).join('');
 }
@@ -2641,7 +2655,6 @@ function renderRanking(list) {
 
 // ── COMPARATIVO ───────────────────────────────────────────────────────────────
 let _periodosSelec = new Set();
-let _ultimoFiltroData = '';
 
 function renderComparativo() {
   updateFilters();
@@ -2669,47 +2682,36 @@ function renderComparativo() {
   const clearBtn = document.getElementById('comp-date-clear');
   if(clearBtn) clearBtn.style.display = (compDtIni||compDtFim) ? 'inline-flex' : 'none';
 
-  // Se tem filtro de data E o filtro mudou → auto-seleciona períodos do intervalo
-  const filtroAtual = compDtIni + '|' + compDtFim;
-  if((compDtIni || compDtFim) && filtroAtual !== _ultimoFiltroData) {
-    _ultimoFiltroData = filtroAtual;
+  // Se tem filtro de data → auto-seleciona APENAS períodos que realmente se sobrepõem ao intervalo
+  if(compDtIni || compDtFim) {
     _periodosSelec = new Set(
       todosPeriodos
         .filter(([id, p]) => {
           const pIni = p.dataIni||'';
           const pFim = p.dataFim||p.dataIni||'';
+          // Se o período não tem datas de referência, não inclui quando há filtro ativo
           if(!pIni) return false;
-          if(compDtFim && pIni > compDtFim) return false;
-          if(compDtIni && pFim && pFim < compDtIni) return false;
+          // Sobreposição real: período começa antes do fim do filtro E termina depois do início do filtro
+          if(compDtFim && pIni > compDtFim) return false; // período começa depois do fim do filtro
+          if(compDtIni && pFim && pFim < compDtIni) return false; // período termina antes do início do filtro
           return true;
         })
         .map(([id]) => id)
     );
   }
-  // Limpa o rastro quando não tem data
-  if(!compDtIni && !compDtFim) _ultimoFiltroData = '';
 
-  // Períodos a exibir nos checkboxes
+  // Períodos a exibir nos checkboxes: se tem filtro de data → só os filtrados; senão → todos
   const periodosVisiveis = (compDtIni || compDtFim)
-    ? todosPeriodos.filter(([id]) => _periodosSelec.has(id) || todosPeriodos.find(([i,p]) => {
-        if(i!==id) return false;
-        const pIni=p.dataIni||'', pFim=p.dataFim||p.dataIni||'';
-        if(!pIni) return false;
-        if(compDtFim && pIni > compDtFim) return false;
-        if(compDtIni && pFim && pFim < compDtIni) return false;
-        return true;
-      }))
+    ? todosPeriodos.filter(([id]) => _periodosSelec.has(id))
     : todosPeriodos;
 
-  // Sem filtro de data → esconde seletor, auto-seleciona mais recente
-  if (!compDtIni && !compDtFim) {
-    selectorDiv.style.display = 'none';
-    if (_periodosSelec.size === 0) {
-      const maisRecente = todosPeriodos[todosPeriodos.length - 1];
-      if (maisRecente) _periodosSelec.add(maisRecente[0]);
-    }
-  } else {
-    selectorDiv.style.display = 'block';
+  // Mostrar seletor de períodos
+  selectorDiv.style.display = 'block';
+
+  // Sem filtro de data → inicializa com o mais recente se vazia
+  if (!compDtIni && !compDtFim && _periodosSelec.size === 0) {
+    const maisRecente = todosPeriodos[todosPeriodos.length - 1];
+    if (maisRecente) _periodosSelec.add(maisRecente[0]);
   }
 
   // Se tem filtro mas nenhum período bateu → avisa
@@ -3142,24 +3144,25 @@ function limparFiltroDataComp() {
 
 // ── ABASTECIMENTOS ────────────────────────────────────────────────────────────
 function limparFiltrosAbast() {
-  ['abast-op-filter','abast-maq-filter'].forEach(id=>document.getElementById(id).value='');
+  ['abast-op-filter','abast-periodo-filter'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  const placaEl=document.getElementById('abast-placa-busca'); if(placaEl) placaEl.value='';
   ['abast-data-ini','abast-data-fim'].forEach(id=>document.getElementById(id).value='');
   renderAbastecimentos();
 }
 
 function renderAbastecimentos() {
   updateFilters();
-  const opF=document.getElementById('abast-op-filter')?.value||'';
-  const maqF=document.getElementById('abast-maq-filter')?.value||'';
-  const dIni=document.getElementById('abast-data-ini')?.value||'';
-  const dFim=document.getElementById('abast-data-fim')?.value||'';
+  const opF     = document.getElementById('abast-op-filter')?.value||'';
+  const placaB  = (document.getElementById('abast-placa-busca')?.value||'').trim().toUpperCase();
+  const periodoF= document.getElementById('abast-periodo-filter')?.value||'';
+  const dIni    = document.getElementById('abast-data-ini')?.value||'';
+  const dFim    = document.getElementById('abast-data-fim')?.value||'';
   let list=[...state.abastecimentos];
-  if(opF)  list=list.filter(a=>(getMaquina(a.placa)?.operacao||a.operacao||'')===opF);
-  if(maqF === '__tratores__') list=list.filter(a=>a.placa&&a.placa.toUpperCase().startsWith('TRA'));
-  else if(maqF === '__maquinas__') list=list.filter(a=>a.placa&&!a.placa.toUpperCase().startsWith('TRA')&&!a.placa.toUpperCase().startsWith('EMP'));
-  else if(maqF === '__empilhadeiras__') list=list.filter(a=>a.placa&&a.placa.toUpperCase().startsWith('EMP'));
-  else if(maqF) list=list.filter(a=>a.placa===maqF);
-  else list=list.filter(a=>!a.placa||!a.placa.toUpperCase().startsWith('EMP')); // consolidado exclui EMP
+  if(opF)     list=list.filter(a=>(getMaquina(a.placa)?.operacao||a.operacao||'')===opF);
+  if(placaB)  list=list.filter(a=>(a.placa||'').toUpperCase().includes(placaB));
+  if(periodoF) list=list.filter(a=>a.periodoId===periodoF);
+  // Sem filtro de placa → exclui EMP por padrão
+  if(!placaB && !periodoF) list=list.filter(a=>!a.placa||!a.placa.toUpperCase().startsWith('EMP'));
   if(dIni) list=list.filter(a=>a.data>=dIni);
   if(dFim) list=list.filter(a=>a.data<=dFim);
   list.sort((a,b)=>new Date(b.data)-new Date(a.data));
@@ -3184,10 +3187,19 @@ function renderAbastecimentos() {
     else if(desvio<=10){ cls='badge-yellow'; desvioLabel=`+${desvio.toFixed(0)}%`; }
     else { cls='badge-red'; desvioLabel=`+${desvio.toFixed(0)}%`; }
     const dataFmt=a.data?new Date(a.data+'T00:00:00').toLocaleDateString('pt-BR'):'—';
+    // Período de referência
+    const periodo = a.periodoId && state.semanas[a.periodoId] ? state.semanas[a.periodoId] : null;
+    const periodoLabel = periodo ? (periodo.label || a.periodoId) : '—';
+    const periodoRef = periodo && periodo.dataIni ? 
+      (new Date(periodo.dataIni+'T00:00:00').toLocaleDateString('pt-BR') + (periodo.dataFim ? ' a ' + new Date(periodo.dataFim+'T00:00:00').toLocaleDateString('pt-BR') : '')) : '';
     return `<tr id="row-${idx}" class="${selectedIds.has(idx)?'selected-row':''}">
       <td class="col-check"><input type="checkbox" class="check-input" ${selectedIds.has(idx)?'checked':''} onchange="toggleSelecionar(${idx},this)"></td>
       <td><span class="placa-tag">${a.placa}</span></td>
       <td>${dataFmt}</td>
+      <td style="font-size:12px;color:var(--text2)">
+        <span title="${periodoRef}" style="cursor:default">${periodoLabel}</span>
+        ${periodoRef ? `<br><span style="font-size:10px;color:var(--text3)">${periodoRef}</span>` : ''}
+      </td>
       <td>${(a.litros||0).toFixed(1)}L</td>
       <td>${(a.horas||0).toFixed(1)}h</td>
       <td><span class="badge ${cls}">${media} L/h${desvioLabel?' · '+desvioLabel:''}</span></td>
@@ -3199,7 +3211,7 @@ function renderAbastecimentos() {
       </td>
     </tr>`;
   }).join('');
-  c.innerHTML=`<table><thead><tr><th class="col-check"></th><th>Máquina</th><th>Data</th><th>Litros</th><th>Horas</th><th>L/h</th><th>Meta</th><th>Operador</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+  c.innerHTML=`<table><thead><tr><th class="col-check"></th><th>Máquina</th><th>Data</th><th>Período</th><th>Litros</th><th>Horas</th><th>L/h</th><th>Meta</th><th>Operador</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 // Seleção em massa
