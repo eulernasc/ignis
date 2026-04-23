@@ -3462,18 +3462,22 @@ function renderAbastecimentos() {
   if(!list.length){c.innerHTML='<div class="empty"><div class="empty-icon">⛽</div><div class="empty-text">Nenhum resultado</div><div class="empty-sub">Tente ajustar os filtros</div></div>';return;}
   const rows=list.map((a)=>{
     const idx=state.abastecimentos.indexOf(a);
-    const mN=a.horas>0?a.litros/a.horas:0;
+    const rowIsKmL = getTipoIgnis(a) === 'pesada' || getTipoIgnis(a) === 'leve';
+    const mN = rowIsKmL ? (a.litros>0 ? a.horas/a.litros : 0) : (a.horas>0 ? a.litros/a.horas : 0);
+    const unid = rowIsKmL ? 'km/L' : 'L/h';
     const media=mN>0?mN.toFixed(2):'—';
     const maq=getMaquina(a.placa);
     const meta=maq?.meta||0;
     const desvio=meta>0&&mN>0?((mN-meta)/meta*100):null;
     let cls, desvioLabel='';
     if(desvio===null){ cls=mN>12?'badge-green':mN>8?'badge-blue':mN>0?'badge-red':''; }
-    else if(desvio<=0){ cls='badge-green'; }
-    else if(desvio<=10){ cls='badge-yellow'; desvioLabel=`+${desvio.toFixed(0)}%`; }
-    else { cls='badge-red'; desvioLabel=`+${desvio.toFixed(0)}%`; }
+    else {
+      const bom = rowIsKmL ? desvio>=0 : desvio<=0;
+      if(bom){ cls='badge-green'; }
+      else if(Math.abs(desvio)<=10){ cls='badge-yellow'; desvioLabel=`${desvio>0?'+':''}${desvio.toFixed(0)}%`; }
+      else { cls='badge-red'; desvioLabel=`${desvio>0?'+':''}${desvio.toFixed(0)}%`; }
+    }
     const dataFmt=a.data?new Date(a.data+'T00:00:00').toLocaleDateString('pt-BR'):'—';
-    // Período de referência
     const periodo = a.periodoId && state.semanas[a.periodoId] ? state.semanas[a.periodoId] : null;
     const periodoLabel = periodo ? (periodo.label || a.periodoId) : '—';
     const periodoRef = periodo && periodo.dataIni ? 
@@ -3487,9 +3491,9 @@ function renderAbastecimentos() {
         ${periodoRef ? `<br><span style="font-size:10px;color:var(--text3)">${periodoRef}</span>` : ''}
       </td>
       <td>${(a.litros||0).toFixed(1)}L</td>
-      <td>${(a.horas||0).toFixed(1)}h</td>
-      <td><span class="badge ${cls}">${media} L/h${desvioLabel?' · '+desvioLabel:''}</span></td>
-      <td style="font-size:11px;color:var(--text2)">${meta>0?meta.toFixed(1)+' L/h':''}</td>
+      <td>${(a.horas||0).toFixed(1)}${rowIsKmL?'km':'h'}</td>
+      <td><span class="badge ${cls}">${media} ${unid}${desvioLabel?' · '+desvioLabel:''}</span></td>
+      <td style="font-size:11px;color:var(--text2)">${meta>0?meta.toFixed(1)+' '+unid:''}</td>
       <td>${a.operador||'—'}</td>
       <td>
         <button class="btn-icon" onclick="verificarSenha(()=>editarAbast(${idx}))" title="Editar">✏️</button>
@@ -3497,7 +3501,7 @@ function renderAbastecimentos() {
       </td>
     </tr>`;
   }).join('');
-  c.innerHTML=`<table><thead><tr><th class="col-check"></th><th>Máquina</th><th>Data</th><th>Período</th><th>Litros</th><th>Horas</th><th>L/h</th><th>Meta</th><th>Operador</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
+  c.innerHTML=`<table><thead><tr><th class="col-check"></th><th>Máquina</th><th>Data</th><th>Período</th><th>Litros</th><th>km/h</th><th>Média</th><th>Meta</th><th>Operador</th><th></th></tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 // Seleção em massa
@@ -4170,6 +4174,9 @@ function renderRelatorio() {
 
   // Filtra por tipo de máquina
   const relTipo = document.querySelector('.rel-tipo-btn.active')?.dataset?.tipo || '';
+  const isKmL = relTipo === '__pesada__' || relTipo === '__leve__';
+  const unidadeMedia = isKmL ? 'km/L' : 'L/h';
+  const calcMedia = (l, h) => isKmL ? (l>0 ? h/l : 0) : (h>0 ? l/h : 0);
   // Filtra abastecimentos
   let registros = state.abastecimentos.filter(a => a.data >= ini && a.data <= fim);
   if (opsFiltro.length) registros = registros.filter(a => { const op = (getMaquina(a.placa)?.operacao || a.operacao || '').replace(/_/g,' '); return opsFiltro.includes(op); });
@@ -4201,8 +4208,8 @@ function renderRelatorio() {
   for (const [placa, dados] of Object.entries(byMaq)) {
     const maq = getMaquina(placa);
     const meta = maq?.meta || 0;
-    const mediaReal = dados.horas > 0 ? dados.litros / dados.horas : 0;
-    const eficiencia = meta > 0 && mediaReal > 0 ? (meta / mediaReal) * 100 : null;
+    const mediaReal = calcMedia(dados.litros, dados.horas);
+    const eficiencia = meta > 0 && mediaReal > 0 ? (isKmL ? (mediaReal/meta)*100 : (meta/mediaReal)*100) : null;
     const desvio = meta > 0 && mediaReal > 0 ? ((mediaReal - meta) / meta * 100) : null;
     const item = { placa, operacao: dados.operacao, mediaReal, meta, eficiencia, desvio };
     if (eficiencia !== null && eficiencia < limite) maquinasProblema.push(item);
@@ -4252,8 +4259,8 @@ function renderRelatorio() {
         return '<tr style="border-bottom:1px solid rgba(42,47,69,.5)">' +
           '<td style="padding:10px 12px;font-weight:600"><span class="placa-tag">' + m.placa + '</span></td>' +
           '<td style="padding:10px 12px;text-align:center;font-size:11px;color:var(--text2)">' + m.operacao + '</td>' +
-          '<td style="padding:10px 12px;text-align:center;font-family:monospace;color:var(--accent)">' + (m.meta>0?m.meta.toFixed(1)+' L/h':'—') + '</td>' +
-          '<td style="padding:10px 12px;text-align:center;font-family:monospace;color:' + cor + ';font-weight:700">' + m.mediaReal.toFixed(2) + ' L/h</td>' +
+          '<td style="padding:10px 12px;text-align:center;font-family:monospace;color:var(--accent)">' + (m.meta>0?m.meta.toFixed(1)+' '+unidadeMedia:'—') + '</td>' +
+          '<td style="padding:10px 12px;text-align:center;font-family:monospace;color:' + cor + ';font-weight:700">' + m.mediaReal.toFixed(2) + ' ' + unidadeMedia + '</td>' +
           '<td style="padding:10px 12px;text-align:center;font-family:monospace;color:' + cor + '">+' + m.desvio.toFixed(1) + '%</td>' +
           '<td style="padding:10px 12px;text-align:center"><span style="background:' + cor + ';color:#fff;padding:3px 10px;border-radius:99px;font-size:12px;font-weight:700">' + m.eficiencia.toFixed(1) + '%</span></td>' +
         '</tr>';
@@ -4266,7 +4273,7 @@ function renderRelatorio() {
   '</div>';
 
   c.innerHTML = html;
-  window._relDados = { labelPeriodo, maquinasProblema, byOp, limite };
+  window._relDados = { labelPeriodo, maquinasProblema, byOp, limite, isKmL, unidadeMedia };
   renderRelEmailBloco(Object.keys(byOp));
 }
 
@@ -4363,8 +4370,8 @@ function buildEmailHTML(blocoOps, byOp, labelPeriodo, limite, labelBloco) {
         : '';
       return '<tr style="background:' + bg + '">' +
         '<td style="padding:11px 16px;font-weight:700;font-family:monospace;font-size:13px;color:#1e293b;border-bottom:1px solid #e2e8f0">' + m.placa + reincBadge + '</td>' +
-        '<td style="padding:11px 16px;color:#2563eb;font-weight:600;text-align:center;font-size:13px;border-bottom:1px solid #e2e8f0">' + (m.meta>0?m.meta.toFixed(1)+' L/h':'—') + '</td>' +
-        '<td style="padding:11px 16px;font-weight:700;text-align:center;font-size:13px;color:' + cor + ';border-bottom:1px solid #e2e8f0">' + m.mediaReal.toFixed(2) + ' L/h</td>' +
+        '<td style="padding:11px 16px;color:#2563eb;font-weight:600;text-align:center;font-size:13px;border-bottom:1px solid #e2e8f0">' + (m.meta>0?m.meta.toFixed(1)+' '+(window._relDados?.unidadeMedia||'L/h'):'—') + '</td>' +
+        '<td style="padding:11px 16px;font-weight:700;text-align:center;font-size:13px;color:' + cor + ';border-bottom:1px solid #e2e8f0">' + m.mediaReal.toFixed(2) + ' ' + (window._relDados?.unidadeMedia||'L/h') + '</td>' +
         '<td style="padding:11px 16px;text-align:center;font-size:13px;color:' + cor + ';font-weight:600;border-bottom:1px solid #e2e8f0">+' + m.desvio.toFixed(1) + '%</td>' +
         '<td style="padding:11px 16px;text-align:center;border-bottom:1px solid #e2e8f0">' +
           '<span style="display:inline-block;background:' + bgEfic(m.eficiencia) + ';color:' + cor + ';border:1px solid ' + cor + ';padding:3px 12px;border-radius:99px;font-size:12px;font-weight:700">' + m.eficiencia.toFixed(1) + '%</span>' +
@@ -4488,13 +4495,13 @@ function enviarRelatorioEmail() {
 
 function copiarRelatorio() {
   if (!window._relDados) return;
-  const { labelPeriodo, byOp, limite } = window._relDados;
+  const { labelPeriodo, byOp, limite, unidadeMedia = 'L/h' } = window._relDados;
   let texto = 'Relatorio de Eficiencia - ' + (labelPeriodo||'Periodo') + '\n';
   texto += 'Meta: ' + limite + '%\n\n';
   for (const [op, maquinas] of Object.entries(byOp)) {
     texto += '📍 ' + op + '\n';
     maquinas.forEach(m => {
-      texto += '• ' + m.placa + ' | Meta: ' + (m.meta>0?m.meta.toFixed(1):'-') + ' L/h | Real: ' + m.mediaReal.toFixed(2) + ' L/h | +' + m.desvio.toFixed(1) + '% | ' + m.eficiencia.toFixed(1) + '%\n';
+      texto += '• ' + m.placa + ' | Meta: ' + (m.meta>0?m.meta.toFixed(1):'-') + ' ' + unidadeMedia + ' | Real: ' + m.mediaReal.toFixed(2) + ' ' + unidadeMedia + ' | ' + (m.desvio>0?'+':'') + m.desvio.toFixed(1) + '% | ' + m.eficiencia.toFixed(1) + '%\n';
     });
     texto += '\n';
   }
