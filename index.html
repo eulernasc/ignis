@@ -2406,19 +2406,19 @@ function getSelectedCompOps() {
 
 // ── HELPER: retorna o tipoIgnis de um abastecimento ──────────────────────────
 function getTipoIgnis(a) {
-  // Prioridade: campo tipoIgnis já classificado na importação
-  if (a.tipoIgnis) return a.tipoIgnis;
-  // Fallback para dados importados antes desta atualização: usa placa
   const placa = (a.placa||'').toUpperCase();
   const m = state.maquinas.find(x => x.placa === a.placa);
-  if (m && m.tipoIgnis) return m.tipoIgnis;
-  // Fallback por operação (dados sem tipoIgnis)
+  // Operação tem prioridade máxima — regras dinâmicas sobrepõem campo salvo
   const op = (a.operacao || m?.operacao || '').toUpperCase();
-  if (op.includes('MERCADO LIVRE') || op.startsWith('VL')) return 'leve';
-  if (placa.startsWith('EMP')) return 'empilhadeira';
+  if (op.includes('MERCADO LIVRE') || op.startsWith('VL') || (a.tipo||'').toUpperCase() === 'VEICULO LEVE') return 'leve';
+  if ((a.modelo||'').toUpperCase().includes('MOFFETT') || placa.startsWith('EMP')) return 'empilhadeira';
+  // Agora usa campo salvo (importação mais recente)
+  if (a.tipoIgnis) return a.tipoIgnis;
+  if (m && m.tipoIgnis) return m.tipoIgnis;
+  // Fallback por placa
   if (placa.startsWith('MAQ')) return 'maquina';
   if (placa.startsWith('TRA')) return 'trator';
-  return 'pesada'; // fallback para frota pesada
+  return 'pesada';
 }
 
 function getFilteredAbast(opF,maqF) {
@@ -2645,7 +2645,9 @@ function renderOpChart(list, isKmL=false) {
     byOp[op].meta=maqsDaOp.length>0?(maqsDaOp.reduce((s,m)=>s+m.meta,0)/maqsDaOp.length):0;
   });
   const maxL=Math.max(...ops.map(o=>byOp[o].litros));
-  const maxM=Math.max(...ops.map(o=>isKmL ? (byOp[o].litros>0?byOp[o].horas/byOp[o].litros:0) : (byOp[o].horas>0?byOp[o].litros/byOp[o].horas:0)));
+  const maxM = isKmL
+    ? Math.max(...ops.map(o=>{ const meta=byOp[o].meta||0; const m=byOp[o].litros>0?byOp[o].horas/byOp[o].litros:0; return Math.max(meta,m)*1.3; }), 1)
+    : Math.max(...ops.map(o=>byOp[o].horas>0?byOp[o].litros/byOp[o].horas:0), 1);
   const H=120;
 
   c.innerHTML=`<div style="display:inline-flex;gap:12px;padding:8px 4px 4px;min-width:max-content">`+
@@ -2653,9 +2655,9 @@ function renderOpChart(list, isKmL=false) {
     const d=byOp[op];
     const l=d.litros;
     const m = isKmL ? (l>0 ? d.horas/l : 0) : (d.horas>0 ? l/d.horas : 0);
-    const hL=maxL>0?(l/maxL)*H:0, hM=maxM>0?(m/maxM)*H:0;
+    const hL=maxL>0?(l/maxL)*H:0;
+    const hM = isKmL && d.meta>0 ? Math.min((m/d.meta)*36, 54) : maxM>0?(m/maxM)*36:0;
     const meta=d.meta||0;
-    // Para km/L: positivo (acima da meta) é BOM; para L/h: positivo é RUIM
     const desvio=meta>0&&m>0?((m-meta)/meta*100):null;
     const bomDesvio = isKmL ? (desvio!==null&&desvio>=0) : (desvio!==null&&desvio<=0);
     const mColor=desvio===null?'var(--yellow)':bomDesvio?'var(--green)':Math.abs(desvio)<=10?'#f59e0b':'var(--red)';
@@ -2663,10 +2665,10 @@ function renderOpChart(list, isKmL=false) {
     return `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:12px 16px;display:flex;flex-direction:column;gap:8px">
       <div style="font-size:11px;color:var(--text2);font-weight:600;line-height:1.3">${op}</div>
       <div style="display:flex;align-items:flex-end;gap:12px">
-        <div style="display:flex;flex-direction:column;align-items:flex-start;gap:2px">
+        ${!isKmL ? `<div style="display:flex;flex-direction:column;align-items:flex-start;gap:2px">
           <span style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">Litros</span>
           <span style="font-size:15px;font-weight:700;color:var(--accent);font-family:monospace">${l.toFixed(0)}<span style="font-size:10px">L</span></span>
-        </div>
+        </div>` : ''}
         <div style="flex:1;display:flex;flex-direction:column;align-items:flex-start;gap:2px">
           <span style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">Média ${unidadeMedia}</span>
           <span style="font-size:15px;font-weight:700;color:${mColor};font-family:monospace">${m.toFixed(2)}</span>
@@ -2674,11 +2676,11 @@ function renderOpChart(list, isKmL=false) {
         </div>
       </div>
       <div style="display:flex;gap:4px;align-items:flex-end;height:40px">
-        <div style="display:flex;flex-direction:column;justify-content:flex-end;align-items:center;flex:1;gap:2px">
+        ${!isKmL ? `<div style="display:flex;flex-direction:column;justify-content:flex-end;align-items:center;flex:1;gap:2px">
           <div style="width:100%;background:var(--accent);border-radius:3px 3px 0 0;height:${Math.max((hL/H)*36,2)}px;opacity:.8"></div>
-        </div>
-        <div style="display:flex;flex-direction:column;justify-content:flex-end;align-items:center;flex:1;gap:2px">
-          <div style="width:100%;background:${mColor};border-radius:3px 3px 0 0;height:${Math.max((hM/H)*36,2)}px"></div>
+        </div>` : ''}
+        <div style="display:flex;flex-direction:column;justify-content:flex-end;align-items:center;flex:${isKmL?'none':'1'};width:${isKmL?'100%':'auto'};gap:2px">
+          <div style="width:100%;background:${mColor};border-radius:3px 3px 0 0;height:${Math.max(hM,2)}px"></div>
         </div>
       </div>
     </div>`;
