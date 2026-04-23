@@ -645,14 +645,29 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
             <span id="op-dropdown-label">Todas as Operações</span>
             <span style="font-size:10px">▼</span>
           </button>
-          <div id="op-dropdown-menu" style="display:none;position:absolute;top:calc(100% + 4px);left:0;min-width:220px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:8px;z-index:200;box-shadow:0 8px 24px rgba(0,0,0,.4);max-height:240px;overflow-y:auto">
+          <div id="op-dropdown-menu" style="display:none;position:absolute;top:calc(100% + 4px);left:0;min-width:260px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:8px;z-index:200;box-shadow:0 8px 24px rgba(0,0,0,.4);max-height:320px;overflow-y:auto">
+            <input type="text" id="op-search" placeholder="🔍 Buscar operação..." oninput="filtrarOpsDropdown()" style="width:100%;box-sizing:border-box;padding:6px 10px;border-radius:7px;border:1px solid var(--border);background:var(--bg3);color:var(--text1);font-size:12px;margin-bottom:6px;outline:none">
             <label style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--border);margin-bottom:4px">
               <input type="checkbox" id="op-all-check" checked onchange="toggleAllOps(this)"> Todas as Operações
             </label>
             <div id="op-checkboxes"></div>
           </div>
         </div>
-        <select class="filter-select" id="dash-maq-filter" onchange="updateFilters();renderDashboard()"><option value="">Selecione o tipo...</option></select>
+        <!-- Filtro por Placa -->
+        <div style="position:relative" id="placa-dropdown-wrap">
+          <button class="filter-select" id="placa-dropdown-btn" onclick="togglePlacaDropdown()" style="cursor:pointer;text-align:left;min-width:160px;display:flex;align-items:center;justify-content:space-between;gap:8px">
+            <span id="placa-dropdown-label">Todas as Placas</span>
+            <span style="font-size:10px">▼</span>
+          </button>
+          <div id="placa-dropdown-menu" style="display:none;position:absolute;top:calc(100% + 4px);left:0;min-width:220px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:8px;z-index:200;box-shadow:0 8px 24px rgba(0,0,0,.4);max-height:320px;overflow-y:auto">
+            <input type="text" id="placa-search" placeholder="🔍 Buscar placa..." oninput="filtrarPlacasDropdown()" style="width:100%;box-sizing:border-box;padding:6px 10px;border-radius:7px;border:1px solid var(--border);background:var(--bg3);color:var(--text1);font-size:12px;margin-bottom:6px;outline:none">
+            <label style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--border);margin-bottom:4px">
+              <input type="checkbox" id="placa-all-check" checked onchange="toggleAllPlacas(this)"> Todas as Placas
+            </label>
+            <div id="placa-checkboxes"></div>
+          </div>
+        </div>
+        <select class="filter-select" id="dash-maq-filter" onchange="updateFilters();populatePlacaDropdown();renderDashboard()"><option value="">Selecione o tipo...</option></select>
         <div class="tab-group">
           <button class="tab-btn active" id="tab-semanal" onclick="setTab('semanal')">Semanal</button>
           <button class="tab-btn" id="tab-mensal" onclick="setTab('mensal')">Mensal</button>
@@ -2337,13 +2352,107 @@ function updateFilters() {
 }
 
 function getSelectedOps() {
-  const checks=document.querySelectorAll('.op-check:checked');
-  return new Set([...checks].map(c=>c.value));
+  const allCheck = document.getElementById('op-all-check');
+  const checks = [...document.querySelectorAll('.op-check')];
+  const checked = checks.filter(c => c.checked);
+  if (allCheck && allCheck.checked && !allCheck.indeterminate) return null;
+  return new Set(checked.map(c => c.value));
 }
 
 function toggleOpDropdown() {
   const menu=document.getElementById('op-dropdown-menu');
-  menu.style.display=menu.style.display==='none'?'block':'none';
+  const isOpen = menu.style.display !== 'none';
+  if(!isOpen) setTimeout(()=>document.getElementById('op-search')?.focus(),50);
+  menu.style.display=isOpen?'none':'block';
+}
+
+function filtrarOpsDropdown() {
+  const q = (document.getElementById('op-search')?.value||'').toLowerCase();
+  document.querySelectorAll('.op-check').forEach(cb => {
+    const label = cb.closest('label');
+    if(label) label.style.display = cb.value.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+
+function togglePlacaDropdown() {
+  const menu = document.getElementById('placa-dropdown-menu');
+  if(!menu) return;
+  const isOpen = menu.style.display !== 'none';
+  // Fecha outros dropdowns
+  document.getElementById('op-dropdown-menu').style.display = 'none';
+  menu.style.display = isOpen ? 'none' : 'block';
+  if(!isOpen) {
+    setTimeout(() => document.getElementById('placa-search')?.focus(), 50);
+    populatePlacaDropdown();
+  }
+}
+
+function populatePlacaDropdown() {
+  const cont = document.getElementById('placa-checkboxes');
+  if(!cont) return;
+  const maqF = document.getElementById('dash-maq-filter')?.value||'';
+  // Usa lista filtrada pelo tipo atual
+  const placas = [...new Set(
+    state.abastecimentos
+      .filter(a => {
+        if(!maqF) return getTipoIgnis(a) !== 'ignorado';
+        const t = getTipoIgnis(a);
+        if(maqF==='__maquinas__') return t==='maquina';
+        if(maqF==='__tratores__') return t==='trator';
+        if(maqF==='__pesada__') return t==='pesada';
+        if(maqF==='__leve__') return t==='leve';
+        if(maqF==='__empilhadeiras__') return t==='empilhadeira';
+        return a.placa===maqF;
+      })
+      .map(a=>a.placa)
+  )].sort();
+  const sel = getSelectedPlacas();
+  cont.innerHTML = placas.map(p =>
+    `<label style="display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:6px;cursor:pointer;font-size:12px" class="placa-check-label">
+      <input type="checkbox" class="placa-check" value="${p}" ${sel===null||sel.has(p)?'checked':''} onchange="onPlacaCheckChange()">
+      ${p}
+    </label>`
+  ).join('');
+  sincPlacaAllCheck();
+}
+
+function filtrarPlacasDropdown() {
+  const q = (document.getElementById('placa-search')?.value||'').toUpperCase();
+  document.querySelectorAll('.placa-check-label').forEach(lbl => {
+    const val = lbl.querySelector('.placa-check')?.value||'';
+    lbl.style.display = val.includes(q) ? '' : 'none';
+  });
+}
+
+function getSelectedPlacas() {
+  const allCheck = document.getElementById('placa-all-check');
+  if(allCheck && allCheck.checked && !allCheck.indeterminate) return null;
+  const checked = [...document.querySelectorAll('.placa-check:checked')];
+  return new Set(checked.map(c=>c.value));
+}
+
+function toggleAllPlacas(cb) {
+  document.querySelectorAll('.placa-check').forEach(c=>c.checked=cb.checked);
+  onPlacaCheckChange();
+}
+
+function sincPlacaAllCheck() {
+  const allCheck = document.getElementById('placa-all-check');
+  if(!allCheck) return;
+  const all = document.querySelectorAll('.placa-check');
+  const checked = document.querySelectorAll('.placa-check:checked');
+  allCheck.checked = all.length===checked.length;
+  allCheck.indeterminate = checked.length>0 && checked.length<all.length;
+}
+
+function onPlacaCheckChange() {
+  sincPlacaAllCheck();
+  const sel = getSelectedPlacas();
+  const placas = [...document.querySelectorAll('.placa-check')];
+  const n = sel===null ? placas.length : (sel?.size||0);
+  const label = document.getElementById('placa-dropdown-label');
+  if(label) label.textContent = n===0||n===placas.length ? 'Todas as Placas' : n===1 ? [...(sel||[])][0] : `${n} placas`;
+  renderDashboard();
 }
 
 function toggleAllOps(cb) {
@@ -2371,6 +2480,8 @@ document.addEventListener('click', e=>{
   if(wrap && !wrap.contains(e.target)) document.getElementById('op-dropdown-menu').style.display='none';
   const compWrap=document.getElementById('comp-op-dropdown-wrap');
   if(compWrap && !compWrap.contains(e.target)) document.getElementById('comp-op-dropdown-menu').style.display='none';
+  const placaWrap=document.getElementById('placa-dropdown-wrap');
+  if(placaWrap && !placaWrap.contains(e.target)) { const m=document.getElementById('placa-dropdown-menu'); if(m) m.style.display='none'; }
 });
 
 function toggleCompOpDropdown() {
@@ -2473,6 +2584,12 @@ function getFilteredAbast(opF,maqF) {
   // null ou Set vazio → sem filtro de operação
   // Remove sempre os ignorados (vendidos, seminovos, etc.)
   list = list.filter(a => getTipoIgnis(a) !== 'ignorado');
+
+  // Filtro de placa individual (dropdown Placas)
+  const placasSel = getSelectedPlacas();
+  if(placasSel instanceof Set && placasSel.size > 0) {
+    list = list.filter(a => placasSel.has(a.placa));
+  }
 
   if(maqF === '__maquinas__')     list=list.filter(a=>getTipoIgnis(a)==='maquina');
   else if(maqF === '__tratores__')  list=list.filter(a=>getTipoIgnis(a)==='trator');
