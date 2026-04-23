@@ -2627,6 +2627,7 @@ function renderOpChart(list, isKmL=false) {
   const c=document.getElementById('op-chart-container');
   if(!c) return;
   if(!list.length){c.innerHTML='<div class="empty"><div class="empty-icon">🏭</div><div class="empty-text">Sem dados</div></div>';return;}
+  const unidadeMedia = isKmL ? 'km/L' : 'L/h';
   const byOp={};
   list.forEach(a=>{
     const op=(getMaquina(a.placa)?.operacao||a.operacao||'Sem Operação').replace(/_/g,' ');
