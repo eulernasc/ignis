@@ -2789,7 +2789,6 @@ function renderOpChart(list, isKmL=false) {
     // Barra litros (só L/h)
     const barHL = maxL>0 ? Math.max((l/maxL)*32, 3) : 3;
     return `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;min-width:130px;max-width:160px">
-      <div style="font-size:10px;color:var(--text3);font-weight:600;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${op}">${op}</div>
       <div style="display:flex;align-items:baseline;gap:4px">
         <span style="font-size:18px;font-weight:700;color:${mColor};font-family:monospace;line-height:1">${m.toFixed(2)}</span>
         <span style="font-size:10px;color:var(--text3)">${unidadeMedia}</span>
@@ -2803,6 +2802,7 @@ function renderOpChart(list, isKmL=false) {
           <div style="background:${mColor};border-radius:2px 2px 0 0;height:${barH}px"></div>
         </div>
       </div>
+      <div style="font-size:10px;color:var(--text3);font-weight:600;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px" title="${op}">${op}</div>
     </div>`;
   }).join('')+'</div>';
 }
@@ -3014,6 +3014,10 @@ function renderComparativo() {
 
   const dadosPeriodo={};
   const maqCompF = document.getElementById('comp-maq-filter')?.value || '';
+  const isKmL = maqCompF === '__pesada__' || maqCompF === '__leve__';
+  const unidadeMedia = isKmL ? 'km/L' : 'L/h';
+  const labelHoras = isKmL ? 'KM Rodados' : 'Horas';
+  const calcMedia = (tL, tH) => isKmL ? (tL>0 ? tH/tL : 0) : (tH>0 ? tL/tH : 0);
   selecionadosFiltrados.forEach(([id, p])=>{
     let rows = (p.registros||[]);
     if(opF.size>0) rows = rows.filter(r=>opF.has(r.operacao));
@@ -3025,7 +3029,7 @@ function renderComparativo() {
     else if(maqCompF) rows = rows.filter(r=>r.placa===maqCompF);
     else rows = rows.filter(r=>getTipoIgnis(r)!=='empilhadeira');
     const tL=rows.reduce((a,r)=>a+(r.litros||0),0), tH=rows.reduce((a,r)=>a+(r.horas||0),0);
-    dadosPeriodo[id]={label:p.label||id, rows, totalL:tL, totalH:tH, media:tH>0?tL/tH:0, maquinas:new Set(rows.map(r=>r.placa)).size};
+    dadosPeriodo[id]={label:p.label||id, rows, totalL:tL, totalH:tH, media:calcMedia(tL,tH), maquinas:new Set(rows.map(r=>r.placa)).size};
   });
 
   // Cards de resumo
@@ -3040,19 +3044,21 @@ function renderComparativo() {
     const placasPeriodo = new Set(d.rows.map(r=>r.placa));
     const maqsP = [...placasPeriodo].map(p=>getMaquina(p)).filter(m=>m&&m.meta>0);
     const metaP = maqsP.length>0?(maqsP.reduce((s,m)=>s+m.meta,0)/maqsP.length):0;
-    const eficP = metaP>0&&d.media>0?(metaP/d.media)*100:null;
+    const eficP = metaP>0&&d.media>0 ? (isKmL ? (d.media/metaP)*100 : (metaP/d.media)*100) : null;
     const eficCor = eficP===null?'var(--text3)':eficP>=98?'var(--green)':eficP>=90?'var(--yellow)':'var(--red)';
     const eficIcon = eficP===null?'':eficP>=98?'✅':eficP>=90?'⚠️':'🔴';
     const desvioP = metaP>0&&d.media>0?((d.media-metaP)/metaP*100):null;
+    const dMsign = isKmL ? (dM!==null&&dM>=0?'up':'down') : (dM!==null&&dM>=0?'down':'up');
 
-    // Sparkline duplo: litros (vermelho) + média L/h (laranja) por máquina
+    // Sparkline — usa km/L ou L/h conforme tipo
     const sparkRows = d.rows.slice(0,10);
     const sparkMaxL = Math.max(...sparkRows.map(r=>r.litros||0),1);
-    const sparkMaxM = Math.max(...sparkRows.map(r=>r.horas>0?r.litros/r.horas:0),1);
+    const sparkMaxM = Math.max(...sparkRows.map(r=>isKmL?(r.litros>0?(r.horas||0)/r.litros:0):(r.horas>0?r.litros/r.horas:0)),1);
     const sparkW = 6, sparkGap = 3, sparkH = 28, pairGap = 2;
     const pairW = sparkW*2 + pairGap;
     const sparkBars = sparkRows.map((r,i)=>{
-      const l = r.litros||0, h = r.horas||0, m = h>0?l/h:0;
+      const l = r.litros||0, h = r.horas||0;
+      const m = isKmL ? (l>0?h/l:0) : (h>0?l/h:0);
       const hL = Math.max(2, Math.round(l/sparkMaxL*sparkH));
       const hM = Math.max(2, Math.round(m/sparkMaxM*sparkH));
       const x = i*(pairW+sparkGap);
@@ -3060,17 +3066,17 @@ function renderComparativo() {
              `<rect x="${x+sparkW+pairGap}" y="${sparkH-hM}" width="${sparkW}" height="${hM}" rx="1" fill="#d9621e" opacity="0.8"/>`;
     }).join('');
     const sparkSvgW = sparkRows.length*(pairW+sparkGap);
-    const sparkVals = sparkRows; // keep for length check below
+    const sparkVals = sparkRows;
 
     html+=`<div class="comp-card">
       <div class="comp-card-title">${d.label}</div>
       <div class="comp-row"><span class="comp-semana">Litros</span><span class="comp-val">${d.totalL.toFixed(0)}L</span>${dL!==null?`<span class="comp-diff ${dL>0?'down':'up'}">${dL>0?'▲':'▼'}${Math.abs(dL).toFixed(1)}%</span>`:''}</div>
-      <div class="comp-row"><span class="comp-semana">Média L/h</span><span class="comp-val">${d.media.toFixed(2)}</span>${dM!==null?`<span class="comp-diff ${dM>=0?'down':'up'}">${dM>=0?'▲':'▼'}${Math.abs(dM).toFixed(1)}%</span>`:''}</div>
-      <div class="comp-row"><span class="comp-semana">Meta Ideal</span><span class="comp-val" style="color:var(--accent)">${metaP>0?metaP.toFixed(2)+' L/h':'—'}</span></div>
+      <div class="comp-row"><span class="comp-semana">Média ${unidadeMedia}</span><span class="comp-val">${d.media.toFixed(2)}</span>${dM!==null?`<span class="comp-diff ${dMsign}">${dM>=0?'▲':'▼'}${Math.abs(dM).toFixed(1)}%</span>`:''}</div>
+      <div class="comp-row"><span class="comp-semana">Meta Ideal</span><span class="comp-val" style="color:var(--accent)">${metaP>0?metaP.toFixed(2)+' '+unidadeMedia:'—'}</span></div>
       <div class="comp-row"><span class="comp-semana">Eficiência</span><span class="comp-val" style="color:${eficCor}">${eficP!==null?eficIcon+' '+eficP.toFixed(1)+'%':'—'}</span>${desvioP!==null?`<span class="comp-diff" style="color:${eficCor}">${desvioP>0?'+':''}${desvioP.toFixed(1)}%</span>`:''}</div>
-      <div class="comp-row"><span class="comp-semana">Máquinas</span><span class="comp-val">${d.maquinas}</span></div>
-      <div class="comp-row"><span class="comp-semana">Horas</span><span class="comp-val">${d.totalH.toFixed(0)}h</span></div>
-      ${sparkVals.length>0?`<div style="margin-top:8px;opacity:.85"><svg width="${sparkSvgW}" height="${sparkH}" viewBox="0 0 ${sparkSvgW} ${sparkH}">${sparkBars}</svg><div style="display:flex;gap:8px;margin-top:3px"><span style="font-size:9px;color:#c0392b">■ litros</span><span style="font-size:9px;color:#d9621e">■ L/h</span></div></div>`:''}
+      <div class="comp-row"><span class="comp-semana">Veículos</span><span class="comp-val">${d.maquinas}</span></div>
+      <div class="comp-row"><span class="comp-semana">${labelHoras}</span><span class="comp-val">${d.totalH.toFixed(0)}${isKmL?'km':'h'}</span></div>
+      ${sparkVals.length>0?`<div style="margin-top:8px;opacity:.85"><svg width="${sparkSvgW}" height="${sparkH}" viewBox="0 0 ${sparkSvgW} ${sparkH}">${sparkBars}</svg><div style="display:flex;gap:8px;margin-top:3px"><span style="font-size:9px;color:#c0392b">■ litros</span><span style="font-size:9px;color:#d9621e">■ ${unidadeMedia}</span></div></div>`:''}
     </div>`;
   });
   html+='</div>';
