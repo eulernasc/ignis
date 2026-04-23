@@ -3798,6 +3798,7 @@ function importarRelatorio(input) {
 
       let novaMaq=0,metaAtualizada=0,dadosSemana=[];
       let ignoradas=0;
+      const precosPorOp = {}; // op → {soma, count} para calcular média
       dataRows.forEach(row=>{
         const operacao = String(row[0]||'').trim();   // Coluna A
         const placa    = String(row[2]||'').trim().toUpperCase(); // Coluna C
@@ -3806,6 +3807,7 @@ function importarRelatorio(input) {
         const kmReal   = parseFloat(row[6])||0;       // Coluna G — Km Real
         const volReal  = parseFloat(row[9])||0;       // Coluna J — Vol. Real
         const mediaIdeal = parseFloat(row[12])||0;    // Coluna M — Média Ideal
+        const precoMedio = parseFloat(row[18])||0;    // Coluna S — Preço Médio do Combustível
 
         if(!placa) return;
 
@@ -3836,6 +3838,12 @@ function importarRelatorio(input) {
         }
 
         const maqExistente = state.maquinas.find(m => m.placa === placa);
+        // Acumula preço médio por operação
+        if (precoMedio > 0 && operacao) {
+          if (!precosPorOp[operacao]) precosPorOp[operacao] = { soma: 0, count: 0 };
+          precosPorOp[operacao].soma += precoMedio;
+          precosPorOp[operacao].count++;
+        }
         if(!maqExistente){
           state.maquinas.push({placa, modelo, tipo, tipoIgnis, operacao, status:'Ativa', meta:mediaIdeal||0});
           novaMaq++;
@@ -3852,6 +3860,17 @@ function importarRelatorio(input) {
           const entry = {placa, data:dataRef, litros:volReal, horas:kmReal, operador:'', operacao, modelo, tipo, tipoIgnis, periodoId};
           dadosSemana.push(entry);
           state.abastecimentos.push(entry);
+        }
+      });
+
+      // Salvar preços médios por operação (coluna S) — não sobrescreve preço já configurado manualmente
+      if (!state.dieselPrecos) state.dieselPrecos = {};
+      let precosAtualizados = 0;
+      Object.entries(precosPorOp).forEach(([op, {soma, count}]) => {
+        const media = soma / count;
+        if (media > 0) {
+          state.dieselPrecos[op] = parseFloat(media.toFixed(3));
+          precosAtualizados++;
         }
       });
 
@@ -3873,7 +3892,8 @@ function importarRelatorio(input) {
         <div style="background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);border-radius:10px;padding:16px;margin-top:12px">
           <div style="font-size:15px;font-weight:600;color:var(--green);margin-bottom:8px">✅ "${nomePeriodo}" importado!</div>
           <div style="font-size:13px;color:var(--text2)">🚗 ${novaMaq} novo(s) veículo(s) · ⛽ ${dadosSemana.length} registro(s)</div>
-          ${metaAtualizada>0?`<div style="font-size:13px;color:var(--yellow);margin-top:4px">🎯 ${metaAtualizada} meta(s) L/h atualizada(s)</div>`:''}
+          ${precosAtualizados>0?`<div style="font-size:13px;color:var(--yellow);margin-top:4px">💰 ${precosAtualizados} preço(s) de diesel atualizado(s) automaticamente</div>`:''}
+          ${metaAtualizada>0?`<div style="font-size:13px;color:var(--yellow);margin-top:4px">🎯 ${metaAtualizada} meta(s) atualizada(s)</div>`:''}
           ${ignoradas>0?`<div style="font-size:12px;color:var(--text3);margin-top:4px">⏭ ${ignoradas} linha(s) ignorada(s) (IEV, manutenção, locação, etc.)</div>`:''}
           <div style="font-size:12px;color:var(--accent);margin-top:8px">📊 Acesse o Comparativo para analisar os períodos!</div>
         </div>`;
@@ -6157,9 +6177,12 @@ function dieselPopularOps() {
     const preco = precos[op] ?? '';
     const meta  = cfgs[op]?.meta  ?? '';
     const tunel = cfgs[op]?.tunel ?? '';
-    return `<div style="display:grid;grid-template-columns:1fr 130px 130px 110px;gap:6px;align-items:center;background:var(--bg3);border-radius:8px;padding:8px 12px;margin-bottom:4px">
+    // Indica se o preço veio da importação automática
+    const autoImport = preco > 0;
+    const precoLabel = autoImport ? `<span style="font-size:9px;color:var(--green);margin-left:2px" title="Importado automaticamente da planilha">✓ auto</span>` : '';
+    return `<div style="display:grid;grid-template-columns:1fr 150px 130px 110px;gap:6px;align-items:center;background:var(--bg3);border-radius:8px;padding:8px 12px;margin-bottom:4px">
       <div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${op.replace(/_/g,' ')}</div>
-      <div style="${colStyle}"><span style="font-size:11px;color:var(--text2)">R$</span>${mkInput(op,'preco',preco,'0,00',72,'/L','0.01')}</div>
+      <div style="${colStyle};position:relative"><span style="font-size:11px;color:var(--text2)">R$</span>${mkInput(op,'preco',preco,'0,00',72,'/L','0.01')}${precoLabel}</div>
       <div style="${colStyle}">${mkInput(op,'meta',meta,'—',72,' L/h','0.1')}</div>
       <div style="${colStyle}">${mkInput(op,'tunel',tunel,'0',58,' %','0.1')}</div>
     </div>`;
