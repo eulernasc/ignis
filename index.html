@@ -2492,11 +2492,7 @@ function renderDashboard() {
   if(kpiMetaLabelEl) kpiMetaLabelEl.textContent = labelMeta;
 
   const list=getFilteredAbast(opsSelec,maqF);
-  const totalL=list.reduce((s,a)=>s+(a.litros||0),0);
-  const totalH=list.reduce((s,a)=>s+(a.horas||0),0);
-  // Para km/L: media = km / litros; para L/h: media = litros / horas
-  const media = isKmL ? (totalL>0 ? totalH/totalL : 0) : (totalH>0 ? totalL/totalH : 0);
-  const maqAtivas=new Set(list.map(a=>a.placa)).size;
+
   const _animKpi = (id, end, dec=0) => {
     const el = document.getElementById(id); if(!el) return;
     const from = parseFloat(el.textContent)||0;
@@ -2507,6 +2503,39 @@ function renderDashboard() {
       if(s>=steps){el.textContent=end.toFixed(dec);clearInterval(el._kpiTimer);el.classList.add('kpi-pop');setTimeout(()=>el.classList.remove('kpi-pop'),400);}
     },14);
   };
+
+  // Se não há dados, mostra mensagem útil com sugestões
+  if (list.length === 0) {
+    const sugestoes = {
+      '__maquinas__':     '🚛 Frota Pesada ou 🚗 Frota Leve',
+      '__tratores__':     '⚙️ Máquinas ou 🚛 Frota Pesada',
+      '__pesada__':       '⚙️ Máquinas ou 🚗 Frota Leve',
+      '__leve__':         '🚛 Frota Pesada ou ⚙️ Máquinas',
+      '__empilhadeiras__':'⚙️ Máquinas ou 🚛 Frota Pesada',
+    };
+    const sug = sugestoes[maqF] || '';
+    const opEl = document.getElementById('op-chart-container');
+    const barEl = document.getElementById('bar-chart-container');
+    const rankEl = document.getElementById('ranking-list');
+    const emptyHtml = `<div class="empty" style="padding:40px">
+      <div class="empty-icon">🔍</div>
+      <div class="empty-text">Nenhum dado para este filtro no período</div>
+      ${sug?`<div class="empty-sub" style="margin-top:8px">Tente: <strong>${sug}</strong></div>`:''}
+    </div>`;
+    if(opEl) opEl.innerHTML = emptyHtml;
+    if(barEl) barEl.innerHTML = '<div class="empty"><div class="empty-icon">📊</div><div class="empty-text">Sem dados</div></div>';
+    if(rankEl) rankEl.innerHTML = '<div class="empty"><div class="empty-icon">🏆</div><div class="empty-text">Sem dados</div></div>';
+    _animKpi('kpi-litros',0,0); _animKpi('kpi-media',0,2); _animKpi('kpi-horas',0,0); _animKpi('kpi-maquinas',0,0);
+    document.getElementById('kpi-meta-ideal').textContent='—';
+    document.getElementById('kpi-eficiencia').textContent='—';
+    relChecarReincidencia();
+    return;
+  }
+
+  const totalL=list.reduce((s,a)=>s+(a.litros||0),0);
+  const totalH=list.reduce((s,a)=>s+(a.horas||0),0);
+  const media = isKmL ? (totalL>0 ? totalH/totalL : 0) : (totalH>0 ? totalL/totalH : 0);
+  const maqAtivas=new Set(list.map(a=>a.placa)).size;
   _animKpi('kpi-litros',totalL,0);
   _animKpi('kpi-media',media,2);
   _animKpi('kpi-horas',totalH,0);
