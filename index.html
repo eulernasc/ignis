@@ -2412,6 +2412,9 @@ function getTipoIgnis(a) {
   const placa = (a.placa||'').toUpperCase();
   const m = state.maquinas.find(x => x.placa === a.placa);
   if (m && m.tipoIgnis) return m.tipoIgnis;
+  // Fallback por operação (dados sem tipoIgnis)
+  const op = (a.operacao || m?.operacao || '').toUpperCase();
+  if (op.includes('MERCADO LIVRE') || op.startsWith('VL')) return 'leve';
   if (placa.startsWith('EMP')) return 'empilhadeira';
   if (placa.startsWith('MAQ')) return 'maquina';
   if (placa.startsWith('TRA')) return 'trator';
@@ -2691,24 +2694,42 @@ function renderBarChart(list, isKmL=false) {
   list.forEach(a=>{if(!byMaq[a.placa])byMaq[a.placa]={litros:0,horas:0};byMaq[a.placa].litros+=a.litros||0;byMaq[a.placa].horas+=a.horas||0;});
   const pl=Object.keys(byMaq).sort();
   const maxL=Math.max(...pl.map(p=>byMaq[p].litros));
-  const maxM=Math.max(
-    ...pl.map(p=>calcMedia(byMaq[p].litros,byMaq[p].horas)),
-    ...pl.map(p=>getMaquina(p)?.meta||0)
-  );
+
+  // Para km/L: escala cada barra RELATIVA à sua própria meta (se tiver), senão usa máximo global
+  // Para L/h: escala global como antes
+  const maxM = isKmL
+    ? Math.max(...pl.map(p=>{ const meta=getMaquina(p)?.meta||0; const m=calcMedia(byMaq[p].litros,byMaq[p].horas); return Math.max(meta,m)*1.3; }), 1)
+    : Math.max(...pl.map(p=>calcMedia(byMaq[p].litros,byMaq[p].horas)), ...pl.map(p=>getMaquina(p)?.meta||0), 1);
+
   const H=120;
-  const barW=22;
+  const barW=isKmL?28:22;
   c.style.height='';
   c.style.overflowX='auto';
   c.style.overflowY='hidden';
-  c.innerHTML=`<div style="display:inline-flex;align-items:flex-end;gap:18px;padding-top:28px;min-width:max-content;padding-bottom:4px">`+pl.map(p=>{
+
+  // Atualiza legenda dinamicamente
+  const legendEl = document.querySelector('.chart-legend');
+  if(legendEl) {
+    legendEl.innerHTML = isKmL
+      ? `<div class="legend-item"><div class="legend-dot" style="background:var(--yellow)"></div>Média ${unidadeMedia}</div>`
+      : `<div class="legend-item"><div class="legend-dot" style="background:var(--accent)"></div>Litros</div><div class="legend-item"><div class="legend-dot" style="background:var(--yellow)"></div>Média ${unidadeMedia}</div>`;
+  }
+
+  c.innerHTML=`<div style="display:inline-flex;align-items:flex-end;gap:${isKmL?14:18}px;padding-top:28px;min-width:max-content;padding-bottom:4px">`+pl.map(p=>{
     const l=byMaq[p].litros, h=byMaq[p].horas;
     const m=calcMedia(l,h);
     const maq=getMaquina(p);
     const meta=maq?.meta||0;
-    const hL=maxL>0?(l/maxL)*H:0,hM=maxM>0?(m/maxM)*H:0;
+    // Para km/L: barra escalonada por meta individual (meta = 100% da altura)
+    const hM = isKmL
+      ? (meta>0 ? Math.min((m/meta)*H, H*1.5) : maxM>0?(m/maxM)*H:0)
+      : (maxM>0?(m/maxM)*H:0);
+    const hL=maxL>0?(l/maxL)*H:0;
     const desvio=meta>0&&m>0?((m-meta)/meta*100):null;
     const bomDesvio = isKmL ? (desvio!==null&&desvio>=0) : (desvio!==null&&desvio<=0);
     const barColor=desvio===null?'var(--yellow)':bomDesvio?'var(--green)':Math.abs(desvio)<=10?'#f59e0b':'var(--red)';
+    // Linha de meta para km/L
+    const metaLineH = isKmL && meta>0 ? Math.min((meta/Math.max(meta,m))*H, H) : 0;
     const metaText = meta > 0
       ? `<div style="font-size:9px;font-weight:600;font-family:monospace;white-space:nowrap;margin-top:3px;padding:1px 5px;border-radius:4px;background:rgba(192,57,43,.15);color:var(--accent)">${meta.toFixed(1)}</div>`
       : `<div style="font-size:9px;margin-top:3px;padding:1px 5px;height:16px;visibility:hidden">—</div>`;
@@ -2717,13 +2738,16 @@ function renderBarChart(list, isKmL=false) {
       onmouseenter="showBarTooltip(this,'${tooltipContent.replace(/'/g,"&apos;")}')"
       onmouseleave="hideBarTooltip()">
       <div class="bars">
-        <div style="display:flex;flex-direction:column;align-items:center">
+        ${!isKmL ? `<div style="display:flex;flex-direction:column;align-items:center">
           <span style="font-size:9px;color:var(--accent);font-weight:700;margin-bottom:2px;font-family:monospace;white-space:nowrap">${l.toFixed(0)}L</span>
           <div class="bar bar-litros" style="height:${Math.max(hL,2)}px;width:${barW}px"></div>
-        </div>
-        <div style="display:flex;flex-direction:column;align-items:center">
+        </div>` : ''}
+        <div style="display:flex;flex-direction:column;align-items:center;position:relative">
           <span style="font-size:9px;color:${barColor};font-weight:700;margin-bottom:2px;font-family:monospace;white-space:nowrap">${m.toFixed(1)}</span>
-          <div class="bar" style="height:${Math.max(hM,2)}px;width:${barW}px;background:${barColor};border-radius:4px 4px 0 0"></div>
+          <div style="position:relative;width:${barW}px">
+            <div class="bar" style="height:${Math.max(hM,2)}px;width:${barW}px;background:${barColor};border-radius:4px 4px 0 0"></div>
+            ${isKmL && meta>0 ? `<div style="position:absolute;bottom:${Math.min((meta/Math.max(meta,m))*Math.max(hM,2),Math.max(hM,2))}px;left:0;width:${barW}px;height:2px;background:rgba(255,255,255,0.5);border-radius:1px"></div>` : ''}
+          </div>
         </div>
       </div>
       <div class="bar-label">${p}</div>
@@ -3656,7 +3680,7 @@ function importarRelatorio(input) {
         let tipoIgnis;
         if (modUp.includes('MOFFETT') || placa.startsWith('EMP')) {
           tipoIgnis = 'empilhadeira';
-        } else if (tipUp === 'VEICULO LEVE' || opUp.startsWith('VL')) {
+        } else if (tipUp === 'VEICULO LEVE' || opUp.startsWith('VL') || opUp.includes('MERCADO LIVRE')) {
           tipoIgnis = 'leve';
         } else if (placa.startsWith('MAQ')) {
           tipoIgnis = 'maquina';
