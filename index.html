@@ -2430,16 +2430,13 @@ function getFilteredAbast(opF,maqF) {
       });
     }
   }
-  // opF: null = todas ops, Set com itens = filtrar, Set vazio = nenhuma
-  if (opF === null) {
-    // sem filtro de op
-  } else if(opF instanceof Set && opF.size > 0) {
+  // opF: null ou Set vazio = sem filtro de op; Set com itens = filtrar pelas ops
+  if (opF instanceof Set && opF.size > 0) {
     list=list.filter(a=>opF.has(getMaquina(a.placa)?.operacao||a.operacao||''));
-  } else if(opF instanceof Set && opF.size === 0) {
-    return []; // nenhuma op selecionada
   } else if(typeof opF==='string' && opF) {
     list=list.filter(a=>(getMaquina(a.placa)?.operacao||a.operacao||'')===opF);
   }
+  // null ou Set vazio → sem filtro de operação
   if(maqF === '__maquinas__')     list=list.filter(a=>getTipoIgnis(a)==='maquina');
   else if(maqF === '__tratores__')  list=list.filter(a=>getTipoIgnis(a)==='trator');
   else if(maqF === '__pesada__')    list=list.filter(a=>getTipoIgnis(a)==='pesada');
