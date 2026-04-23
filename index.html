@@ -652,7 +652,7 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
             <div id="op-checkboxes"></div>
           </div>
         </div>
-        <select class="filter-select" id="dash-maq-filter" onchange="updateFilters();renderDashboard()"><option value="">Todas as Máquinas</option></select>
+        <select class="filter-select" id="dash-maq-filter" onchange="updateFilters();renderDashboard()"><option value="">Selecione o tipo...</option></select>
         <div class="tab-group">
           <button class="tab-btn active" id="tab-semanal" onclick="setTab('semanal')">Semanal</button>
           <button class="tab-btn" id="tab-mensal" onclick="setTab('mensal')">Mensal</button>
@@ -671,11 +671,11 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
     </div>
 
     <div class="kpi-grid">
-      <div class="kpi-card"><div class="kpi-label">Máquinas Ativas</div><div class="kpi-icon">🚜</div><div><span class="kpi-value" id="kpi-maquinas">0</span></div><div class="kpi-delta" id="kpi-maq-delta"></div></div>
-      <div class="kpi-card"><div class="kpi-label">Horas Trabalhadas</div><div class="kpi-icon">⏱️</div><div><span class="kpi-value" id="kpi-horas">0</span><span class="kpi-unit">h</span></div></div>
+      <div class="kpi-card"><div class="kpi-label">Veículos Ativos</div><div class="kpi-icon">🚗</div><div><span class="kpi-value" id="kpi-maquinas">0</span></div><div class="kpi-delta" id="kpi-maq-delta"></div></div>
+      <div class="kpi-card"><div class="kpi-label" id="kpi-horas-label">Horas Trabalhadas</div><div class="kpi-icon" id="kpi-horas-icon">⏱️</div><div><span class="kpi-value" id="kpi-horas">0</span><span class="kpi-unit" id="kpi-horas-unit">h</span></div></div>
       <div class="kpi-card"><div class="kpi-label">Total de Litros</div><div class="kpi-icon">🛢️</div><div><span class="kpi-value" id="kpi-litros">0</span><span class="kpi-unit">L</span></div><div class="kpi-delta" id="kpi-litros-delta"></div></div>
-      <div class="kpi-card"><div class="kpi-label">Meta Ideal L/H</div><div class="kpi-icon">🎯</div><div><span class="kpi-value" id="kpi-meta-ideal">—</span><span class="kpi-unit" id="kpi-meta-unit"></span></div><div id="kpi-meta-sub" style="font-size:11px;color:var(--text3);margin-top:4px"></div></div>
-      <div class="kpi-card"><div class="kpi-label">Média Realizada</div><div class="kpi-icon">📊</div><div><span class="kpi-value" id="kpi-media">0</span><span class="kpi-unit">L/h</span></div><div class="kpi-delta" id="kpi-media-delta"></div><div id="kpi-media-meta" style="font-size:11px;color:var(--text3);margin-top:4px"></div></div>
+      <div class="kpi-card"><div class="kpi-label" id="kpi-meta-label">Meta Ideal L/H</div><div class="kpi-icon">🎯</div><div><span class="kpi-value" id="kpi-meta-ideal">—</span><span class="kpi-unit" id="kpi-meta-unit"></span></div><div id="kpi-meta-sub" style="font-size:11px;color:var(--text3);margin-top:4px"></div></div>
+      <div class="kpi-card"><div class="kpi-label" id="kpi-media-label">Média Realizada</div><div class="kpi-icon">📊</div><div><span class="kpi-value" id="kpi-media">0</span><span class="kpi-unit" id="kpi-media-unit">L/h</span></div><div class="kpi-delta" id="kpi-media-delta"></div><div id="kpi-media-meta" style="font-size:11px;color:var(--text3);margin-top:4px"></div></div>
       <div class="kpi-card"><div class="kpi-label">Eficiência Geral</div><div class="kpi-icon">⚡</div><div><span class="kpi-value" id="kpi-eficiencia">—</span><span class="kpi-unit">%</span></div><div id="kpi-efic-sub" style="font-size:11px;margin-top:4px"></div></div>
     </div>
     <!-- Consumo por Operação (linha 1, largura total) -->
@@ -735,7 +735,7 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
   </button>
   <div id="comp-maq-menu" style="display:none;position:absolute;top:calc(100% + 4px);right:0;min-width:200px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:6px;z-index:200;box-shadow:0 8px 24px rgba(0,0,0,.4)">
     <div class="comp-maq-opt" data-val="" onclick="setCompMaq(this)" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:7px;cursor:pointer;font-size:13px">
-      <span>⊞</span> Consolidado (sem EMP)
+      <span>⊞</span> Todos (sem EMP)
     </div>
     <div class="comp-maq-opt" data-val="__maquinas__" onclick="setCompMaq(this)" style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:7px;cursor:pointer;font-size:13px">
       <span>⚙️</span> MÁQUINAS
@@ -2279,7 +2279,7 @@ function updateFilters() {
   ['dash-maq-filter'].forEach(id=>{
     const sel=document.getElementById(id); if(!sel) return;
     const val=sel.value;
-    sel.innerHTML='<option value="">Consolidado (sem EMP)</option>' +
+    sel.innerHTML='<option value="">Selecione o tipo...</option>' +
       '<option value="__maquinas__">⚙️ MÁQUINAS</option>' +
       '<option value="__tratores__">🚜 TRATORES</option>' +
       '<option value="__pesada__">🚛 FROTA PESADA</option>' +
@@ -2440,7 +2440,7 @@ function getFilteredAbast(opF,maqF) {
   else if(maqF === '__leve__')      list=list.filter(a=>getTipoIgnis(a)==='leve');
   else if(maqF === '__empilhadeiras__') list=list.filter(a=>getTipoIgnis(a)==='empilhadeira');
   else if(maqF) list=list.filter(a=>a.placa===maqF);
-  else list=list.filter(a=>getTipoIgnis(a)!=='empilhadeira'); // consolidado exclui EMP
+  else return []; // sem filtro = não mostra nada
   return list;
 }
 
@@ -2449,10 +2449,47 @@ function renderDashboard() {
   updateFilters();
   const opsSelec=getSelectedOps();
   const maqF=document.getElementById('dash-maq-filter')?.value||'';
+
+  // Se não tem filtro, mostra tela vazia
+  if (!maqF) {
+    document.getElementById('kpi-litros').textContent='—';
+    document.getElementById('kpi-media').textContent='—';
+    document.getElementById('kpi-horas').textContent='—';
+    document.getElementById('kpi-maquinas').textContent='—';
+    document.getElementById('kpi-meta-ideal').textContent='—';
+    document.getElementById('kpi-eficiencia').textContent='—';
+    const c=document.getElementById('dash-content');
+    if(c) c.innerHTML='<div class="empty"><div class="empty-icon">🔍</div><div class="empty-text">Selecione um tipo de frota</div><div class="empty-sub">Escolha Máquinas, Tratores, Frota Pesada, Frota Leve ou Empilhadeiras para visualizar os dados</div></div>';
+    return;
+  }
+
+  // Determina se o filtro é km/L (pesada ou leve) ou L/h (demais)
+  const isKmL = maqF === '__pesada__' || maqF === '__leve__';
+  const unidadeH = isKmL ? 'km' : 'h';
+  const unidadeMedia = isKmL ? 'km/L' : 'L/h';
+  const labelHoras = isKmL ? 'KM Rodados' : 'Horas Trabalhadas';
+  const labelMedia = isKmL ? 'Média KM/L' : 'Média Realizada';
+  const labelMeta  = isKmL ? 'Meta KM/L' : 'Meta Ideal L/H';
+
+  // Atualiza labels dos KPIs dinamicamente
+  const kpiHorasLabelEl = document.getElementById('kpi-horas-label');
+  if(kpiHorasLabelEl) kpiHorasLabelEl.textContent = labelHoras;
+  const kpiHorasUnitEl = document.getElementById('kpi-horas-unit');
+  if(kpiHorasUnitEl) kpiHorasUnitEl.textContent = unidadeH;
+  const kpiHorasIconEl = document.getElementById('kpi-horas-icon');
+  if(kpiHorasIconEl) kpiHorasIconEl.textContent = isKmL ? '🛣️' : '⏱️';
+  const kpiMediaLabelEl = document.getElementById('kpi-media-label');
+  if(kpiMediaLabelEl) kpiMediaLabelEl.textContent = labelMedia;
+  const kpiMediaUnitEl = document.getElementById('kpi-media-unit');
+  if(kpiMediaUnitEl) kpiMediaUnitEl.textContent = unidadeMedia;
+  const kpiMetaLabelEl = document.getElementById('kpi-meta-label');
+  if(kpiMetaLabelEl) kpiMetaLabelEl.textContent = labelMeta;
+
   const list=getFilteredAbast(opsSelec,maqF);
   const totalL=list.reduce((s,a)=>s+(a.litros||0),0);
   const totalH=list.reduce((s,a)=>s+(a.horas||0),0);
-  const media=totalH>0?totalL/totalH:0;
+  // Para km/L: media = km / litros; para L/h: media = litros / horas
+  const media = isKmL ? (totalL>0 ? totalH/totalL : 0) : (totalH>0 ? totalL/totalH : 0);
   const maqAtivas=new Set(list.map(a=>a.placa)).size;
   const _animKpi = (id, end, dec=0) => {
     const el = document.getElementById(id); if(!el) return;
@@ -2481,8 +2518,8 @@ function renderDashboard() {
   const metaSubEl=document.getElementById('kpi-meta-sub');
   if(metaMedia>0){
     metaIdealEl.textContent=metaMedia.toFixed(2);
-    metaUnitEl.textContent=' L/h';
-    metaSubEl.innerHTML=`<span style="color:var(--text3)">${maqsComMeta.length} máquinas c/ meta</span>`;
+    metaUnitEl.textContent=' '+unidadeMedia;
+    metaSubEl.innerHTML=`<span style="color:var(--text3)">${maqsComMeta.length} veículos c/ meta</span>`;
     metaEl.innerHTML='';
   } else {
     metaIdealEl.textContent='—';
@@ -2495,7 +2532,9 @@ function renderDashboard() {
   const eficEl=document.getElementById('kpi-eficiencia');
   const eficSubEl=document.getElementById('kpi-efic-sub');
   if(metaMedia>0 && media>0){
-    const efic=(metaMedia/media)*100;
+    // L/h: eficiência = meta/real (menor consumo = melhor)
+    // km/L: eficiência = real/meta (maior km/L = melhor)
+    const efic = isKmL ? (media/metaMedia)*100 : (metaMedia/media)*100;
     const cor=efic>=98?'var(--green)':efic>=90?'var(--yellow)':'var(--red)';
     const icone=efic>=98?'✅':efic>=90?'⚠️':'🔴';
     eficEl.textContent=efic.toFixed(1);
@@ -2519,11 +2558,11 @@ function renderDashboard() {
     lbl = 'Período';
   }
   if(document.getElementById('chart-period-label2')) document.getElementById('chart-period-label2').textContent=lbl;
-  renderOpChart(list); renderBarChart(list); renderRanking(list);
+  renderOpChart(list, isKmL); renderBarChart(list, isKmL); renderRanking(list, isKmL);
   relChecarReincidencia();
 }
 
-function renderOpChart(list) {
+function renderOpChart(list, isKmL=false) {
   const c=document.getElementById('op-chart-container');
   if(!c) return;
   if(!list.length){c.innerHTML='<div class="empty"><div class="empty-icon">🏭</div><div class="empty-text">Sem dados</div></div>';return;}
@@ -2536,24 +2575,26 @@ function renderOpChart(list) {
     byOp[op].maquinas.add(a.placa);
   });
   const ops=Object.keys(byOp).sort();
-  // Meta por operação = média das metas das máquinas da operação
   ops.forEach(op=>{
     const maqsDaOp=[...byOp[op].maquinas].map(p=>getMaquina(p)).filter(m=>m&&m.meta>0);
     byOp[op].meta=maqsDaOp.length>0?(maqsDaOp.reduce((s,m)=>s+m.meta,0)/maqsDaOp.length):0;
   });
   const maxL=Math.max(...ops.map(o=>byOp[o].litros));
-  const maxM=Math.max(...ops.map(o=>byOp[o].horas>0?byOp[o].litros/byOp[o].horas:0));
+  const maxM=Math.max(...ops.map(o=>isKmL ? (byOp[o].litros>0?byOp[o].horas/byOp[o].litros:0) : (byOp[o].horas>0?byOp[o].litros/byOp[o].horas:0)));
   const H=120;
 
   c.innerHTML=`<div style="display:inline-flex;gap:12px;padding:8px 4px 4px;min-width:max-content">`+
     ops.map(op=>{
     const d=byOp[op];
-    const l=d.litros, m=d.horas>0?d.litros/d.horas:0;
+    const l=d.litros;
+    const m = isKmL ? (l>0 ? d.horas/l : 0) : (d.horas>0 ? l/d.horas : 0);
     const hL=maxL>0?(l/maxL)*H:0, hM=maxM>0?(m/maxM)*H:0;
     const meta=d.meta||0;
+    // Para km/L: positivo (acima da meta) é BOM; para L/h: positivo é RUIM
     const desvio=meta>0&&m>0?((m-meta)/meta*100):null;
-    const mColor=desvio===null?'var(--yellow)':desvio<=0?'var(--green)':desvio<=10?'#f59e0b':'var(--red)';
-    const icone=desvio===null?'':desvio<=0?'✅':desvio<=10?'⚠️':'🔴';
+    const bomDesvio = isKmL ? (desvio!==null&&desvio>=0) : (desvio!==null&&desvio<=0);
+    const mColor=desvio===null?'var(--yellow)':bomDesvio?'var(--green)':Math.abs(desvio)<=10?'#f59e0b':'var(--red)';
+    const icone=desvio===null?'':bomDesvio?'✅':Math.abs(desvio)<=10?'⚠️':'🔴';
     return `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:12px;padding:12px 16px;display:flex;flex-direction:column;gap:8px">
       <div style="font-size:11px;color:var(--text2);font-weight:600;line-height:1.3">${op}</div>
       <div style="display:flex;align-items:flex-end;gap:12px">
@@ -2562,9 +2603,9 @@ function renderOpChart(list) {
           <span style="font-size:15px;font-weight:700;color:var(--accent);font-family:monospace">${l.toFixed(0)}<span style="font-size:10px">L</span></span>
         </div>
         <div style="flex:1;display:flex;flex-direction:column;align-items:flex-start;gap:2px">
-          <span style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">Média L/h</span>
+          <span style="font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.5px">Média ${unidadeMedia}</span>
           <span style="font-size:15px;font-weight:700;color:${mColor};font-family:monospace">${m.toFixed(2)}</span>
-          ${meta>0?`<span style="font-size:10px;color:${mColor};font-weight:600">${icone} meta: ${meta.toFixed(1)} L/h ${desvio!==null?`(${desvio>0?'+':''}${desvio.toFixed(1)}%)`:''}  </span>`:''}
+          ${meta>0?`<span style="font-size:10px;color:${mColor};font-weight:600">${icone} meta: ${meta.toFixed(1)} ${unidadeMedia} ${desvio!==null?`(${desvio>0?'+':''}${desvio.toFixed(1)}%)`:''}  </span>`:''}
         </div>
       </div>
       <div style="display:flex;gap:4px;align-items:flex-end;height:40px">
@@ -2579,16 +2620,17 @@ function renderOpChart(list) {
   }).join('')+'</div>';
 }
 
-function renderBarChart(list) {
+function renderBarChart(list, isKmL=false) {
   const c=document.getElementById('bar-chart-container');
   if(!list.length){c.innerHTML='<div class="empty"><div class="empty-icon">📊</div><div class="empty-text">Sem dados</div></div>';return;}
+  const unidadeMedia = isKmL ? 'km/L' : 'L/h';
+  const calcMedia = (l,h) => isKmL ? (l>0?h/l:0) : (h>0?l/h:0);
   const byMaq={};
   list.forEach(a=>{if(!byMaq[a.placa])byMaq[a.placa]={litros:0,horas:0};byMaq[a.placa].litros+=a.litros||0;byMaq[a.placa].horas+=a.horas||0;});
   const pl=Object.keys(byMaq).sort();
   const maxL=Math.max(...pl.map(p=>byMaq[p].litros));
-  // Para escala do eixo Y da média, incluir a meta no cálculo
   const maxM=Math.max(
-    ...pl.map(p=>byMaq[p].horas>0?byMaq[p].litros/byMaq[p].horas:0),
+    ...pl.map(p=>calcMedia(byMaq[p].litros,byMaq[p].horas)),
     ...pl.map(p=>getMaquina(p)?.meta||0)
   );
   const H=120;
@@ -2597,17 +2639,18 @@ function renderBarChart(list) {
   c.style.overflowX='auto';
   c.style.overflowY='hidden';
   c.innerHTML=`<div style="display:inline-flex;align-items:flex-end;gap:18px;padding-top:28px;min-width:max-content;padding-bottom:4px">`+pl.map(p=>{
-    const l=byMaq[p].litros,m=byMaq[p].horas>0?byMaq[p].litros/byMaq[p].horas:0;
+    const l=byMaq[p].litros, h=byMaq[p].horas;
+    const m=calcMedia(l,h);
     const maq=getMaquina(p);
     const meta=maq?.meta||0;
     const hL=maxL>0?(l/maxL)*H:0,hM=maxM>0?(m/maxM)*H:0;
     const desvio=meta>0&&m>0?((m-meta)/meta*100):null;
-    const barColor=desvio===null?'var(--yellow)':desvio<=0?'var(--green)':desvio<=10?'#f59e0b':'var(--red)';
+    const bomDesvio = isKmL ? (desvio!==null&&desvio>=0) : (desvio!==null&&desvio<=0);
+    const barColor=desvio===null?'var(--yellow)':bomDesvio?'var(--green)':Math.abs(desvio)<=10?'#f59e0b':'var(--red)';
     const metaText = meta > 0
       ? `<div style="font-size:9px;font-weight:600;font-family:monospace;white-space:nowrap;margin-top:3px;padding:1px 5px;border-radius:4px;background:rgba(192,57,43,.15);color:var(--accent)">${meta.toFixed(1)}</div>`
       : `<div style="font-size:9px;margin-top:3px;padding:1px 5px;height:16px;visibility:hidden">—</div>`;
-    const horas = byMaq[p].horas;
-    const tooltipContent = `${p} | ${maq?.operacao||'—'} | ${l.toFixed(0)}L · ${horas.toFixed(0)}h · ${m.toFixed(2)} L/h${meta>0?' · meta: '+meta.toFixed(1)+' L/h':''}${desvio!==null?' ('+( desvio>0?'+':'')+desvio.toFixed(1)+'%)':''}`;
+    const tooltipContent = `${p} | ${maq?.operacao||'—'} | ${l.toFixed(0)}L · ${h.toFixed(0)}${isKmL?'km':'h'} · ${m.toFixed(2)} ${unidadeMedia}${meta>0?' · meta: '+meta.toFixed(1)+' '+unidadeMedia:''}${desvio!==null?' ('+( desvio>0?'+':'')+desvio.toFixed(1)+'%)':''}`;
     return `<div class="bar-group" style="padding-bottom:20px;gap:16px;position:relative;cursor:pointer"
       onmouseenter="showBarTooltip(this,'${tooltipContent.replace(/'/g,"&apos;")}')"
       onmouseleave="hideBarTooltip()">
@@ -2621,40 +2664,41 @@ function renderBarChart(list) {
           <div class="bar" style="height:${Math.max(hM,2)}px;width:${barW}px;background:${barColor};border-radius:4px 4px 0 0"></div>
         </div>
       </div>
-      <div class="bar-label">${p.replace('MAQ0','').replace('TRA0','T').replace('EMP0','E')}</div>
+      <div class="bar-label">${p}</div>
       ${metaText}
     </div>`;
   }).join('')+'</div>';
 }
 
-function renderRanking(list) {
+function renderRanking(list, isKmL=false) {
   const c=document.getElementById('ranking-list');
   if(!list.length){c.innerHTML='<div class="empty"><div class="empty-icon">🏆</div><div class="empty-text">Sem dados</div></div>';return;}
+  const unidadeMedia = isKmL ? 'km/L' : 'L/h';
+  const calcMedia = (l,h) => isKmL ? (l>0?h/l:0) : (h>0?l/h:0);
   const byMaq={};
   list.forEach(a=>{if(!byMaq[a.placa])byMaq[a.placa]={litros:0,horas:0};byMaq[a.placa].litros+=a.litros||0;byMaq[a.placa].horas+=a.horas||0;});
   const sorted=Object.entries(byMaq).map(([p,d])=>{
-    const media=d.horas>0?d.litros/d.horas:0;
+    const media=calcMedia(d.litros,d.horas);
     const maq=getMaquina(p);
     const meta=maq?.meta||0;
     const desvio=meta>0?((media-meta)/meta*100):null;
     return {placa:p,litros:d.litros,media,meta,desvio};
   }).sort((a,b)=>{
-    // Ordenar por desvio acima da meta (pior primeiro), sem meta vai pelo absoluto
-    const da=a.desvio!==null?a.desvio:a.media;
-    const db=b.desvio!==null?b.desvio:b.media;
-    return db-da;
+    // Para L/h: maior desvio (pior) primeiro; para km/L: menor desvio (pior) primeiro
+    const da=a.desvio!==null?a.desvio:0;
+    const db=b.desvio!==null?b.desvio:0;
+    return isKmL ? da-db : db-da;
   });
   c.innerHTML='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px">'+sorted.slice(0,8).map((item,i)=>{
     let alertColor, alertIcon, alertLabel, barColor;
     if(item.desvio===null){
-      // Sem meta cadastrada — usa lógica antiga
       alertColor='var(--text3)'; alertIcon='—'; alertLabel=''; barColor='var(--accent)';
-    } else if(item.desvio<=0){
-      alertColor='var(--green)'; alertIcon='✓'; alertLabel='Dentro da meta'; barColor='var(--green)';
-    } else if(item.desvio<=10){
-      alertColor='var(--yellow)'; alertIcon='⚠'; alertLabel=`+${item.desvio.toFixed(1)}% acima`; barColor='var(--yellow)';
     } else {
-      alertColor='var(--red)'; alertIcon='🔴'; alertLabel=`+${item.desvio.toFixed(1)}% acima`; barColor='var(--red)';
+      const bomDesvio = isKmL ? item.desvio>=0 : item.desvio<=0;
+      const pct = Math.abs(item.desvio);
+      if(bomDesvio){ alertColor='var(--green)'; alertIcon='✓'; alertLabel='Dentro da meta'; barColor='var(--green)'; }
+      else if(pct<=10){ alertColor='var(--yellow)'; alertIcon='⚠'; alertLabel=`${item.desvio.toFixed(1)}% vs meta`; barColor='var(--yellow)'; }
+      else { alertColor='var(--red)'; alertIcon='🔴'; alertLabel=`${item.desvio.toFixed(1)}% vs meta`; barColor='var(--red)'; }
     }
     const barW=item.meta>0?Math.min(Math.max((item.media/item.meta)*60,8),100):0;
     return `<div class="ranking-item" style="flex-direction:column;align-items:stretch;gap:6px;padding:10px 12px">
@@ -2662,10 +2706,10 @@ function renderRanking(list) {
         <div class="rank-num">${i+1}</div>
         <div style="flex:1">
           <div class="rank-placa">${item.placa}</div>
-          <div class="rank-litros">${item.litros.toFixed(0)}L total${item.meta>0?' · meta: '+item.meta.toFixed(1)+' L/h':''}</div>
+          <div class="rank-litros">${item.litros.toFixed(0)}L total${item.meta>0?' · meta: '+item.meta.toFixed(1)+' '+unidadeMedia:''}</div>
         </div>
         <div style="text-align:right">
-          <div class="rank-value" style="color:${alertColor}">${item.media.toFixed(2)} L/h</div>
+          <div class="rank-value" style="color:${alertColor}">${item.media.toFixed(2)} ${unidadeMedia}</div>
           ${alertLabel?`<div style="font-size:10px;color:${alertColor};font-weight:600">${alertIcon} ${alertLabel}</div>`:`<div style="font-size:10px;color:var(--text3)">sem meta</div>`}
         </div>
       </div>
@@ -3597,9 +3641,9 @@ function importarRelatorio(input) {
       document.getElementById('import-preview').innerHTML=`
         <div style="background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);border-radius:10px;padding:16px;margin-top:12px">
           <div style="font-size:15px;font-weight:600;color:var(--green);margin-bottom:8px">✅ "${nomePeriodo}" importado!</div>
-          <div style="font-size:13px;color:var(--text2)">🚜 ${novaMaq} nova(s) máquina(s) · ⛽ ${dadosSemana.length} registro(s)</div>
+          <div style="font-size:13px;color:var(--text2)">🚗 ${novaMaq} novo(s) veículo(s) · ⛽ ${dadosSemana.length} registro(s)</div>
           ${metaAtualizada>0?`<div style="font-size:13px;color:var(--yellow);margin-top:4px">🎯 ${metaAtualizada} meta(s) L/h atualizada(s)</div>`:''}
-          ${ignoradas>0?`<div style="font-size:12px;color:var(--text3);margin-top:4px">⏭ ${ignoradas} linha(s) ignorada(s) (não são MAQ/TRA/EMP)</div>`:''}
+          ${ignoradas>0?`<div style="font-size:12px;color:var(--text3);margin-top:4px">⏭ ${ignoradas} linha(s) ignorada(s) (IEV, manutenção, locação, etc.)</div>`:''}
           <div style="font-size:12px;color:var(--accent);margin-top:8px">📊 Acesse o Comparativo para analisar os períodos!</div>
         </div>`;
       updateFilters(); renderDashboard();
