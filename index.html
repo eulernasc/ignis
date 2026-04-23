@@ -701,8 +701,8 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
     <!-- Consumo por Máquina (largura total) -->
     <div class="chart-card" style="margin-bottom:16px;height:340px;display:flex;flex-direction:column;min-height:0;overflow:hidden">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-shrink:0;margin-bottom:0">
-        <div class="chart-title" style="margin-bottom:0">Consumo por Máquina — <span id="chart-period-label">Semanal</span></div>
-        <div class="chart-legend" style="margin:0"><div class="legend-item"><div class="legend-dot" style="background:var(--accent)"></div>Litros</div><div class="legend-item"><div class="legend-dot" style="background:var(--yellow)"></div>Média L/h</div></div>
+        <div class="chart-title" style="margin-bottom:0">Consumo por Placa — <span id="chart-period-label">Semanal</span></div>
+        <div class="chart-legend" id="bar-chart-legend" style="margin:0"><div class="legend-item"><div class="legend-dot" style="background:var(--accent)"></div>Litros</div><div class="legend-item"><div class="legend-dot" style="background:var(--yellow)"></div><span id="bar-legend-media">Média L/h</span></div></div>
       </div>
       <div id="bar-chart-container" style="flex:1;min-height:0;overflow-x:auto;overflow-y:hidden;padding-bottom:12px"><div class="empty"><div class="empty-icon">📊</div><div class="empty-text">Sem dados</div><div class="empty-sub">Importe um relatório para começar</div></div></div>
     </div>
@@ -1023,6 +1023,17 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
           <button class="btn btn-secondary btn-sm" onclick="execSetRange(15)">Últimos 15 dias</button>
           <button class="btn btn-secondary btn-sm" onclick="execSetRange('mes')">Este mês</button>
           <button class="btn btn-secondary btn-sm" onclick="execSetRange(30)">Últimos 30 dias</button>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Tipo de Frota</label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">
+            <button class="btn btn-secondary btn-sm exec-tipo-btn active" data-tipo="" onclick="execSetTipo(this,'')">⊞ Todos</button>
+            <button class="btn btn-secondary btn-sm exec-tipo-btn" data-tipo="__maquinas__" onclick="execSetTipo(this,'__maquinas__')">⚙️ Máquinas</button>
+            <button class="btn btn-secondary btn-sm exec-tipo-btn" data-tipo="__tratores__" onclick="execSetTipo(this,'__tratores__')">🚜 Tratores</button>
+            <button class="btn btn-secondary btn-sm exec-tipo-btn" data-tipo="__pesada__" onclick="execSetTipo(this,'__pesada__')">🚛 Pesada</button>
+            <button class="btn btn-secondary btn-sm exec-tipo-btn" data-tipo="__leve__" onclick="execSetTipo(this,'__leve__')">🚗 Leve</button>
+            <button class="btn btn-secondary btn-sm exec-tipo-btn" data-tipo="__empilhadeiras__" onclick="execSetTipo(this,'__empilhadeiras__')">🏗 Empilhadeiras</button>
+          </div>
         </div>
         <div class="form-group">
           <label class="form-label">Filtrar Operação (opcional)</label>
@@ -2830,7 +2841,7 @@ function renderBarChart(list, isKmL=false) {
   c.style.overflowY='hidden';
 
   // Atualiza legenda dinamicamente
-  const legendEl = document.querySelector('.chart-legend');
+  const legendEl = document.getElementById('bar-chart-legend');
   if(legendEl) {
     legendEl.innerHTML = isKmL
       ? `<div class="legend-item"><div class="legend-dot" style="background:var(--yellow)"></div>Média ${unidadeMedia}</div>`
@@ -3086,27 +3097,27 @@ function renderComparativo() {
   if(todasOps.length>0 && opF.size===0){
     html+=`<div class="comp-maq-table" style="margin-bottom:16px">
       <div class="comp-maq-header"><span>📍 Consumo por Operação</span><span class="comp-badge">${todasOps.length} operações</span></div>
-      <div style="overflow-x:auto"><table><thead><tr><th>Operação</th><th style="color:var(--text2)">Meta</th>${selecionadosFiltrados.map(([id])=>`<th>${dadosPeriodo[id].label} — L</th><th>L/h</th><th>Maq.</th>`).join('')}${selecionadosFiltrados.length>1?'<th>Variação</th>':''}</tr></thead><tbody>`;
+      <div style="overflow-x:auto"><table><thead><tr><th>Operação</th><th style="color:var(--text2)">Meta</th>${selecionadosFiltrados.map(([id])=>`<th>${dadosPeriodo[id].label} — L</th><th>${unidadeMedia}</th><th>Maq.</th>`).join('')}${selecionadosFiltrados.length>1?'<th>Variação</th>':''}</tr></thead><tbody>`;
     todasOps.forEach(op=>{
-      // Calcular meta média das máquinas desta operação
       const maqsDaOp=state.maquinas.filter(m=>(m.operacao||'').replace(/_/g,' ')===op&&m.meta>0);
       const metaOp=maqsDaOp.length>0?(maqsDaOp.reduce((s,m)=>s+m.meta,0)/maqsDaOp.length):0;
       const vals=selecionadosFiltrados.map(([id])=>{
         const rows=dadosPeriodo[id].rows.filter(r=>(r.operacao||'').replace(/_/g,' ')===op);
         const l=rows.reduce((a,r)=>a+(r.litros||0),0),h=rows.reduce((a,r)=>a+(r.horas||0),0);
-        return{l,h,m:h>0?l/h:0,maq:new Set(rows.map(r=>r.placa)).size};
+        return{l,h,m:calcMedia(l,h),maq:new Set(rows.map(r=>r.placa)).size};
       });
       html+=`<tr><td style="font-weight:600">${op}</td>`;
-      html+=`<td style="font-size:11px;color:var(--text2)">${metaOp>0?metaOp.toFixed(2)+' L/h':'—'}</td>`;
+      html+=`<td style="font-size:11px;color:var(--text2)">${metaOp>0?metaOp.toFixed(2)+' '+unidadeMedia:'—'}</td>`;
       vals.forEach(v=>{
         html+=`<td>${v.l>0?v.l.toFixed(0)+'L':'—'}</td>`;
         const desvio=metaOp>0&&v.m>0?((v.m-metaOp)/metaOp*100):null;
-        const cls=desvio===null?(v.m>=12?'badge-green':v.m>=9?'badge-blue':v.m>0?'badge-red':''):(desvio<=0?'badge-green':desvio<=10?'badge-yellow':'badge-red');
+        const bomDesvio = isKmL ? (desvio!==null&&desvio>=0) : (desvio!==null&&desvio<=0);
+        const cls=desvio===null?(v.m>0?'badge-blue':''):(bomDesvio?'badge-green':Math.abs(desvio)<=10?'badge-yellow':'badge-red');
         const tip=desvio!==null?` · ${desvio>0?'+':''}${desvio.toFixed(0)}%`:'';
         html+=`<td>${v.m>0?`<span class="badge ${cls}">${v.m.toFixed(2)}${tip}</span>`:'—'}</td>`;
         html+=`<td style="color:var(--text2)">${v.maq||'—'}</td>`;
       });
-      if(selecionadosFiltrados.length>1){const f=vals[0],l=vals[vals.length-1];if(f.m>0&&l.m>0){const d=((l.m-f.m)/f.m*100);html+=`<td><span class="badge ${d>=0?'badge-red':'badge-green'}">${d>=0?'▲':'▼'}${Math.abs(d).toFixed(1)}%</span></td>`;}else html+='<td>—</td>';}
+      if(selecionadosFiltrados.length>1){const f=vals[0],lv=vals[vals.length-1];if(f.m>0&&lv.m>0){const d=((lv.m-f.m)/f.m*100);const bomVar=isKmL?d>=0:d<=0;html+=`<td><span class="badge ${bomVar?'badge-green':'badge-red'}">${bomVar?'▼':'▲'}${Math.abs(d).toFixed(1)}%</span></td>`;}else html+='<td>—</td>';}
       html+='</tr>';
     });
     html+='</tbody></table></div></div>';
@@ -3115,8 +3126,8 @@ function renderComparativo() {
   // Tabela por Máquina
   const todasPlacas=[...new Set(selecionadosFiltrados.flatMap(([id])=>dadosPeriodo[id].rows.filter(r=>opF.size===0||opF.has(r.operacao)).map(r=>r.placa)))]
     .sort();
-  html+=`<div class="comp-maq-table"><div class="comp-maq-header"><span>🚜 Consumo por Máquina</span><span class="comp-badge">${todasPlacas.length} máquinas</span></div>
-  <div style="overflow-x:auto"><table><thead><tr><th>Máquina</th><th>Operação</th><th style="color:var(--text2)">Meta</th>${selecionadosFiltrados.map(([id])=>`<th>${dadosPeriodo[id].label} — L</th><th>L/h</th>`).join('')}${selecionadosFiltrados.length>1?'<th>Variação</th>':''}</tr></thead><tbody>`;
+  html+=`<div class="comp-maq-table"><div class="comp-maq-header"><span>🚗 Consumo por Placa</span><span class="comp-badge">${todasPlacas.length} veículos</span></div>
+  <div style="overflow-x:auto"><table><thead><tr><th>Placa</th><th>Operação</th><th style="color:var(--text2)">Meta</th>${selecionadosFiltrados.map(([id])=>`<th>${dadosPeriodo[id].label} — L</th><th>${unidadeMedia}</th>`).join('')}${selecionadosFiltrados.length>1?'<th>Variação</th>':''}</tr></thead><tbody>`;
   todasPlacas.forEach(placa=>{
     let op='';
     const maq=getMaquina(placa);
@@ -3124,18 +3135,20 @@ function renderComparativo() {
     const vals=selecionadosFiltrados.map(([id])=>{
       const row=dadosPeriodo[id].rows.find(r=>r.placa===placa);
       if(row) op=row.operacao||'';
-      return{l:row?.litros||0,h:row?.horas||0,m:row&&row.horas>0?row.litros/row.horas:0};
+      const l=row?.litros||0, h=row?.horas||0;
+      return{l,h,m:calcMedia(l,h)};
     });
     html+=`<tr><td><span class="placa-tag">${placa}</span></td><td style="font-size:11px;color:var(--text2)">${op.replace(/_/g,' ')}</td>`;
-    html+=`<td style="font-size:11px;color:var(--text2)">${meta>0?meta.toFixed(2)+' L/h':'—'}</td>`;
+    html+=`<td style="font-size:11px;color:var(--text2)">${meta>0?meta.toFixed(2)+' '+unidadeMedia:'—'}</td>`;
     vals.forEach(v=>{
       html+=`<td>${v.l>0?v.l.toFixed(0)+'L':'—'}</td>`;
       const desvio=meta>0&&v.m>0?((v.m-meta)/meta*100):null;
-      const cls=desvio===null?(v.m>=10?'badge-green':v.m>0?'badge-red':''):(desvio<=0?'badge-green':desvio<=10?'badge-yellow':'badge-red');
+      const bomDesvio = isKmL ? (desvio!==null&&desvio>=0) : (desvio!==null&&desvio<=0);
+      const cls=desvio===null?(v.m>0?'badge-blue':''):(bomDesvio?'badge-green':Math.abs(desvio)<=10?'badge-yellow':'badge-red');
       const tip=desvio!==null?` · ${desvio>0?'+':''}${desvio.toFixed(0)}%`:'';
       html+=`<td>${v.m>0?`<span class="badge ${cls}">${v.m.toFixed(2)}${tip}</span>`:'—'}</td>`;
     });
-    if(selecionadosFiltrados.length>1){const f=vals[0],l=vals[vals.length-1];if(f.m>0&&l.m>0){const d=((l.m-f.m)/f.m*100);html+=`<td><span class="badge ${d>=0?'badge-red':'badge-green'}">${d>=0?'▲':'▼'}${Math.abs(d).toFixed(1)}%</span></td>`;}else html+='<td>—</td>';}
+    if(selecionadosFiltrados.length>1){const f=vals[0],lv=vals[vals.length-1];if(f.m>0&&lv.m>0){const d=((lv.m-f.m)/f.m*100);const bomVar=isKmL?d>=0:d<=0;html+=`<td><span class="badge ${bomVar?'badge-green':'badge-red'}">${bomVar?'▼':'▲'}${Math.abs(d).toFixed(1)}%</span></td>`;}else html+='<td>—</td>';}
     html+='</tr>';
   });
   html+='</tbody></table></div></div>';
@@ -6166,6 +6179,11 @@ function dieselPopularOps() {
 }
 
 // ── RELATÓRIO EXECUTIVO ───────────────────────────────────────────────────────
+function execSetTipo(el, tipo) {
+  document.querySelectorAll('.exec-tipo-btn').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+}
+
 function execSetRange(opt) {
   const hoje = new Date();
   const fmt = d => d.toISOString().split('T')[0];
@@ -6194,8 +6212,17 @@ function renderExecutivo() {
   const fmtBr = d => { const [y,m,dd] = d.split('-'); return dd+'/'+m+'/'+y; };
   const labelPeriodo = fmtBr(ini) + ' a ' + fmtBr(fim);
 
+  const execTipo = document.querySelector('.exec-tipo-btn.active')?.dataset?.tipo || '';
+  const isKmL = execTipo === '__pesada__' || execTipo === '__leve__';
+  const unidadeMedia = isKmL ? 'km/L' : 'L/h';
+
   let registros = state.abastecimentos.filter(a => a.data >= ini && a.data <= fim);
   if (opFiltro) registros = registros.filter(a => (getMaquina(a.placa)?.operacao || a.operacao || '') === opFiltro);
+  if (execTipo === '__maquinas__')       registros = registros.filter(a => getTipoIgnis(a)==='maquina');
+  else if (execTipo === '__tratores__')  registros = registros.filter(a => getTipoIgnis(a)==='trator');
+  else if (execTipo === '__pesada__')    registros = registros.filter(a => getTipoIgnis(a)==='pesada');
+  else if (execTipo === '__leve__')      registros = registros.filter(a => getTipoIgnis(a)==='leve');
+  else if (execTipo === '__empilhadeiras__') registros = registros.filter(a => getTipoIgnis(a)==='empilhadeira');
   if (!registros.length) {
     c.innerHTML = '<div class="empty"><div class="empty-icon">🔍</div><div class="empty-text">Nenhum registro no período</div></div>';
     return;
@@ -6218,21 +6245,39 @@ function renderExecutivo() {
     const maq = getMaquina(placa);
     const op = (maq?.operacao || '').replace(/_/g,' ') || 'Sem Operação';
     const meta = maq?.meta || 0;
-    const media = d.h > 0 ? d.l / d.h : 0;
+    const media = isKmL ? (d.l > 0 ? d.h / d.l : 0) : (d.h > 0 ? d.l / d.h : 0);
     const preco = dieselGetPreco(maq?.operacao || '');
     if (!preco) semPreco.add(op);
     if (!meta) semMeta.add(placa);
-    // Usa meta cliente da operação se configurada
     const metaCli = opGetMeta(maq?.operacao || '');
     const metaFinal = metaCli > 0 ? metaCli : meta;
     const limiteReal = opGetLimiteReal(maq?.operacao || '', metaFinal);
-    const efic = metaFinal > 0 && media > 0 ? (metaFinal / media) * 100 : null;
-    // Desperdício: acima do limite (meta + túnel). Menor = melhor.
-    const desperdicadoL = metaFinal > 0 && limiteReal > 0 && media > limiteReal ? (media - limiteReal) * d.h : 0;
-    const economiaL = metaFinal > 0 && media > 0 && media < metaFinal ? (metaFinal - media) * d.h : 0;
+    const efic = metaFinal > 0 && media > 0 ? (isKmL ? (media/metaFinal)*100 : (metaFinal/media)*100) : null;
+    let desperdicadoL = 0, economiaL = 0;
+    if (isKmL) {
+      if (metaFinal > 0 && d.h > 0) {
+        const litrosIdeais = d.h / metaFinal;
+        if (d.l > litrosIdeais) desperdicadoL = d.l - litrosIdeais;
+        else economiaL = litrosIdeais - d.l;
+      }
+    } else {
+      if (metaFinal > 0 && limiteReal > 0 && media > limiteReal) desperdicadoL = (media - limiteReal) * d.h;
+      if (metaFinal > 0 && media > 0 && media < metaFinal) economiaL = (metaFinal - media) * d.h;
+    }
     const desperdicadoR = desperdicadoL * preco;
     const economiaR = economiaL * preco;
-    const metaBatida = metaFinal > 0 && media > 0 && media <= limiteReal; // está dentro da meta
+    const metaBatida = isKmL ? (metaFinal > 0 && media >= metaFinal) : (metaFinal > 0 && media > 0 && media <= limiteReal);
+
+
+
+
+
+
+
+
+
+
+
     if (!byOp[op]) byOp[op] = { maquinas: [], totalL: 0, totalH: 0, desperdicadoL: 0, desperdicadoR: 0, economiaL: 0, economiaR: 0, maqNaMeta: 0, preco, semPreco: !preco };
     byOp[op].maquinas.push({ placa, meta, media, efic, desperdicadoL, desperdicadoR, economiaL, economiaR, metaBatida, litros: d.l, horas: d.h });
     byOp[op].totalL += d.l;
@@ -6346,13 +6391,13 @@ function renderExecutivo() {
       const metaCli = opGetMeta(getMaquina(m.placa)?.operacao || '');
       const metaEfetiva = metaCli > 0 ? metaCli : m.meta;
       const tunel = opGetTunel(getMaquina(m.placa)?.operacao || '');
-      const limiteLabel = tunel > 0 ? metaEfetiva.toFixed(1) + ' +' + tunel + '%' : (metaEfetiva > 0 ? metaEfetiva.toFixed(1) + ' L/h' : '—');
+      const limiteLabel = tunel > 0 ? metaEfetiva.toFixed(1) + ' +' + tunel + '%' : (metaEfetiva > 0 ? metaEfetiva.toFixed(1) + ' ' + unidadeMedia : '—');
       const eficCor = !m.efic ? 'var(--text3)' : m.efic >= 98 ? 'var(--green)' : m.efic >= 90 ? 'var(--yellow)' : 'var(--red)';
       const eficBadge = !m.efic ? '' : m.efic >= 98 ? 'badge-green' : m.efic >= 90 ? 'badge-yellow' : 'badge-red';
       html += '<tr>';
       html += '<td><span class="placa-tag">' + m.placa + '</span></td>';
       html += '<td style="text-align:center;font-family:monospace;color:var(--accent)">' + limiteLabel + '</td>';
-      html += '<td style="text-align:center;font-family:monospace;font-weight:700;color:' + eficCor + '">' + m.media.toFixed(2) + ' L/h</td>';
+      html += '<td style="text-align:center;font-family:monospace;font-weight:700;color:' + eficCor + '">' + m.media.toFixed(2) + ' ' + unidadeMedia + '</td>';
       html += '<td style="text-align:center"><span class="badge ' + eficBadge + '">' + (m.efic ? m.efic.toFixed(1) + '%' : '—') + '</span></td>';
       html += '<td style="text-align:right;font-family:monospace;color:' + (m.desperdicadoL > 0 ? 'var(--red)' : 'var(--text3)') + '">' + (m.desperdicadoL > 0 ? fmtL(m.desperdicadoL) : '—') + '</td>';
       html += '<td style="text-align:right;font-family:monospace;font-weight:700;color:' + (m.desperdicadoR > 0 ? 'var(--red)' : 'var(--text3)') + '">' + (m.desperdicadoR > 0 ? fmtR(m.desperdicadoR) : '—') + '</td>';
@@ -6383,7 +6428,7 @@ function renderExecutivo() {
   });
 
   // Salva dados para exportação
-  window._execDados = { labelPeriodo, totalDesperdicadoR, totalDesperdicadoL, totalEconomiaR, totalEconomiaL, totalLiquidoR, pctDesperdicio, opsOrdenadas, todasMaq: [], fmtR, fmtL };
+  window._execDados = { labelPeriodo, totalDesperdicadoR, totalDesperdicadoL, totalEconomiaR, totalEconomiaL, totalLiquidoR, pctDesperdicio, opsOrdenadas, todasMaq: [], fmtR, fmtL, isKmL, unidadeMedia };
 }
 
 function kpiExec(label, value, sub, cor) {
@@ -6414,8 +6459,8 @@ function exportarExecutivoEmail() {
     return '<tr style="background:' + (i%2===0?'#fff':'#f8fafc') + ';border-bottom:1px solid #e2e8f0">' +
       '<td style="padding:9px 12px;font-weight:700;font-family:monospace;font-size:13px;color:#1e293b">' + m.placa + '</td>' +
       '<td style="padding:9px 12px;font-size:12px;color:#64748b">' + m.op + '</td>' +
-      '<td style="padding:9px 12px;text-align:center;font-family:monospace;color:#2563eb">' + (m.meta>0?m.meta.toFixed(1)+' L/h':'—') + '</td>' +
-      '<td style="padding:9px 12px;text-align:center;font-weight:700;font-family:monospace;color:' + eficCor + '">' + m.media.toFixed(2) + ' L/h</td>' +
+      '<td style="padding:9px 12px;text-align:center;font-family:monospace;color:#2563eb">' + (m.meta>0?m.meta.toFixed(1)+' '+(window._execDados?.unidadeMedia||'L/h'):'—') + '</td>' +
+      '<td style="padding:9px 12px;text-align:center;font-weight:700;font-family:monospace;color:' + eficCor + '">' + m.media.toFixed(2) + ' ' + (window._execDados?.unidadeMedia||'L/h') + '</td>' +
       '<td style="padding:9px 12px;text-align:center;color:' + eficCor + ';font-weight:700">' + (m.efic?m.efic.toFixed(1)+'%':'—') + '</td>' +
       '<td style="padding:9px 12px;text-align:right;font-weight:700;color:#dc2626;font-family:monospace">' + fmtR(m.desperdicadoR) + '</td>' +
       '</tr>';
