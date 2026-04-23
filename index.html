@@ -2412,6 +2412,8 @@ function getTipoIgnis(a) {
   const op = (a.operacao || m?.operacao || '').toUpperCase();
   if (op.includes('MERCADO LIVRE') || op.startsWith('VL') || (a.tipo||'').toUpperCase() === 'VEICULO LEVE') return 'leve';
   if ((a.modelo||'').toUpperCase().includes('MOFFETT') || placa.startsWith('EMP')) return 'empilhadeira';
+  // Operações ignoradas — tratar como tipo especial para excluir dos filtros
+  if (op.includes('VENDIDOS') || op.includes('SEMINOVOS')) return 'ignorado';
   // Agora usa campo salvo (importação mais recente)
   if (a.tipoIgnis) return a.tipoIgnis;
   if (m && m.tipoIgnis) return m.tipoIgnis;
@@ -2469,6 +2471,9 @@ function getFilteredAbast(opF,maqF) {
     list=list.filter(a=>(getMaquina(a.placa)?.operacao||a.operacao||'')===opF);
   }
   // null ou Set vazio → sem filtro de operação
+  // Remove sempre os ignorados (vendidos, seminovos, etc.)
+  list = list.filter(a => getTipoIgnis(a) !== 'ignorado');
+
   if(maqF === '__maquinas__')     list=list.filter(a=>getTipoIgnis(a)==='maquina');
   else if(maqF === '__tratores__')  list=list.filter(a=>getTipoIgnis(a)==='trator');
   else if(maqF === '__pesada__')    list=list.filter(a=>getTipoIgnis(a)==='pesada');
@@ -3674,7 +3679,7 @@ function importarRelatorio(input) {
         // Modelo começa com IEV → ignorar
         if (modUp.startsWith('IEV')) { ignoradas++; return; }
         // Operação contém palavras excluídas
-        const excluirOps = ['MANUTENCAO','MANUTENÇÃO','LOCACAO','LOCAÇÃO','NAO DEFINIDO','NÃO DEFINIDO','DISPONIVEL','DISPONÍVEL','DESMOBILIZADA'];
+        const excluirOps = ['MANUTENCAO','MANUTENÇÃO','LOCACAO','LOCAÇÃO','NAO DEFINIDO','NÃO DEFINIDO','DISPONIVEL','DISPONÍVEL','DESMOBILIZADA','VENDIDOS','SEMINOVOS'];
         if (excluirOps.some(x => opUp.includes(x))) { ignoradas++; return; }
 
         // ── CLASSIFICAÇÃO DO TIPO IGNIS ───────────────────────────────────────
