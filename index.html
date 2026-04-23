@@ -1666,6 +1666,35 @@ async function syncFromFirebase() {
     if (deveAplicar && temDadosFirebase) {
       const dados = { ...rest };
       delete dados._savedAt;
+
+      // ── PROTEÇÃO ANTI-PERDA DE DADOS ──────────────────────────────────────────
+      // Se Firebase tem MENOS abastecimentos/semanas que local, mantém os locais
+      // Isso evita que outro usuário com dados mais antigos sobrescreva importações
+      const localAbast = state.abastecimentos?.length || 0;
+      const fbAbast    = dados.abastecimentos?.length || 0;
+      const localSem   = Object.keys(state.semanas||{}).length;
+      const fbSem      = Object.keys(dados.semanas||{}).length;
+
+      if (fbAbast < localAbast || fbSem < localSem) {
+        // Firebase tem menos dados — faz MERGE: une ambos sem duplicar
+        if (fbAbast < localAbast) {
+          // Mantém abastecimentos locais (têm mais registros)
+          dados.abastecimentos = state.abastecimentos;
+        }
+        if (fbSem < localSem) {
+          // Merge de semanas: Firebase + local (local prevalece em conflito de chave)
+          dados.semanas = { ...(dados.semanas||{}), ...(state.semanas||{}) };
+        }
+        // Merge de máquinas: mantém todas
+        const maqMap = {};
+        [...(dados.maquinas||[]), ...(state.maquinas||[])].forEach(m => {
+          if (!maqMap[m.placa] || (m.meta && !maqMap[m.placa].meta)) maqMap[m.placa] = m;
+        });
+        dados.maquinas = Object.values(maqMap);
+        // Salva o merge de volta para Firebase
+        setTimeout(() => saveState(), 2000);
+      }
+
       state = { ...state, ...dados };
       state._savedAt = tsFirebase;
       localStorage.setItem('fueltracker_v3', JSON.stringify(state));
