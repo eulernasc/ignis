@@ -2225,9 +2225,10 @@ function updateFilters() {
     if (maqFiltro === '__maquinas__' || maqFiltro === '__tratores__' || maqFiltro === '__pesada__' || maqFiltro === '__leve__' || maqFiltro === '__empilhadeiras__') {
       const tipoAlvo = maqFiltro === '__maquinas__' ? 'maquina' : maqFiltro === '__tratores__' ? 'trator' : maqFiltro === '__pesada__' ? 'pesada' : maqFiltro === '__leve__' ? 'leve' : 'empilhadeira';
       const opsDotipo = new Set(state.abastecimentos.filter(a => getTipoIgnis(a) === tipoAlvo).map(a => getMaquina(a.placa)?.operacao || a.operacao || '').filter(Boolean));
-      return ops.filter(o => opsDotipo.has(o));
+      // Se nenhuma op encontrada pro tipo (dados sem tipoIgnis), retorna todas as ops
+      const filtradas = ops.filter(o => opsDotipo.has(o));
+      return filtradas.length > 0 ? filtradas : ops;
     }
-    // Placa individual
     const maq = getMaquina(maqFiltro);
     return maq?.operacao ? [maq.operacao] : ops;
   };
@@ -2236,10 +2237,10 @@ function updateFilters() {
   // Multi-select operações do dashboard
   const cb=document.getElementById('op-checkboxes');
   if(cb){
-    const selected=getSelectedOps();
+    const selected=getSelectedOps(); // null = todas, Set = específicas
     cb.innerHTML=opsFiltradas.map(o=>`
       <label style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:13px">
-        <input type="checkbox" class="op-check" value="${o}" ${selected.size===0||selected.has(o)?'checked':''} onchange="onOpCheckChange()">
+        <input type="checkbox" class="op-check" value="${o}" ${selected===null||selected.has(o)?'checked':''} onchange="onOpCheckChange()">
         ${o.replace(/_/g,' ')}
       </label>`).join('');
     // Sincroniza o "Todas" checkbox
@@ -2429,8 +2430,13 @@ function getFilteredAbast(opF,maqF) {
       });
     }
   }
-  if(opF instanceof Set && opF.size>0) {
+  // opF: null = todas ops, Set com itens = filtrar, Set vazio = nenhuma
+  if (opF === null) {
+    // sem filtro de op
+  } else if(opF instanceof Set && opF.size > 0) {
     list=list.filter(a=>opF.has(getMaquina(a.placa)?.operacao||a.operacao||''));
+  } else if(opF instanceof Set && opF.size === 0) {
+    return []; // nenhuma op selecionada
   } else if(typeof opF==='string' && opF) {
     list=list.filter(a=>(getMaquina(a.placa)?.operacao||a.operacao||'')===opF);
   }
