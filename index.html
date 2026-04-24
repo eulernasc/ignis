@@ -1702,24 +1702,32 @@ async function syncFromFirebase() {
       const fbSem      = Object.keys(dados.semanas||{}).length;
 
       if (fbAbast < localAbast || fbSem < localSem) {
-        // Firebase tem menos dados — faz MERGE: une ambos sem duplicar
-        if (fbAbast < localAbast) {
-          // Mantém abastecimentos locais (têm mais registros)
-          dados.abastecimentos = state.abastecimentos;
-        }
-        if (fbSem < localSem) {
-          // Merge de semanas: Firebase + local (local prevalece em conflito de chave)
-          dados.semanas = { ...(dados.semanas||{}), ...(state.semanas||{}) };
-        }
-        // Merge de máquinas: mantém todas
+        if (fbAbast < localAbast) dados.abastecimentos = state.abastecimentos;
+        if (fbSem < localSem) dados.semanas = { ...(dados.semanas||{}), ...(state.semanas||{}) };
         const maqMap = {};
         [...(dados.maquinas||[]), ...(state.maquinas||[])].forEach(m => {
           if (!maqMap[m.placa] || (m.meta && !maqMap[m.placa].meta)) maqMap[m.placa] = m;
         });
         dados.maquinas = Object.values(maqMap);
-        // Salva o merge de volta para Firebase
         setTimeout(() => saveState(), 2000);
       }
+
+      // Merge dieselPrecos: local prevalece (tem mais entradas = mais recente)
+      const localPrecos = Object.keys(state.dieselPrecos||{}).length;
+      const fbPrecos    = Object.keys(dados.dieselPrecos||{}).length;
+      if (localPrecos > fbPrecos) {
+        // Local tem mais preços configurados — faz merge (local prevalece por chave)
+        dados.dieselPrecos = { ...(dados.dieselPrecos||{}), ...(state.dieselPrecos||{}) };
+      }
+
+      // Merge opConfigs igualmente
+      const localCfgs = Object.keys(state.opConfigs||{}).length;
+      const fbCfgs    = Object.keys(dados.opConfigs||{}).length;
+      if (localCfgs > fbCfgs) {
+        dados.opConfigs = { ...(dados.opConfigs||{}), ...(state.opConfigs||{}) };
+      }
+      // Salva merge de volta ao Firebase se houve mudanças
+      setTimeout(() => saveState(), 2000);
 
       state = { ...state, ...dados };
       state._savedAt = tsFirebase;
@@ -3809,6 +3817,15 @@ function importarRelatorio(input) {
         const mediaIdeal = parseFloat(row[12])||0;    // Coluna M — Média Ideal
         const precoMedio = parseFloat(row[18])||0;    // Coluna S — Preço Médio do Combustível
 
+        if(!placa && !operacao) return; // só ignora linha completamente vazia
+
+        // Acumula preço médio por operação ANTES de qualquer exclusão
+        if (precoMedio > 0 && operacao) {
+          if (!precosPorOp[operacao]) precosPorOp[operacao] = { soma: 0, count: 0 };
+          precosPorOp[operacao].soma += precoMedio;
+          precosPorOp[operacao].count++;
+        }
+
         if(!placa) return;
 
         const opUp  = operacao.toUpperCase();
@@ -3838,12 +3855,6 @@ function importarRelatorio(input) {
         }
 
         const maqExistente = state.maquinas.find(m => m.placa === placa);
-        // Acumula preço médio por operação
-        if (precoMedio > 0 && operacao) {
-          if (!precosPorOp[operacao]) precosPorOp[operacao] = { soma: 0, count: 0 };
-          precosPorOp[operacao].soma += precoMedio;
-          precosPorOp[operacao].count++;
-        }
         if(!maqExistente){
           state.maquinas.push({placa, modelo, tipo, tipoIgnis, operacao, status:'Ativa', meta:mediaIdeal||0});
           novaMaq++;
