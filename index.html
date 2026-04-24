@@ -3864,7 +3864,7 @@ function importarRelatorio(input) {
         }
       });
 
-      // Salvar preços médios por operação (coluna S) — não sobrescreve preço já configurado manualmente
+      // Salvar preços médios por operação (coluna S)
       if (!state.dieselPrecos) state.dieselPrecos = {};
       let precosAtualizados = 0;
       Object.entries(precosPorOp).forEach(([op, {soma, count}]) => {
@@ -3874,6 +3874,14 @@ function importarRelatorio(input) {
           precosAtualizados++;
         }
       });
+      // Salva em chave separada que Firebase nunca sobrescreve
+      if (precosAtualizados > 0) {
+        try {
+          const backup = JSON.parse(localStorage.getItem('ignis_diesel_backup')||'{}');
+          Object.assign(backup, state.dieselPrecos);
+          localStorage.setItem('ignis_diesel_backup', JSON.stringify(backup));
+        } catch(e) {}
+      }
 
       // Salvar período no novo formato
       const dataIniRef = document.getElementById('import-data-ini')?.value||'';
@@ -6101,6 +6109,12 @@ function dieselGetPrecos() {
 async function dieselSalvarPreco(op, val) {
   if (!state.dieselPrecos) state.dieselPrecos = {};
   if (val > 0) state.dieselPrecos[op] = val; else delete state.dieselPrecos[op];
+  // Backup imune ao Firebase
+  try {
+    const backup = JSON.parse(localStorage.getItem('ignis_diesel_backup')||'{}');
+    if (val > 0) backup[op] = val; else delete backup[op];
+    localStorage.setItem('ignis_diesel_backup', JSON.stringify(backup));
+  } catch(e) {}
   saveState();
 }
 function dieselGetPreco(op) {
@@ -6135,20 +6149,21 @@ function opGetLimiteReal(op, metaMaquina) {
 }
 
 function dieselPopularOps() {
-  // Tenta recuperar dieselPrecos do localStorage caso state esteja vazio
+  // Recupera preços do backup local (imune ao Firebase sync)
+  try {
+    const backup = JSON.parse(localStorage.getItem('ignis_diesel_backup')||'{}');
+    if (Object.keys(backup).length) {
+      if (!state.dieselPrecos) state.dieselPrecos = {};
+      // Merge: backup prevalece sobre state (que pode ter sido zerado pelo sync)
+      Object.assign(state.dieselPrecos, backup);
+    }
+  } catch(e) {}
+  // Fallback: tenta fueltracker_v3
   if (!state.dieselPrecos || !Object.keys(state.dieselPrecos).length) {
     try {
       const local = JSON.parse(localStorage.getItem('fueltracker_v3')||'{}');
       if (local.dieselPrecos && Object.keys(local.dieselPrecos).length) {
         state.dieselPrecos = local.dieselPrecos;
-      }
-    } catch(e) {}
-  }
-  if (!state.opConfigs || !Object.keys(state.opConfigs).length) {
-    try {
-      const local = JSON.parse(localStorage.getItem('fueltracker_v3')||'{}');
-      if (local.opConfigs && Object.keys(local.opConfigs).length) {
-        state.opConfigs = local.opConfigs;
       }
     } catch(e) {}
   }
