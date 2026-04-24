@@ -6214,7 +6214,7 @@ function dieselPopularOps() {
     const autoImport = preco > 0;
     const precoLabel = autoImport ? `<span style="font-size:9px;color:var(--green);margin-left:2px" title="Importado automaticamente da planilha">✓ auto</span>` : '';
     return `<div style="display:grid;grid-template-columns:1fr 150px 130px 110px;gap:6px;align-items:center;background:var(--bg3);border-radius:8px;padding:8px 12px;margin-bottom:4px">
-      <div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${op.replace(/_/g,' ')}</div>
+      <div style="font-size:13px;font-weight:500;word-break:break-word;white-space:normal">${op.replace(/_/g,' ')}</div>
       <div style="${colStyle};position:relative"><span style="font-size:11px;color:var(--text2)">R$</span>${mkInput(op,'preco',preco,'0,00',72,'/L','0.01')}${precoLabel}</div>
       <div style="${colStyle}">${mkInput(op,'meta',meta,'—',72,' L/h','0.1')}</div>
       <div style="${colStyle}">${mkInput(op,'tunel',tunel,'0',58,' %','0.1')}</div>
