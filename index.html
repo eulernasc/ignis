@@ -1712,20 +1712,10 @@ async function syncFromFirebase() {
         setTimeout(() => saveState(), 2000);
       }
 
-      // Merge dieselPrecos: local prevalece (tem mais entradas = mais recente)
-      const localPrecos = Object.keys(state.dieselPrecos||{}).length;
-      const fbPrecos    = Object.keys(dados.dieselPrecos||{}).length;
-      if (localPrecos > fbPrecos) {
-        // Local tem mais preços configurados — faz merge (local prevalece por chave)
-        dados.dieselPrecos = { ...(dados.dieselPrecos||{}), ...(state.dieselPrecos||{}) };
-      }
+      // Sempre merge dieselPrecos e opConfigs — nunca sobrescrever configurações locais
+      dados.dieselPrecos = { ...(dados.dieselPrecos||{}), ...(state.dieselPrecos||{}) };
+      dados.opConfigs    = { ...(dados.opConfigs||{}),    ...(state.opConfigs||{})    };
 
-      // Merge opConfigs igualmente
-      const localCfgs = Object.keys(state.opConfigs||{}).length;
-      const fbCfgs    = Object.keys(dados.opConfigs||{}).length;
-      if (localCfgs > fbCfgs) {
-        dados.opConfigs = { ...(dados.opConfigs||{}), ...(state.opConfigs||{}) };
-      }
       // Salva merge de volta ao Firebase se houve mudanças
       setTimeout(() => saveState(), 2000);
 
@@ -6145,6 +6135,23 @@ function opGetLimiteReal(op, metaMaquina) {
 }
 
 function dieselPopularOps() {
+  // Tenta recuperar dieselPrecos do localStorage caso state esteja vazio
+  if (!state.dieselPrecos || !Object.keys(state.dieselPrecos).length) {
+    try {
+      const local = JSON.parse(localStorage.getItem('fueltracker_v3')||'{}');
+      if (local.dieselPrecos && Object.keys(local.dieselPrecos).length) {
+        state.dieselPrecos = local.dieselPrecos;
+      }
+    } catch(e) {}
+  }
+  if (!state.opConfigs || !Object.keys(state.opConfigs).length) {
+    try {
+      const local = JSON.parse(localStorage.getItem('fueltracker_v3')||'{}');
+      if (local.opConfigs && Object.keys(local.opConfigs).length) {
+        state.opConfigs = local.opConfigs;
+      }
+    } catch(e) {}
+  }
   const ops = getOperacoes();
   const precos = dieselGetPrecos();
   const cfgs = opGetConfigs();
