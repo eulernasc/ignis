@@ -6155,10 +6155,34 @@ function dieselPopularOps() {
     const backup = JSON.parse(localStorage.getItem('ignis_diesel_backup')||'{}');
     if (Object.keys(backup).length) {
       if (!state.dieselPrecos) state.dieselPrecos = {};
-      // Merge: backup prevalece sobre state (que pode ter sido zerado pelo sync)
       Object.assign(state.dieselPrecos, backup);
     }
   } catch(e) {}
+
+  // ── CORRIGE preços contaminados por GLP (EMP) ─────────────────────────────
+  // Para cada operação no backup: se SÓ tem veículos EMP → remove o preço
+  // Se tem mistos → mantém (maioria é diesel)
+  if (state.dieselPrecos && state.abastecimentos?.length) {
+    const backup = JSON.parse(localStorage.getItem('ignis_diesel_backup')||'{}');
+    let corrigidos = 0;
+    Object.keys(backup).forEach(op => {
+      const veiculos = [...new Set(
+        state.abastecimentos
+          .filter(a => (a.operacao||getMaquina(a.placa)?.operacao||'') === op)
+          .map(a => a.placa)
+      )];
+      const todosEMP = veiculos.length > 0 && veiculos.every(p => p.toUpperCase().startsWith('EMP'));
+      if (todosEMP) {
+        delete backup[op];
+        delete state.dieselPrecos[op];
+        corrigidos++;
+      }
+    });
+    if (corrigidos > 0) {
+      localStorage.setItem('ignis_diesel_backup', JSON.stringify(backup));
+    }
+  }
+
   // Fallback: tenta fueltracker_v3
   if (!state.dieselPrecos || !Object.keys(state.dieselPrecos).length) {
     try {
