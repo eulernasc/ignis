@@ -4356,32 +4356,72 @@ function renderRelEmailBloco(operacoes) {
   const dica = '<div style="font-size:11px;color:var(--text3);margin-bottom:12px">💡 Configure grupos em <strong>📧 Grupos de E-mail</strong> para reusar toda semana!</div>';
   const blocosSalvos = relgGetBlocosSalvos(operacoes);
   const blocos = blocosSalvos || relGetBlocos(operacoes);
+  window._relBlocos = blocos;
+
   bloco.innerHTML = '<div class="chart-card">' +
     '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">' +
     '<div class="chart-title" style="margin-bottom:0">📧 Enviar Alertas por E-mail</div>' +
-    '<button class="btn btn-secondary btn-sm" onclick="relSetTab(\'grupos\',document.getElementById(\'rel-tab-btn-grupos\'))">⚙️ Gerenciar Grupos</button>' +
-    '</div>' + dica +
-    blocos.map(b =>
-      '<div style="margin-bottom:14px">' +
-        '<div style="font-size:12px;font-weight:600;margin-bottom:6px;color:var(--text2)">' +
-          (b.isGrupo ? '🗂 ' : '📍 ') + b.label +
-          (b.isGrupo ? '<span style="font-size:10px;color:var(--text3);font-weight:400;margin-left:6px">(' + b.ops.join(', ') + ')</span>' : '') +
+    '<div style="display:flex;gap:8px;align-items:center">' +
+    '<button class="btn btn-secondary btn-sm" onclick="relEmailToggleAll()">⊕ Expandir Todos</button>' +
+    '<button class="btn btn-secondary btn-sm" onclick="relSetTab(\'grupos\',document.getElementById(\'rel-tab-btn-grupos\'))">⚙️ Grupos</button>' +
+    '</div></div>' +
+    dica +
+    // Barra de busca
+    '<input type="text" id="rel-email-search" class="form-input" placeholder="🔍 Buscar operação..." oninput="relEmailFiltrar()" style="width:100%;box-sizing:border-box;margin-bottom:12px">' +
+    '<div id="rel-email-lista">' +
+    blocos.map((b, idx) =>
+      '<div class="rel-email-item" data-label="' + b.label.toLowerCase() + '" style="margin-bottom:6px;border:1px solid var(--border);border-radius:8px;overflow:hidden">' +
+        // Header clicável
+        '<div onclick="relEmailToggle(' + idx + ')" style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;cursor:pointer;background:var(--bg3);user-select:none">' +
+          '<div style="display:flex;align-items:center;gap:8px">' +
+            '<span id="rel-email-icon-' + idx + '" style="font-size:11px;color:var(--text3)">▶</span>' +
+            '<span style="font-size:13px;font-weight:600">' + (b.isGrupo ? '🗂 ' : '📍 ') + b.label + '</span>' +
+            (b.isGrupo ? '<span style="font-size:10px;color:var(--text3)">(' + b.ops.join(', ') + ')</span>' : '') +
+          '</div>' +
+          '<button class="btn btn-primary btn-sm" data-bloco-id="' + b.id.replace(/"/g,'&quot;') + '" onclick="event.stopPropagation();enviarBloco(this.dataset.blocoId)" style="padding:4px 12px">📧 Enviar</button>' +
         '</div>' +
-        '<div style="display:flex;gap:8px">' +
-          '<input type="text" class="form-input" style="flex:1" id="rel-email-bloco-' + encodeURIComponent(b.id) + '" placeholder="email1@empresa.com, email2@empresa.com">' +
-          '<button class="btn btn-primary btn-sm" data-bloco-id="' + b.id.replace(/"/g,'&quot;') + '" onclick="enviarBloco(this.dataset.blocoId)">📧 Enviar</button>' +
+        // Corpo expansível (fechado por padrão)
+        '<div id="rel-email-body-' + idx + '" style="display:none;padding:10px 14px;background:var(--bg2)">' +
+          '<input type="text" class="form-input" style="width:100%;box-sizing:border-box" id="rel-email-bloco-' + encodeURIComponent(b.id) + '" placeholder="email1@empresa.com, email2@empresa.com">' +
         '</div>' +
       '</div>'
     ).join('') +
-    (blocos.length > 1 ? '<div style="margin-top:6px"><button class="btn btn-primary" onclick="enviarTodosEmails()">📧 Enviar Todos</button></div>' : '') +
+    '</div>' +
+    (blocos.length > 1 ? '<div style="margin-top:10px"><button class="btn btn-primary" onclick="enviarTodosEmails()">📧 Enviar Todos</button></div>' : '') +
   '</div>';
-  window._relBlocos = blocos;
-  // Preenche e-mails via JS (mais confiável que value= no innerHTML)
+
+  // Preenche e-mails
   blocos.forEach(b => {
     if (b.emails) {
       const input = document.getElementById('rel-email-bloco-' + encodeURIComponent(b.id));
       if (input) input.value = b.emails;
     }
+  });
+}
+
+function relEmailToggle(idx) {
+  const body = document.getElementById('rel-email-body-' + idx);
+  const icon = document.getElementById('rel-email-icon-' + idx);
+  if (!body) return;
+  const open = body.style.display !== 'none';
+  body.style.display = open ? 'none' : 'block';
+  if (icon) icon.textContent = open ? '▶' : '▼';
+}
+
+function relEmailToggleAll() {
+  const bodies = document.querySelectorAll('[id^="rel-email-body-"]');
+  const icons  = document.querySelectorAll('[id^="rel-email-icon-"]');
+  const anyOpen = [...bodies].some(b => b.style.display !== 'none');
+  bodies.forEach(b => b.style.display = anyOpen ? 'none' : 'block');
+  icons.forEach(ic => ic.textContent = anyOpen ? '▶' : '▼');
+  const btn = document.querySelector('[onclick="relEmailToggleAll()"]');
+  if (btn) btn.textContent = anyOpen ? '⊕ Expandir Todos' : '⊖ Recolher Todos';
+}
+
+function relEmailFiltrar() {
+  const q = (document.getElementById('rel-email-search')?.value||'').toLowerCase();
+  document.querySelectorAll('.rel-email-item').forEach(el => {
+    el.style.display = el.dataset.label.includes(q) ? '' : 'none';
   });
 }
 
