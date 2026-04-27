@@ -3810,7 +3810,8 @@ function importarRelatorio(input) {
         if(!placa && !operacao) return; // só ignora linha completamente vazia
 
         // Acumula preço médio por operação ANTES de qualquer exclusão
-        if (precoMedio > 0 && operacao) {
+        // Exclui empilhadeiras (EMP) pois usam GLP, não diesel
+        if (precoMedio > 0 && operacao && !(placa||'').startsWith('EMP')) {
           if (!precosPorOp[operacao]) precosPorOp[operacao] = { soma: 0, count: 0 };
           precosPorOp[operacao].soma += precoMedio;
           precosPorOp[operacao].count++;
