@@ -6304,6 +6304,7 @@ function renderExecutivo() {
   else if (execTipo === '__pesada__')    registros = registros.filter(a => getTipoIgnis(a)==='pesada');
   else if (execTipo === '__leve__')      registros = registros.filter(a => getTipoIgnis(a)==='leve');
   else if (execTipo === '__empilhadeiras__') registros = registros.filter(a => getTipoIgnis(a)==='empilhadeira');
+  else registros = registros.filter(a => getTipoIgnis(a) !== 'empilhadeira'); // padrão: exclui EMP (GLP)
   if (!registros.length) {
     c.innerHTML = '<div class="empty"><div class="empty-icon">🔍</div><div class="empty-text">Nenhum registro no período</div></div>';
     return;
@@ -6394,8 +6395,15 @@ function renderExecutivo() {
 
   // KPIs executivos
   const totalLiquidoR = totalDesperdicadoR - totalEconomiaR;
+  // Calcula gasto total: litros × preço por operação
+  let totalGasto = 0;
+  Object.entries(byOp).forEach(([op, d]) => {
+    const preco = dieselGetPreco(op) || 0;
+    totalGasto += d.totalL * preco;
+  });
   html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(185px,1fr));gap:12px;margin-bottom:20px">';
   html += kpiExec('📅 Período', labelPeriodo, '', '#8b90a7');
+  html += kpiExec('💸 Gasto Total', fmtR(totalGasto), fmtL(totalL) + ' consumidos', 'var(--text1)');
   html += kpiExec('🔴 Desperdiçado', fmtR(totalDesperdicadoR), fmtL(totalDesperdicadoL) + ' · ' + pctDesperdicio.toFixed(1) + '% do total', 'var(--red)');
   html += kpiExec('🟢 Economizado', fmtR(totalEconomiaR), fmtL(totalEconomiaL) + ' poupados vs meta', 'var(--green)');
   html += kpiExec(totalLiquidoR >= 0 ? '📉 Custo Líquido' : '📈 Saldo Líquido', fmtR(Math.abs(totalLiquidoR)), totalLiquidoR >= 0 ? 'após descontar economias' : 'economia supera o desperdício!', totalLiquidoR > 0 ? 'var(--red)' : 'var(--green)');
