@@ -4282,12 +4282,26 @@ function renderRelatorio() {
     return;
   }
 
+  // Barra de busca
+  html += '<div style="display:flex;gap:8px;align-items:center;margin-bottom:12px">' +
+    '<input type="text" id="rel-analise-search" class="form-input" placeholder="🔍 Buscar operação ou placa..." oninput="relAnaliseFiltrar()" style="flex:1">' +
+    '<button class="btn btn-secondary btn-sm" onclick="relAnaliseToggleAll()">⊕ Expandir Todos</button>' +
+  '</div>' +
+  '<div id="rel-analise-lista">';
+
+  let opIdx = 0;
   for (const [op, maquinas] of Object.entries(byOp)) {
-    html += '<div class="chart-card" style="margin-bottom:14px">' +
-      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">' +
-        '<div class="chart-title" style="margin-bottom:0">📍 ' + op + '</div>' +
+    html += '<div class="rel-op-section" data-op="' + op.toLowerCase() + '" data-placas="' + maquinas.map(m=>m.placa).join(' ').toLowerCase() + '" style="margin-bottom:8px;border:1px solid var(--border);border-radius:10px;overflow:hidden">' +
+      // Header clicável
+      '<div onclick="relAnaliseToggle(' + opIdx + ')" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;cursor:pointer;background:var(--bg3);user-select:none">' +
+        '<div style="display:flex;align-items:center;gap:10px">' +
+          '<span id="rel-op-icon-' + opIdx + '" style="font-size:11px;color:var(--text3)">▶</span>' +
+          '<div class="chart-title" style="margin-bottom:0;font-size:14px">📍 ' + op + '</div>' +
+        '</div>' +
         '<span style="background:var(--red);color:#fff;padding:3px 10px;border-radius:99px;font-size:11px;font-weight:700">' + maquinas.length + ' máquina' + (maquinas.length>1?'s':'') + '</span>' +
       '</div>' +
+      // Tabela expansível (fechada por padrão)
+      '<div id="rel-op-body-' + opIdx + '" style="display:none">' +
       '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">' +
         '<thead><tr style="background:var(--bg3)">' +
           '<th style="padding:8px 12px;text-align:left;font-size:11px;color:var(--text2);text-transform:uppercase">Máquina</th>' +
@@ -4304,12 +4318,14 @@ function renderRelatorio() {
           '<td style="padding:10px 12px;text-align:center;font-size:11px;color:var(--text2)">' + m.operacao + '</td>' +
           '<td style="padding:10px 12px;text-align:center;font-family:monospace;color:var(--accent)">' + (m.meta>0?m.meta.toFixed(1)+' '+unidadeMedia:'—') + '</td>' +
           '<td style="padding:10px 12px;text-align:center;font-family:monospace;color:' + cor + ';font-weight:700">' + m.mediaReal.toFixed(2) + ' ' + unidadeMedia + '</td>' +
-          '<td style="padding:10px 12px;text-align:center;font-family:monospace;color:' + cor + '">+' + m.desvio.toFixed(1) + '%</td>' +
+          '<td style="padding:10px 12px;text-align:center;font-family:monospace;color:' + cor + '">' + (m.desvio>0?'+':'') + m.desvio.toFixed(1) + '%</td>' +
           '<td style="padding:10px 12px;text-align:center"><span style="background:' + cor + ';color:#fff;padding:3px 10px;border-radius:99px;font-size:12px;font-weight:700">' + m.eficiencia.toFixed(1) + '%</span></td>' +
         '</tr>';
       }).join('') +
-      '</tbody></table></div></div>';
+      '</tbody></table></div></div></div>';
+    opIdx++;
   }
+  html += '</div>';
 
   html += '<div style="margin-top:8px;display:flex;gap:10px;flex-wrap:wrap">' +
     '<button class="btn btn-secondary" onclick="copiarRelatorio()">📋 Copiar Resumo</button>' +
@@ -4382,7 +4398,7 @@ function renderRelEmailBloco(operacoes) {
         '</div>' +
         // Corpo expansível (fechado por padrão)
         '<div id="rel-email-body-' + idx + '" style="display:none;padding:10px 14px;background:var(--bg2)">' +
-          '<input type="text" class="form-input" style="width:100%;box-sizing:border-box" id="rel-email-bloco-' + encodeURIComponent(b.id) + '" placeholder="email1@empresa.com, email2@empresa.com">' +
+          '<input type="text" class="form-input" style="width:100%;box-sizing:border-box" id="rel-email-bloco-' + encodeURIComponent(b.id) + '" placeholder="email1@empresa.com, email2@empresa.com" oninput="relEmailSalvarAuto(\'' + b.id.replace(/'/g,"\\'") + '\',this.value)">' +
         '</div>' +
       '</div>'
     ).join('') +
@@ -4390,13 +4406,61 @@ function renderRelEmailBloco(operacoes) {
     (blocos.length > 1 ? '<div style="margin-top:10px"><button class="btn btn-primary" onclick="enviarTodosEmails()">📧 Enviar Todos</button></div>' : '') +
   '</div>';
 
-  // Preenche e-mails
+  // Preenche e-mails — prioridade: grupo salvo > backup auto > vazio
+  const emailBackup = (() => { try { return JSON.parse(localStorage.getItem('ignis_email_backup')||'{}'); } catch(e) { return {}; } })();
   blocos.forEach(b => {
-    if (b.emails) {
-      const input = document.getElementById('rel-email-bloco-' + encodeURIComponent(b.id));
-      if (input) input.value = b.emails;
+    const input = document.getElementById('rel-email-bloco-' + encodeURIComponent(b.id));
+    if (!input) return;
+    if (b.emails) input.value = b.emails;
+    else if (emailBackup[b.id]) input.value = emailBackup[b.id];
+  });
+}
+
+function relAnaliseToggle(idx) {
+  const body = document.getElementById('rel-op-body-' + idx);
+  const icon = document.getElementById('rel-op-icon-' + idx);
+  if (!body) return;
+  const open = body.style.display !== 'none';
+  body.style.display = open ? 'none' : 'block';
+  if (icon) icon.textContent = open ? '▶' : '▼';
+}
+
+function relAnaliseToggleAll() {
+  const bodies = document.querySelectorAll('[id^="rel-op-body-"]');
+  const icons  = document.querySelectorAll('[id^="rel-op-icon-"]');
+  const anyOpen = [...bodies].some(b => b.style.display !== 'none');
+  bodies.forEach(b => b.style.display = anyOpen ? 'none' : 'block');
+  icons.forEach(ic => ic.textContent = anyOpen ? '▶' : '▼');
+  const btn = document.querySelector('[onclick="relAnaliseToggleAll()"]');
+  if (btn) btn.textContent = anyOpen ? '⊕ Expandir Todos' : '⊖ Recolher Todos';
+}
+
+function relAnaliseFiltrar() {
+  const q = (document.getElementById('rel-analise-search')?.value||'').toLowerCase();
+  document.querySelectorAll('.rel-op-section').forEach(el => {
+    const match = el.dataset.op.includes(q) || el.dataset.placas.includes(q);
+    el.style.display = match ? '' : 'none';
+    // Abre automaticamente se há busca por placa específica
+    if (match && q.length >= 3 && el.dataset.placas.includes(q)) {
+      const idx = el.querySelector('[id^="rel-op-body-"]')?.id.replace('rel-op-body-','');
+      if (idx !== undefined) {
+        const body = document.getElementById('rel-op-body-' + idx);
+        const icon = document.getElementById('rel-op-icon-' + idx);
+        if (body) body.style.display = 'block';
+        if (icon) icon.textContent = '▼';
+      }
     }
   });
+}
+
+// Auto-salva e-mails ao digitar no campo
+function relEmailSalvarAuto(blocoId, valor) {
+  try {
+    const backup = JSON.parse(localStorage.getItem('ignis_email_backup')||'{}');
+    if (valor.trim()) backup[blocoId] = valor.trim();
+    else delete backup[blocoId];
+    localStorage.setItem('ignis_email_backup', JSON.stringify(backup));
+  } catch(e) {}
 }
 
 function relEmailToggle(idx) {
