@@ -1580,6 +1580,7 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
         <label class="perm-item"><input type="checkbox" data-perm="excluir"> 🗑️ A Excluir</label>
         <label class="perm-item"><input type="checkbox" data-perm="arla"> 🧪 Arla</label>
         <label class="perm-item"><input type="checkbox" data-perm="kmcomp"> 📏 KM Comparativo</label>
+        <label class="perm-item"><input type="checkbox" data-perm="metarota"> 🎯 Meta por Rota</label>
         <label class="perm-item"><input type="checkbox" data-perm="config"> ⚙️ Configurações</label>
       </div>
       <div style="margin-top:10px;padding:10px;background:rgba(232,148,26,.08);border:1px solid rgba(232,148,26,.3);border-radius:8px">
@@ -1892,6 +1893,7 @@ const AUTH_PAGES = [
   { id:'excluir',      label:'A Excluir',      icon:'🗑️' },
   { id:'arla',         label:'Arla',           icon:'🧪' },
   { id:'kmcomp',       label:'KM Comparativo', icon:'📏' },
+  { id:'metarota',     label:'Meta por Rota',  icon:'🎯' },
   { id:'config',       label:'Configurações',  icon:'⚙️' },
 ];
 
@@ -2000,7 +2002,7 @@ async function loginCriarAdm() {
 
   try {
     const hash = await sha256(pass);
-    const adm = { nome: login, hash, role: 'adm', perms: ['dashboard','comparativo','abastecimentos','maquinas','relatorio','excluir','arla','kmcomp','config'] };
+    const adm = { nome: login, hash, role: 'adm', perms: ['dashboard','comparativo','abastecimentos','maquinas','relatorio','excluir','arla','kmcomp','metarota','config'] };
 
     // Salva cache local imediatamente (não depende do Firebase)
     try { localStorage.setItem('ignis_users_cache', JSON.stringify({ [login]: adm })); } catch(e) {}
