@@ -715,7 +715,8 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
             <div id="placa-checkboxes"></div>
           </div>
         </div>
-        <select class="filter-select" id="dash-maq-filter" onchange="updateFilters();populatePlacaDropdown();renderDashboard()"><option value="">Selecione o tipo...</option></select>
+        <select class="filter-select" id="dash-maq-filter" onchange="updateFilters();populatePlacaDropdown();populateModeloDropdown();renderDashboard()"><option value="">Selecione o tipo...</option></select>
+        <select class="filter-select" id="dash-modelo-filter" onchange="renderDashboard()" style="min-width:140px;display:none"><option value="">Todos os Modelos</option></select>
         <div class="tab-group">
           <button class="tab-btn active" id="tab-semanal" onclick="setTab('semanal')">Semanal</button>
           <button class="tab-btn" id="tab-mensal" onclick="setTab('mensal')">Mensal</button>
@@ -2563,6 +2564,37 @@ function togglePlacaDropdown() {
   }
 }
 
+function populateModeloDropdown() {
+  const sel = document.getElementById('dash-modelo-filter');
+  if (!sel) return;
+  const maqF = document.getElementById('dash-maq-filter')?.value || '';
+  if (!maqF) { sel.style.display = 'none'; sel.value = ''; return; }
+
+  // Pega todos os abastecimentos do tipo selecionado (sem filtro de modelo)
+  const byTipo = state.abastecimentos.filter(a => {
+    const ti = getTipoIgnis(a);
+    if (ti === 'ignorado') return false;
+    if (maqF === '__maquinas__')      return ti === 'maquina';
+    if (maqF === '__tratores__')      return ti === 'trator';
+    if (maqF === '__pesada__')        return ti === 'pesada';
+    if (maqF === '__leve__')          return ti === 'leve';
+    if (maqF === '__empilhadeiras__') return ti === 'empilhadeira';
+    return a.placa === maqF;
+  });
+
+  // Coleta modelos únicos não-vazios
+  const modelos = [...new Set(
+    byTipo.map(a => (getMaquina(a.placa)?.modelo || a.modelo || '').trim().toUpperCase()).filter(Boolean)
+  )].sort();
+
+  if (modelos.length === 0) { sel.style.display = 'none'; sel.value = ''; return; }
+
+  const anterior = sel.value;
+  sel.innerHTML = '<option value="">Todos os Modelos</option>' +
+    modelos.map(m => `<option value="${m}"${m===anterior?' selected':''}>${m}</option>`).join('');
+  sel.style.display = '';
+}
+
 function populatePlacaDropdown() {
   const cont = document.getElementById('placa-checkboxes');
   if(!cont) return;
@@ -2774,12 +2806,20 @@ function getFilteredAbast(opF,maqF) {
   else if(maqF === '__empilhadeiras__') list=list.filter(a=>getTipoIgnis(a)==='empilhadeira');
   else if(maqF) list=list.filter(a=>a.placa===maqF);
   else return []; // sem filtro = não mostra nada
+
+  // Filtro de modelo (dropdown Modelo)
+  const modeloF = (document.getElementById('dash-modelo-filter')?.value||'').trim().toUpperCase();
+  if (modeloF) {
+    list = list.filter(a => (getMaquina(a.placa)?.modelo || a.modelo || '').trim().toUpperCase() === modeloF);
+  }
+
   return list;
 }
 
 // ── DASHBOARD ─────────────────────────────────────────────────────────────────
 function renderDashboard() {
   updateFilters();
+  populateModeloDropdown();
   const opsSelec=getSelectedOps();
   const maqF=document.getElementById('dash-maq-filter')?.value||'';
 
