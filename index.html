@@ -1864,13 +1864,14 @@ async function syncFromFirebase() {
 
       state = { ...state, ...dados };
       state._savedAt = tsFirebase;
+      if (!state.metaRotaModelos) state.metaRotaModelos = {};
       localStorage.setItem('fueltracker_v3', JSON.stringify(state));
       window._ultimoSaveAt = tsFirebase;
 
       // Re-inicializa TUDO que depende do state
-      updateFilters();
-      renderDashboard();
-      relChecarReincidencia();
+      try { updateFilters(); } catch(e) { console.warn('updateFilters error:', e); }
+      try { renderDashboard(); } catch(e) { console.warn('renderDashboard error:', e); }
+      try { relChecarReincidencia(); } catch(e) { console.warn('relChecar error:', e); }
 
       // ── CHAVE: re-inicializa Arla com dados do Firebase ──────────────────
       if (typeof arlaInit === 'function') {
@@ -2397,7 +2398,12 @@ function showPage(page,el) {
       if (!state.metaRotaModelos) state.metaRotaModelos = {};
       mrSimPopular(); 
       mrRenderTabela();
-    } catch(e) { console.error('metarota error:', e); }
+      mrRenderModelos();
+    } catch(e) { 
+      console.error('metarota render error:', e);
+      const p = document.getElementById('page-metarota');
+      if(p) p.innerHTML = '<div style="padding:40px;color:red">Erro: ' + e.message + '</div>';
+    }
   }
 }
 
