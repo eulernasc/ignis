@@ -9,7 +9,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, doc, setDoc, getDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
 const firebaseConfig = {
@@ -37,9 +37,21 @@ const withTimeout = (promise, ms) => Promise.race([
 
 window.fbSave = async function(data) {
   try {
-    // Remove _users dos dados — usuários vivem em documento próprio
-    const { _users, ...dadosSemUsuarios } = data;
-    await withTimeout(setDoc(doc(db, "fueltracker", "dados"), dadosSemUsuarios), 10000);
+    const { _users, abastecimentos, ...restData } = data;
+    // Documento principal: tudo EXCETO abastecimentos
+    await withTimeout(setDoc(doc(db, "fueltracker", "dados"), { ...restData, _hasAbast: true }), 10000);
+    // Abastecimentos: divide em chunks de 400 registros (cada doc ~300KB)
+    const abast = abastecimentos || [];
+    const chunkSize = 400;
+    const numChunks = Math.ceil(abast.length / chunkSize) || 1;
+    for (let i = 0; i < numChunks; i++) {
+      const chunk = abast.slice(i * chunkSize, (i + 1) * chunkSize);
+      await withTimeout(setDoc(doc(db, "fueltracker", "abast_" + i), { registros: chunk, chunk: i, total: numChunks }), 10000);
+    }
+    // Remove chunks extras de importações anteriores
+    for (let i = numChunks; i < numChunks + 5; i++) {
+      try { await withTimeout(deleteDoc(doc(db, "fueltracker", "abast_" + i)), 3000); } catch(e) {}
+    }
     return true;
   } catch(e) { console.error("Firebase save error:", e); return false; }
 };
@@ -47,7 +59,22 @@ window.fbSave = async function(data) {
 window.fbLoad = async function() {
   try {
     const snap = await withTimeout(getDoc(doc(db, "fueltracker", "dados")), 8000);
-    return snap.exists() ? snap.data() : null;
+    if (!snap.exists()) return null;
+    const dados = snap.data();
+    // Carrega abastecimentos dos chunks
+    if (dados._hasAbast) {
+      let abastecimentos = [];
+      for (let i = 0; i < 20; i++) {
+        const chunkSnap = await withTimeout(getDoc(doc(db, "fueltracker", "abast_" + i)), 5000);
+        if (!chunkSnap.exists()) break;
+        const chunkData = chunkSnap.data();
+        abastecimentos = abastecimentos.concat(chunkData.registros || []);
+        if (i >= (chunkData.total || 1) - 1) break;
+      }
+      dados.abastecimentos = abastecimentos;
+    }
+    delete dados._hasAbast;
+    return dados;
   } catch(e) { console.error("Firebase load error:", e); return null; }
 };
 
