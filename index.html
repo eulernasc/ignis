@@ -576,6 +576,7 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
     <div class="nav-item" id="nav-excluir" onclick="showPage('excluir',this)"><span class="icon-wrap" style="position:relative;display:inline-flex"><span class="icon">🗑️</span><span id="excluir-nav-badge" style="display:none" class="excl-badge nav-badge-abs">0</span></span><span class="nav-label">A Excluir</span></div>
     <div class="nav-item" id="nav-arla" onclick="showPage('arla',this)"><span class="icon-wrap" style="position:relative;display:inline-flex"><span class="icon">🧪</span><span id="arla-nav-badge" style="display:none" class="excl-badge nav-badge-abs">0</span><span id="arla-lembrete-badge" style="display:none;background:var(--yellow);color:#000;font-size:9px;font-weight:700;padding:2px 5px;border-radius:8px;position:absolute;top:-4px;right:-4px">⏰</span></span><span class="nav-label">Controle Arla</span></div>
     <div class="nav-item" id="nav-kmcomp" onclick="showPage('kmcomp',this)"><span class="icon-wrap" style="position:relative;display:inline-flex"><span class="icon">📏</span><span id="kmcomp-nav-badge" style="display:none" class="excl-badge nav-badge-abs">!</span></span><span class="nav-label">KM Comparativo</span></div>
+    <div class="nav-item" id="nav-metarota" onclick="showPage('metarota',this)"><span class="icon">🎯</span><span class="nav-label">Meta por Rota</span></div>
     <div class="nav-item" onclick="showPage('config',this)"><span class="icon">⚙️</span><span class="nav-label">Configurações</span></div>
   </nav>
   <div class="sidebar-toggle" id="sidebar-toggle" onclick="toggleSidebarCollapse()" title="Recolher">&#8249;</div>
@@ -1395,7 +1396,106 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
   </div>
 </div>
 
-<!-- MODAL NOVA MÁQUINA -->
+<!-- META POR ROTA PAGE -->
+<div id="page-metarota" class="page">
+  <div class="page-header">
+    <div>
+      <div class="page-title">🎯 Meta por Rota</div>
+      <div class="page-subtitle">Configure metas ajustadas por modelo de veículo, operação e peso da carga</div>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap">
+    <button class="btn btn-primary btn-sm metarota-tab-btn active" data-tab="simulador" onclick="metaRotaTab(this,'simulador')">🧮 Simulador</button>
+    <button class="btn btn-secondary btn-sm metarota-tab-btn" data-tab="modelos" onclick="metaRotaTab(this,'modelos')">🚛 Modelos</button>
+    <button class="btn btn-secondary btn-sm metarota-tab-btn" data-tab="tabela" onclick="metaRotaTab(this,'tabela')">📊 Tabela de Peso</button>
+  </div>
+
+  <!-- SIMULADOR -->
+  <div id="metarota-tab-simulador">
+    <div class="chart-card" style="max-width:600px">
+      <div class="chart-title">🧮 Simular Meta Ajustada</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Modelo do Veículo</label>
+          <select class="form-input" id="mr-sim-modelo" onchange="mrSimAtualizar()"><option value="">Selecione...</option></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Operação / Rota</label>
+          <select class="form-input" id="mr-sim-op" onchange="mrSimAtualizar()"><option value="">Selecione...</option></select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Peso da Viagem (kg)</label>
+        <input type="number" class="form-input" id="mr-sim-peso" placeholder="Ex: 28000" oninput="mrSimAtualizar()">
+      </div>
+      <div id="mr-sim-resultado" style="display:none;margin-top:16px;background:var(--bg3);border-radius:10px;padding:16px">
+        <div style="font-size:12px;color:var(--text3);margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px">Resultado</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div><div style="font-size:11px;color:var(--text3)">Meta Base</div><div id="mr-res-base" style="font-size:20px;font-weight:700;color:var(--text1);font-family:monospace">—</div></div>
+          <div><div style="font-size:11px;color:var(--text3)">Peso Base</div><div id="mr-res-pesobase" style="font-size:20px;font-weight:700;color:var(--text1);font-family:monospace">—</div></div>
+          <div><div style="font-size:11px;color:var(--text3)">Fator Peso</div><div id="mr-res-fatorpeso" style="font-size:18px;font-weight:700;font-family:monospace">—</div></div>
+          <div><div style="font-size:11px;color:var(--text3)">Coef. Rota</div><div id="mr-res-coefop" style="font-size:18px;font-weight:700;font-family:monospace">—</div></div>
+          <div><div style="font-size:11px;color:var(--text3)">Desconto %</div><div id="mr-res-desconto" style="font-size:18px;font-weight:700;font-family:monospace">—</div></div>
+          <div><div style="font-size:11px;color:var(--text3)">Total Variação</div><div id="mr-res-variacao" style="font-size:18px;font-weight:700;font-family:monospace">—</div></div>
+          <div><div style="font-size:11px;color:var(--green)">✅ Meta Ajustada</div><div id="mr-res-ajustada" style="font-size:24px;font-weight:700;color:var(--green);font-family:monospace">—</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODELOS -->
+  <div id="metarota-tab-modelos" style="display:none">
+    <div style="display:flex;gap:10px;margin-bottom:16px;align-items:center">
+      <button class="btn btn-primary btn-sm" onclick="mrNovoModelo()">+ Novo Modelo</button>
+      <span style="font-size:12px;color:var(--text3)" id="mr-modelos-count"></span>
+    </div>
+    <div id="mr-modelos-lista"></div>
+  </div>
+
+  <!-- TABELA DE PESO -->
+  <div id="metarota-tab-tabela" style="display:none">
+    <div class="chart-card">
+      <div class="chart-title">📊 Tabela Universal de Variação por Peso</div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:14px">Ponto neutro: 24.001 – 25.000 kg (variação = 0). O sistema desloca essa referência conforme o <strong>Peso Base</strong> cadastrado por modelo+operação.</div>
+      <div style="overflow-x:auto;max-height:400px;overflow-y:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:12px">
+          <thead style="position:sticky;top:0;background:var(--bg2)">
+            <tr>
+              <th style="padding:8px 12px;text-align:left;color:var(--text2)">De (kg)</th>
+              <th style="padding:8px 12px;text-align:left;color:var(--text2)">Até (kg)</th>
+              <th style="padding:8px 12px;text-align:right;color:var(--text2)">Variação</th>
+              <th style="padding:8px 12px;text-align:right;color:var(--text2)">Impacto</th>
+            </tr>
+          </thead>
+          <tbody id="mr-tabela-peso-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL NOVO MODELO META ROTA -->
+<div class="modal-overlay" id="modal-mr-modelo">
+  <div class="modal" style="width:560px;max-height:85vh;overflow-y:auto">
+    <div class="modal-title" id="modal-mr-modelo-title">Novo Modelo</div>
+    <div class="form-group">
+      <label class="form-label">Nome do Modelo</label>
+      <input type="text" class="form-input" id="mr-mod-nome" placeholder="Ex: Scania G540, Volvo FH, Mercedes Axor">
+    </div>
+    <div id="mr-mod-ops-lista">
+      <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px;margin-top:4px">Metas por Operação</div>
+    </div>
+    <button class="btn btn-secondary btn-sm" style="margin-bottom:16px" onclick="mrAdicionarOp()">+ Adicionar Operação</button>
+    <div style="display:flex;gap:10px;justify-content:flex-end">
+      <button class="btn btn-secondary" onclick="document.getElementById('modal-mr-modelo').classList.remove('open')">Cancelar</button>
+      <button class="btn btn-primary" onclick="mrSalvarModelo()">💾 Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL KM COMP DUPLO -->
 <div class="modal-overlay" id="modal-maquina">
   <div class="modal">
     <div class="modal-title" id="modal-maquina-title">Nova Máquina</div>
@@ -1642,7 +1742,7 @@ function doPost(e) {
 `;
 
 // ── STATE ─────────────────────────────────────────────────────────────────────
-let state = { maquinas:[], abastecimentos:[], semanas:{}, tab:'semanal', sheetsUrl:'', arlaEgr:[], arlaMeses:[], arlaGrupos:[], dieselPrecos:{}, opConfigs:{} };
+let state = { maquinas:[], abastecimentos:[], semanas:{}, tab:'semanal', sheetsUrl:'', arlaEgr:[], arlaMeses:[], arlaGrupos:[], dieselPrecos:{}, opConfigs:{}, metaRotaModelos:{} };
 let selectedIds = new Set();
 let abastFiltrados = [];
 
@@ -2248,6 +2348,7 @@ function showPage(page,el) {
   if(page==='excluir') { onShowExcluir(); }
   if(page==='arla') { arlaOnShow(); }
   if(page==='kmcomp') { /* nothing extra needed on show */ }
+  if(page==='metarota') { mrSimPopular(); mrRenderTabela(); }
 }
 
 function setTab(tab) {
@@ -6233,8 +6334,13 @@ function opGetConfigs() {
 async function opSalvarConfig(op, campo, val) {
   if (!state.opConfigs) state.opConfigs = {};
   if (!state.opConfigs[op]) state.opConfigs[op] = {};
-  if (val !== '' && parseFloat(val) > 0) state.opConfigs[op][campo] = parseFloat(val);
-  else delete state.opConfigs[op][campo];
+  const num = parseFloat(val);
+  if (val !== '' && !isNaN(num)) {
+    // coefRota: usuário digita em %, armazenar como decimal (pode ser negativo)
+    state.opConfigs[op][campo] = campo === 'coefRota' ? num / 100 : num;
+  } else {
+    delete state.opConfigs[op][campo];
+  }
   if (!Object.keys(state.opConfigs[op]).length) delete state.opConfigs[op];
   saveState();
 }
@@ -6328,24 +6434,26 @@ function dieselPopularOps() {
     🔒 Somente ADM Master e Admin podem editar estas configurações.
   </div>` : '';
 
-  let html = aviso + `<div style="display:grid;grid-template-columns:1fr 130px 130px 110px;gap:6px;padding:4px 12px 8px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text3)">
+  let html = aviso + `<div style="display:grid;grid-template-columns:1fr 130px 130px 100px 110px;gap:6px;padding:4px 12px 8px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--text3)">
     <span>Operação</span>
     <span style="text-align:right">Preço / L</span>
     <span style="text-align:right">Meta Cliente</span>
+    <span style="text-align:right">Coef. Rota</span>
     <span style="text-align:right">Túnel %</span>
   </div>`;
 
   html += ops.map(op => {
-    const preco = precos[op] ?? '';
-    const meta  = cfgs[op]?.meta  ?? '';
-    const tunel = cfgs[op]?.tunel ?? '';
-    // Indica se o preço veio da importação automática
+    const preco  = precos[op] ?? '';
+    const meta   = cfgs[op]?.meta   ?? '';
+    const tunel  = cfgs[op]?.tunel  ?? '';
+    const coef   = cfgs[op]?.coefRota ?? '';
     const autoImport = preco > 0;
     const precoLabel = autoImport ? `<span style="font-size:9px;color:var(--green);margin-left:2px" title="Importado automaticamente da planilha">✓ auto</span>` : '';
-    return `<div style="display:grid;grid-template-columns:1fr 150px 130px 110px;gap:6px;align-items:center;background:var(--bg3);border-radius:8px;padding:8px 12px;margin-bottom:4px">
+    return `<div style="display:grid;grid-template-columns:1fr 150px 130px 100px 110px;gap:6px;align-items:center;background:var(--bg3);border-radius:8px;padding:8px 12px;margin-bottom:4px">
       <div style="font-size:13px;font-weight:500;word-break:break-word;white-space:normal">${op.replace(/_/g,' ')}</div>
       <div style="${colStyle};position:relative"><span style="font-size:11px;color:var(--text2)">R$</span>${mkInput(op,'preco',preco,'0,00',72,'/L','0.01')}${precoLabel}</div>
       <div style="${colStyle}">${mkInput(op,'meta',meta,'—',72,' L/h','0.1')}</div>
+      <div style="${colStyle}">${mkInput(op,'coefRota',coef!==''?(coef*100).toFixed(2):'','0.00',62,' %','0.01')}</div>
       <div style="${colStyle}">${mkInput(op,'tunel',tunel,'0',58,' %','0.1')}</div>
     </div>`;
   }).join('');
@@ -6840,6 +6948,239 @@ function kmBaixarModeloCliente() {
   XLSX.utils.book_append_sheet(wb, ws, 'KM Produtivo');
   XLSX.writeFile(wb, 'modelo_km_cliente.xlsx');
   showToast('Modelo baixado!', 'success');
+}
+
+// ── META POR ROTA ──────────────────────────────────────────────────────────────
+
+// Tabela universal de peso (Scania, extraída da planilha)
+const MR_TABELA_PESO = [
+  [0,1000,0.36],[1000.01,2000,0.32],[2000.01,3000,0.29],[3000.01,4000,0.26],
+  [4000.01,5000,0.24],[5000.01,6000,0.22],[6000.01,7000,0.20],[7000.01,8000,0.19],
+  [8000.01,9000,0.18],[9000.01,10000,0.16],[10000.01,11000,0.15],[11000.01,12000,0.14],
+  [12000.01,13000,0.13],[13000.01,14000,0.12],[14000.01,15000,0.10],[15000.01,16000,0.08],
+  [16000.01,17000,0.06],[17000.01,18000,0.05],[18000.01,19000,0.04],[19000.01,20000,0.035],
+  [20000.01,21000,0.03],[21000.01,22000,0.02],[22000.01,23000,0.01],[23000.01,24000,0.01],
+  [24000.01,25000,0],[25000.01,26000,-0.03],[26000.01,27000,-0.05],[27000.01,28000,-0.06],
+  [28000.01,29000,-0.07],[29000.01,30000,-0.08],[30000.01,31000,-0.10],[31000.01,32000,-0.13],
+  [32000.01,33000,-0.16],[33000.01,34000,-0.19],[34000.01,35000,-0.21],[35000.01,36000,-0.23],
+  [36000.01,37000,-0.25],[37000.01,38000,-0.26],[38000.01,39000,-0.27],[39000.01,40000,-0.28],
+  [40000.01,41000,-0.30],[41000.01,42000,-0.31],[42000.01,43000,-0.32],[43000.01,44000,-0.33],
+  [44000.01,45000,-0.34],[45000.01,46000,-0.35],[46000.01,47000,-0.36],[47000.01,48000,-0.37],
+  [48000.01,49000,-0.38],[49000.01,50000,-0.39],[50000.01,60000,-0.40],[60000.01,70000,-0.50],
+  [70000.01,80000,-0.58],[80000.01,90000,-0.68]
+];
+
+// Ponto neutro da tabela original = 25000 kg
+const MR_PESO_NEUTRO = 25000;
+
+function mrGetFatorPeso(pesoReal, pesoBase) {
+  // Desloca o peso real pelo offset do peso base em relação ao neutro
+  const pesoAjustado = pesoReal - pesoBase + MR_PESO_NEUTRO;
+  const faixa = MR_TABELA_PESO.find(([de, ate]) => pesoAjustado >= de && pesoAjustado <= ate);
+  return faixa ? faixa[2] : null;
+}
+
+function mrCalcular(metaBase, pesoBase, pesoReal, coefRota) {
+  const fatorPeso = mrGetFatorPeso(pesoReal, pesoBase);
+  if (fatorPeso === null) return null;
+  const descontoPct = fatorPeso + coefRota;           // Desconto % (soma dos fatores)
+  const totalVariacao = metaBase * descontoPct;        // Total Variação em km/L
+  const metaAjustada = metaBase - totalVariacao;       // Média Ideal - Total Variação
+  return { fatorPeso, coefRota, descontoPct, totalVariacao, metaAjustada };
+}
+
+// ── STATE ──────────────────────────────────────────────────────────────────────
+if (!state.metaRotaModelos) state.metaRotaModelos = {};
+// state.metaRotaModelos = { [nomeModelo]: { nome, ops: { [nomeOp]: { metaBase, pesoBase } } } }
+// Coef rota vem de state.opConfigs[op].coefRota
+
+// ── UI ─────────────────────────────────────────────────────────────────────────
+function metaRotaTab(btn, tab) {
+  document.querySelectorAll('.metarota-tab-btn').forEach(b => {
+    b.classList.toggle('active', b === btn);
+    b.className = b === btn ? 'btn btn-primary btn-sm metarota-tab-btn active' : 'btn btn-secondary btn-sm metarota-tab-btn';
+  });
+  ['simulador','modelos','tabela'].forEach(t => {
+    document.getElementById('metarota-tab-' + t).style.display = t === tab ? '' : 'none';
+  });
+  if (tab === 'simulador') mrSimPopular();
+  if (tab === 'modelos') mrRenderModelos();
+  if (tab === 'tabela') mrRenderTabela();
+}
+
+function mrSimPopular() {
+  const modSel = document.getElementById('mr-sim-modelo');
+  const opSel  = document.getElementById('mr-sim-op');
+  if (!modSel || !opSel) return;
+  const modVal = modSel.value, opVal = opSel.value;
+  modSel.innerHTML = '<option value="">Selecione o modelo...</option>' +
+    Object.keys(state.metaRotaModelos||{}).map(n => `<option value="${n}" ${n===modVal?'selected':''}>${n}</option>`).join('');
+  // Ops do modelo selecionado
+  const mod = state.metaRotaModelos?.[modVal];
+  opSel.innerHTML = '<option value="">Selecione a operação...</option>' +
+    Object.keys(mod?.ops||{}).map(o => `<option value="${o}" ${o===opVal?'selected':''}>${o}</option>`).join('');
+  mrSimAtualizar();
+}
+
+function mrSimAtualizar() {
+  const modNome = document.getElementById('mr-sim-modelo')?.value;
+  const opNome  = document.getElementById('mr-sim-op')?.value;
+  const pesoStr = document.getElementById('mr-sim-peso')?.value;
+  const res     = document.getElementById('mr-sim-resultado');
+
+  // Popular ops quando muda modelo
+  if (modNome) {
+    const mod = state.metaRotaModelos?.[modNome];
+    const opSel = document.getElementById('mr-sim-op');
+    const curOp = opSel?.value;
+    opSel.innerHTML = '<option value="">Selecione a operação...</option>' +
+      Object.keys(mod?.ops||{}).map(o => `<option value="${o}" ${o===curOp?'selected':''}>${o}</option>`).join('');
+  }
+
+  if (!modNome || !opNome || !pesoStr) { if(res) res.style.display='none'; return; }
+  const mod = state.metaRotaModelos?.[modNome];
+  const opCfg = mod?.ops?.[opNome];
+  if (!opCfg) { if(res) res.style.display='none'; return; }
+
+  const pesoReal = parseFloat(pesoStr);
+  if (isNaN(pesoReal)) { if(res) res.style.display='none'; return; }
+
+  const coefRota = parseFloat(state.opConfigs?.[opNome]?.coefRota)||0;
+  const calc = mrCalcular(opCfg.metaBase, opCfg.pesoBase, pesoReal, coefRota);
+  if (!calc) { if(res) res.style.display='none'; return; }
+
+  res.style.display = 'block';
+  document.getElementById('mr-res-base').textContent = opCfg.metaBase.toFixed(2) + ' km/L';
+  document.getElementById('mr-res-pesobase').textContent = opCfg.pesoBase.toLocaleString('pt-BR') + ' kg';
+  const fpCor = calc.fatorPeso > 0 ? 'var(--green)' : calc.fatorPeso < 0 ? 'var(--red)' : 'var(--text2)';
+  const crCor = calc.coefRota > 0 ? 'var(--green)' : calc.coefRota < 0 ? 'var(--red)' : 'var(--text2)';
+  const dcCor = calc.descontoPct > 0 ? 'var(--green)' : calc.descontoPct < 0 ? 'var(--red)' : 'var(--text2)';
+  document.getElementById('mr-res-fatorpeso').innerHTML = `<span style="color:${fpCor}">${calc.fatorPeso>0?'+':''}${(calc.fatorPeso*100).toFixed(2)}%</span>`;
+  document.getElementById('mr-res-coefop').innerHTML    = `<span style="color:${crCor}">${calc.coefRota>0?'+':''}${(calc.coefRota*100).toFixed(2)}%</span>`;
+  document.getElementById('mr-res-desconto').innerHTML  = `<span style="color:${dcCor}">${calc.descontoPct>0?'+':''}${(calc.descontoPct*100).toFixed(2)}%</span>`;
+  document.getElementById('mr-res-variacao').innerHTML  = `<span style="color:${dcCor}">${calc.totalVariacao>0?'+':''}${calc.totalVariacao.toFixed(4)}</span> <span style="font-size:11px;color:var(--text3)">km/L</span>`;
+  document.getElementById('mr-res-ajustada').textContent = calc.metaAjustada.toFixed(4) + ' km/L';
+}
+
+function mrRenderModelos() {
+  const lista = document.getElementById('mr-modelos-lista');
+  if (!lista) return;
+  const modelos = Object.values(state.metaRotaModelos||{});
+  document.getElementById('mr-modelos-count').textContent = modelos.length + ' modelo(s) cadastrado(s)';
+  if (!modelos.length) {
+    lista.innerHTML = '<div class="empty"><div class="empty-icon">🚛</div><div class="empty-text">Nenhum modelo cadastrado</div><div class="empty-sub">Clique em "+ Novo Modelo" para começar</div></div>';
+    return;
+  }
+  lista.innerHTML = modelos.map(mod => `
+    <div class="chart-card" style="margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div style="font-size:16px;font-weight:700">🚛 ${mod.nome}</div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-secondary btn-sm" onclick="mrEditarModelo('${mod.nome.replace(/'/g,"\\'")}')">✏️ Editar</button>
+          <button class="btn btn-secondary btn-sm" onclick="verificarSenha(()=>mrExcluirModelo('${mod.nome.replace(/'/g,"\\'")}'))">🗑️</button>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px">
+        ${Object.entries(mod.ops||{}).map(([op, cfg]) => {
+          const coef = parseFloat(state.opConfigs?.[op]?.coefRota)||0;
+          return `<div style="background:var(--bg3);border-radius:8px;padding:10px 12px">
+            <div style="font-size:11px;color:var(--text3);margin-bottom:4px">${op}</div>
+            <div style="font-size:15px;font-weight:700;font-family:monospace">${cfg.metaBase.toFixed(2)} km/L</div>
+            <div style="font-size:11px;color:var(--text2)">Base: ${cfg.pesoBase.toLocaleString('pt-BR')} kg</div>
+            ${coef!==0?`<div style="font-size:11px;color:${coef>0?'var(--green)':'var(--red)'}">Rota: ${coef>0?'+':''}${(coef*100).toFixed(1)}%</div>`:''}
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`).join('');
+}
+
+function mrRenderTabela() {
+  const body = document.getElementById('mr-tabela-peso-body');
+  if (!body) return;
+  body.innerHTML = MR_TABELA_PESO.map(([de, ate, v]) => {
+    const cor = v > 0 ? 'var(--green)' : v < 0 ? 'var(--red)' : 'var(--text2)';
+    const neutro = v === 0 ? ' style="background:rgba(255,255,255,0.05)"' : '';
+    return `<tr${neutro}>
+      <td style="padding:6px 12px;font-family:monospace">${de.toLocaleString('pt-BR')}</td>
+      <td style="padding:6px 12px;font-family:monospace">${ate.toLocaleString('pt-BR')}</td>
+      <td style="padding:6px 12px;text-align:right;font-family:monospace;color:${cor};font-weight:600">${v>0?'+':''}${v}</td>
+      <td style="padding:6px 12px;text-align:right;font-size:11px;color:${cor}">${v>0?'Mais leve que base → bônus':v<0?'Mais pesado que base → penalidade':'Peso base (neutro)'}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── CRUD MODELOS ───────────────────────────────────────────────────────────────
+let _mrEditando = null;
+
+function mrNovoModelo() {
+  _mrEditando = null;
+  document.getElementById('mr-mod-nome').value = '';
+  document.getElementById('mr-mod-ops-lista').innerHTML = '<div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px;margin-top:4px">Metas por Operação</div>';
+  document.getElementById('modal-mr-modelo-title').textContent = 'Novo Modelo';
+  document.getElementById('modal-mr-modelo').classList.add('open');
+}
+
+function mrEditarModelo(nome) {
+  _mrEditando = nome;
+  const mod = state.metaRotaModelos[nome];
+  document.getElementById('mr-mod-nome').value = mod.nome;
+  document.getElementById('modal-mr-modelo-title').textContent = 'Editar: ' + nome;
+  const lista = document.getElementById('mr-mod-ops-lista');
+  lista.innerHTML = '<div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px;margin-top:4px">Metas por Operação</div>';
+  Object.entries(mod.ops||{}).forEach(([op, cfg]) => mrAdicionarOp(op, cfg.metaBase, cfg.pesoBase));
+  document.getElementById('modal-mr-modelo').classList.add('open');
+}
+
+function mrAdicionarOp(opNome='', metaBase='', pesoBase='') {
+  const lista = document.getElementById('mr-mod-ops-lista');
+  const ops = getOperacoes();
+  const idx = lista.querySelectorAll('.mr-op-row').length;
+  const div = document.createElement('div');
+  div.className = 'mr-op-row';
+  div.style.cssText = 'display:grid;grid-template-columns:1fr 120px 130px 36px;gap:6px;align-items:center;margin-bottom:6px';
+  div.innerHTML = `
+    <select class="form-input" style="font-size:12px">
+      <option value="">Selecione a operação...</option>
+      ${ops.map(o=>`<option value="${o}" ${o===opNome?'selected':''}>${o}</option>`).join('')}
+    </select>
+    <input type="number" class="form-input" placeholder="Meta km/L" value="${metaBase}" step="0.01" style="font-size:12px">
+    <input type="number" class="form-input" placeholder="Peso base kg" value="${pesoBase}" step="100" style="font-size:12px">
+    <button class="btn btn-secondary btn-sm" onclick="this.closest('.mr-op-row').remove()" style="padding:6px 8px">✕</button>`;
+  lista.appendChild(div);
+}
+
+function mrSalvarModelo() {
+  const nome = document.getElementById('mr-mod-nome').value.trim();
+  if (!nome) { showToast('Digite o nome do modelo','error'); return; }
+  const rows = document.querySelectorAll('.mr-op-row');
+  const ops = {};
+  let valido = true;
+  rows.forEach(row => {
+    const [selOp, inpMeta, inpPeso] = row.querySelectorAll('select,input,input');
+    const op = selOp.value, meta = parseFloat(inpMeta.value), peso = parseFloat(inpPeso.value);
+    if (!op || isNaN(meta) || isNaN(peso)) { valido = false; return; }
+    ops[op] = { metaBase: meta, pesoBase: peso };
+  });
+  if (!valido) { showToast('Preencha todos os campos das operações','error'); return; }
+  if (!Object.keys(ops).length) { showToast('Adicione pelo menos uma operação','error'); return; }
+  if (!state.metaRotaModelos) state.metaRotaModelos = {};
+  if (_mrEditando && _mrEditando !== nome) delete state.metaRotaModelos[_mrEditando];
+  state.metaRotaModelos[nome] = { nome, ops };
+  saveState();
+  document.getElementById('modal-mr-modelo').classList.remove('open');
+  mrRenderModelos();
+  showToast('Modelo salvo!','success');
+}
+
+function mrExcluirModelo(nome) {
+  delete state.metaRotaModelos[nome];
+  saveState();
+  mrRenderModelos();
+  showToast('Modelo removido','success');
+}
+
+function showPageMetaRota() {
+  mrSimPopular();
 }
 
 function kmComparar() {
