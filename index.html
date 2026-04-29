@@ -2345,7 +2345,13 @@ function showPage(page,el) {
   if(page==='excluir') { onShowExcluir(); }
   if(page==='arla') { arlaOnShow(); }
   if(page==='kmcomp') { /* nothing extra needed on show */ }
-  if(page==='metarota') { mrSimPopular(); mrRenderTabela(); }
+  if(page==='metarota') { 
+    try {
+      if (!state.metaRotaModelos) state.metaRotaModelos = {};
+      mrSimPopular(); 
+      mrRenderTabela();
+    } catch(e) { console.error('metarota error:', e); }
+  }
 }
 
 function setTab(tab) {
@@ -7006,6 +7012,7 @@ function metaRotaTab(btn, tab) {
 }
 
 function mrSimPopular() {
+  if (!state.metaRotaModelos) state.metaRotaModelos = {};
   const modSel = document.getElementById('mr-sim-modelo');
   const opSel  = document.getElementById('mr-sim-op');
   if (!modSel || !opSel) return;
