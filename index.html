@@ -37,10 +37,23 @@ const withTimeout = (promise, ms) => Promise.race([
 
 window.fbSave = async function(data) {
   try {
-    const { _users, abastecimentos, ...restData } = data;
-    // Documento principal: tudo EXCETO abastecimentos
-    await withTimeout(setDoc(doc(db, "fueltracker", "dados"), { ...restData, _hasAbast: true }), 10000);
-    // Abastecimentos: divide em chunks de 400 registros (cada doc ~300KB)
+    const { _users, abastecimentos, semanas, ...restData } = data;
+
+    // Remove registros das semanas antes de salvar — são reconstruídos no load
+    const semanasSemRegistros = {};
+    Object.entries(semanas||{}).forEach(([id, s]) => {
+      const { registros, ...semMeta } = s;
+      semanasSemRegistros[id] = semMeta;
+    });
+
+    // Documento principal: sem abastecimentos e sem registros duplicados
+    await withTimeout(setDoc(doc(db, "fueltracker", "dados"), {
+      ...restData,
+      semanas: semanasSemRegistros,
+      _hasAbast: true
+    }), 10000);
+
+    // Abastecimentos em chunks de 400 (~300KB cada)
     const abast = abastecimentos || [];
     const chunkSize = 400;
     const numChunks = Math.ceil(abast.length / chunkSize) || 1;
@@ -48,7 +61,7 @@ window.fbSave = async function(data) {
       const chunk = abast.slice(i * chunkSize, (i + 1) * chunkSize);
       await withTimeout(setDoc(doc(db, "fueltracker", "abast_" + i), { registros: chunk, chunk: i, total: numChunks }), 10000);
     }
-    // Remove chunks extras de importações anteriores
+    // Remove chunks extras
     for (let i = numChunks; i < numChunks + 5; i++) {
       try { await withTimeout(deleteDoc(doc(db, "fueltracker", "abast_" + i)), 3000); } catch(e) {}
     }
@@ -61,6 +74,7 @@ window.fbLoad = async function() {
     const snap = await withTimeout(getDoc(doc(db, "fueltracker", "dados")), 8000);
     if (!snap.exists()) return null;
     const dados = snap.data();
+
     // Carrega abastecimentos dos chunks
     if (dados._hasAbast) {
       let abastecimentos = [];
@@ -72,6 +86,12 @@ window.fbLoad = async function() {
         if (i >= (chunkData.total || 1) - 1) break;
       }
       dados.abastecimentos = abastecimentos;
+      // Reconstrói registros das semanas a partir dos abastecimentos
+      if (dados.semanas) {
+        Object.keys(dados.semanas).forEach(id => {
+          dados.semanas[id].registros = abastecimentos.filter(a => a.periodoId === id);
+        });
+      }
     }
     delete dados._hasAbast;
     return dados;
