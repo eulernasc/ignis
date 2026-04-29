@@ -743,7 +743,12 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
     </div>
     <!-- Consumo por Operação (linha 1, largura total) -->
     <div class="chart-card" style="margin-bottom:16px;height:280px;display:flex;flex-direction:column;min-height:0;overflow:hidden">
-      <div class="chart-title" style="flex-shrink:0">Consumo por Operação — <span id="chart-period-label2">Semanal</span></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-shrink:0;margin-bottom:0">
+        <div class="chart-title" style="margin-bottom:0">Consumo por Operação — <span id="chart-period-label2">Semanal</span></div>
+        <div id="op-filter-indicator" style="display:none;align-items:center;gap:6px;font-size:11px;color:var(--accent);background:rgba(192,57,43,.12);border:1px solid rgba(192,57,43,.3);border-radius:8px;padding:4px 10px;cursor:pointer" onclick="opClearSelection()">
+          <span>🔍</span><span id="op-filter-label">1 operação filtrada</span><span style="font-size:10px;color:var(--text2)">✕ limpar</span>
+        </div>
+      </div>
       <div id="op-chart-container" style="flex:1;min-height:0;overflow-x:auto;overflow-y:hidden;padding-bottom:12px"><div class="empty"><div class="empty-icon">🏭</div><div class="empty-text">Sem dados</div></div></div>
     </div>
     <!-- Consumo por Máquina (largura total) -->
@@ -1790,6 +1795,9 @@ function doPost(e) {
 let state = { maquinas:[], abastecimentos:[], semanas:{}, tab:'semanal', sheetsUrl:'', arlaEgr:[], arlaMeses:[], arlaGrupos:[], dieselPrecos:{}, opConfigs:{}, metaRotaModelos:{} };
 let selectedIds = new Set();
 let abastFiltrados = [];
+window._selectedOps = new Set();   // operações selecionadas no gráfico
+window._dashList    = [];           // último list do renderDashboard
+window._dashIsKmL   = false;        // último isKmL do renderDashboard
 
 async function loadState() {
   try { const s=localStorage.getItem('fueltracker_v3'); if(s) state=JSON.parse(s); } catch(e){}
@@ -2912,7 +2920,10 @@ function renderDashboard() {
     lbl = 'Período';
   }
   if(document.getElementById('chart-period-label2')) document.getElementById('chart-period-label2').textContent=lbl;
-  renderOpChart(list, isKmL); renderBarChart(list, isKmL); renderRanking(list, isKmL);
+  window._dashList   = list;
+  window._dashIsKmL  = isKmL;
+  renderOpChart(list, isKmL);
+  _renderBarAndRanking();
   relChecarReincidencia();
 }
 
@@ -2938,8 +2949,8 @@ function renderOpChart(list, isKmL=false) {
   const maxM = isKmL
     ? Math.max(...ops.map(o=>{ const meta=byOp[o].meta||0; const m=byOp[o].litros>0?byOp[o].horas/byOp[o].litros:0; return Math.max(meta,m)*1.3; }), 1)
     : Math.max(...ops.map(o=>byOp[o].horas>0?byOp[o].litros/byOp[o].horas:0), 1);
-  const H=120;
 
+  const sel = window._selectedOps;
   c.innerHTML=`<div style="display:inline-flex;gap:8px;padding:6px 2px 4px;min-width:max-content">`+
     ops.map(op=>{
     const d=byOp[op];
@@ -2950,30 +2961,97 @@ function renderOpChart(list, isKmL=false) {
     const bomDesvio = isKmL ? (desvio!==null&&desvio>=0) : (desvio!==null&&desvio<=0);
     const mColor=desvio===null?'var(--yellow)':bomDesvio?'var(--green)':Math.abs(desvio)<=10?'#f59e0b':'var(--red)';
     const icone=desvio===null?'':bomDesvio?'✅':Math.abs(desvio)<=10?'⚠️':'🔴';
-    // Barra: proporcional à meta quando km/L, proporcional ao máximo global quando L/h
+    // Barra: altura máx 44px dentro de container 48px (sem overflow)
     const barH = isKmL && meta>0
-      ? Math.min(Math.max((m/meta)*32, 3), 52)
-      : maxM>0 ? Math.max((m/maxM)*32, 3) : 3;
-    // Barra litros (só L/h)
-    const barHL = maxL>0 ? Math.max((l/maxL)*32, 3) : 3;
-    return `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;min-width:130px;max-width:160px">
+      ? Math.min(Math.max((m/meta)*40, 3), 44)
+      : maxM>0 ? Math.min(Math.max((m/maxM)*40, 3), 44) : 3;
+    const barHL = maxL>0 ? Math.min(Math.max((l/maxL)*40, 3), 44) : 3;
+    // Estado visual baseado na seleção
+    const isSelected = sel.size===0 || sel.has(op);
+    const borderStyle = sel.has(op) ? `2px solid ${mColor}` : '1px solid var(--border)';
+    const opacStyle = isSelected ? '1' : '0.3';
+    const scaleStyle = sel.has(op) ? 'scale(1.03)' : 'scale(1)';
+    const opEsc = op.replace(/'/g,"&apos;");
+    return `<div data-op="${opEsc}" onclick="opCardClick(event,'${opEsc}')"
+      style="background:var(--bg3);border:${borderStyle};border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:5px;min-width:140px;max-width:175px;cursor:pointer;opacity:${opacStyle};transform:${scaleStyle};transition:opacity .2s,transform .2s,border .15s;user-select:none">
       <div style="display:flex;align-items:baseline;gap:4px">
         <span style="font-size:18px;font-weight:700;color:${mColor};font-family:monospace;line-height:1">${m.toFixed(2)}</span>
         <span style="font-size:10px;color:var(--text3)">${unidadeMedia}</span>
       </div>
-      ${meta>0?`<div style="font-size:10px;color:${mColor};white-space:nowrap">${icone} ${desvio!==null?(desvio>0?'+':'')+desvio.toFixed(1)+'%':''} · meta ${meta.toFixed(1)}</div>`:'<div style="font-size:10px;color:var(--text3)">sem meta</div>'}
-      <div style="display:flex;gap:3px;align-items:flex-end;height:36px;margin-top:2px">
-        ${!isKmL ? `<div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end">
-          <div style="background:var(--accent);border-radius:2px 2px 0 0;height:${barHL}px;opacity:.7"></div>
+      ${meta>0?`<div style="font-size:10px;color:${mColor};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${icone} ${desvio!==null?(desvio>0?'+':'')+desvio.toFixed(1)+'%':''} · meta ${meta.toFixed(1)}</div>`:'<div style="font-size:10px;color:var(--text3)">sem meta</div>'}
+      <div style="display:flex;gap:3px;align-items:flex-end;height:48px;overflow:hidden;margin-top:2px;flex-shrink:0">
+        ${!isKmL ? `<div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end;height:100%;overflow:hidden">
+          <div style="background:var(--accent);border-radius:2px 2px 0 0;height:${barHL}px;opacity:.7;flex-shrink:0"></div>
         </div>` : ''}
-        <div style="flex:${isKmL?'none':'1'};width:${isKmL?'100%':'auto'};display:flex;flex-direction:column;justify-content:flex-end">
-          <div style="background:${mColor};border-radius:2px 2px 0 0;height:${barH}px"></div>
+        <div style="flex:${isKmL?'none':'1'};width:${isKmL?'100%':'auto'};display:flex;flex-direction:column;justify-content:flex-end;height:100%;overflow:hidden">
+          <div style="background:${mColor};border-radius:2px 2px 0 0;height:${barH}px;flex-shrink:0"></div>
         </div>
       </div>
-      <div style="font-size:10px;color:var(--text3);font-weight:600;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px" title="${op}">${op}</div>
+      <div style="font-size:10px;color:var(--text3);font-weight:600;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${op}">${op}</div>
     </div>`;
   }).join('')+'</div>';
 }
+
+function opCardClick(e, op) {
+  e.stopPropagation();
+  if (!window._selectedOps) window._selectedOps = new Set();
+  const sel = window._selectedOps;
+  if (e.ctrlKey || e.metaKey) {
+    // Ctrl+click: toggle esta op no multi-select
+    if (sel.has(op)) sel.delete(op); else sel.add(op);
+  } else {
+    // Clique simples: se só esta op está selecionada, deseleciona; caso contrário seleciona só ela
+    if (sel.size===1 && sel.has(op)) sel.clear(); else { sel.clear(); sel.add(op); }
+  }
+  _opUpdateVisual();
+  _renderBarAndRanking();
+}
+
+function opClearSelection() {
+  if (window._selectedOps) window._selectedOps.clear();
+  _opUpdateVisual();
+  _renderBarAndRanking();
+}
+
+function _opUpdateVisual() {
+  const sel = window._selectedOps;
+  document.querySelectorAll('#op-chart-container [data-op]').forEach(card => {
+    const op = card.dataset.op;
+    const isSelected = sel.size===0 || sel.has(op);
+    const isActive   = sel.has(op);
+    card.style.opacity   = isSelected ? '1' : '0.3';
+    card.style.transform = isActive   ? 'scale(1.03)' : 'scale(1)';
+  });
+  // Indicador de filtro ativo
+  const ind = document.getElementById('op-filter-indicator');
+  const lbl = document.getElementById('op-filter-label');
+  if (ind) ind.style.display = sel.size>0 ? 'flex' : 'none';
+  if (lbl && sel.size>0) lbl.textContent = sel.size===1 ? '1 operação filtrada' : `${sel.size} operações filtradas`;
+}
+
+function _renderBarAndRanking() {
+  const list   = window._dashList  || [];
+  const isKmL  = window._dashIsKmL || false;
+  const sel    = window._selectedOps;
+  const filtered = sel && sel.size>0
+    ? list.filter(a => { const op=(getMaquina(a.placa)?.operacao||a.operacao||'Sem Operação').replace(/_/g,' '); return sel.has(op); })
+    : list;
+  renderBarChart(filtered, isKmL);
+  renderRanking(filtered, isKmL);
+}
+
+// Click fora do gráfico de operações → limpa seleção
+document.addEventListener('click', function(e) {
+  const c = document.getElementById('op-chart-container');
+  const ind = document.getElementById('op-filter-indicator');
+  if (!c) return;
+  if (c.contains(e.target) || (ind && ind.contains(e.target))) return;
+  if (window._selectedOps && window._selectedOps.size>0) {
+    window._selectedOps.clear();
+    _opUpdateVisual();
+    _renderBarAndRanking();
+  }
+});
 
 function renderBarChart(list, isKmL=false) {
   const c=document.getElementById('bar-chart-container');
