@@ -716,7 +716,20 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
           </div>
         </div>
         <select class="filter-select" id="dash-maq-filter" onchange="updateFilters();populatePlacaDropdown();populateModeloDropdown();renderDashboard()"><option value="">Selecione o tipo...</option></select>
-        <select class="filter-select" id="dash-modelo-filter" onchange="renderDashboard()" style="min-width:140px;display:none"><option value="">Todos os Modelos</option></select>
+        <!-- Multi-select modelos -->
+        <div style="position:relative" id="modelo-dropdown-wrap" style="display:none">
+          <button class="filter-select" id="modelo-dropdown-btn" onclick="toggleModeloDropdown()" style="cursor:pointer;text-align:left;min-width:170px;display:none;align-items:center;justify-content:space-between;gap:8px">
+            <span id="modelo-dropdown-label">Todos os Modelos</span>
+            <span style="font-size:10px">▼</span>
+          </button>
+          <div id="modelo-dropdown-menu" style="display:none;position:absolute;top:calc(100% + 4px);left:0;min-width:280px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:8px;z-index:200;box-shadow:0 8px 24px rgba(0,0,0,.4);max-height:340px;overflow-y:auto">
+            <input type="text" id="modelo-search" placeholder="🔍 Buscar modelo..." oninput="filtrarModelosDropdown()" style="width:100%;box-sizing:border-box;padding:6px 10px;border-radius:7px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:12px;margin-bottom:6px;outline:none">
+            <label style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--border);margin-bottom:4px">
+              <input type="checkbox" id="modelo-all-check" checked onchange="toggleAllModelos(this)"> Todos os Modelos
+            </label>
+            <div id="modelo-checkboxes"></div>
+          </div>
+        </div>
         <div class="tab-group">
           <button class="tab-btn active" id="tab-semanal" onclick="setTab('semanal')">Semanal</button>
           <button class="tab-btn" id="tab-mensal" onclick="setTab('mensal')">Mensal</button>
@@ -2565,12 +2578,18 @@ function togglePlacaDropdown() {
 }
 
 function populateModeloDropdown() {
-  const sel = document.getElementById('dash-modelo-filter');
-  if (!sel) return;
-  const maqF = document.getElementById('dash-maq-filter')?.value || '';
-  if (!maqF) { sel.style.display = 'none'; sel.value = ''; return; }
+  const btn  = document.getElementById('modelo-dropdown-btn');
+  const wrap = document.getElementById('modelo-dropdown-wrap');
+  const cont = document.getElementById('modelo-checkboxes');
+  if (!btn || !cont) return;
 
-  // Pega todos os abastecimentos do tipo selecionado (sem filtro de modelo)
+  const maqF = document.getElementById('dash-maq-filter')?.value || '';
+  if (!maqF) {
+    btn.style.display  = 'none';
+    return;
+  }
+
+  // Abastecimentos do tipo selecionado
   const byTipo = state.abastecimentos.filter(a => {
     const ti = getTipoIgnis(a);
     if (ti === 'ignorado') return false;
@@ -2582,17 +2601,93 @@ function populateModeloDropdown() {
     return a.placa === maqF;
   });
 
-  // Coleta modelos únicos não-vazios
+  // Se há operações selecionadas nos cards, filtra modelos por essas ops
+  const selOps = window._selectedOps;
+  const base = (selOps && selOps.size > 0)
+    ? byTipo.filter(a => { const op=(getMaquina(a.placa)?.operacao||a.operacao||'Sem Operação').replace(/_/g,' '); return selOps.has(op); })
+    : byTipo;
+
   const modelos = [...new Set(
-    byTipo.map(a => (getMaquina(a.placa)?.modelo || a.modelo || '').trim().toUpperCase()).filter(Boolean)
+    base.map(a => (getMaquina(a.placa)?.modelo || a.modelo || '').trim().toUpperCase()).filter(Boolean)
   )].sort();
 
-  if (modelos.length === 0) { sel.style.display = 'none'; sel.value = ''; return; }
+  if (modelos.length === 0) {
+    btn.style.display = 'none';
+    cont.innerHTML = '';
+    return;
+  }
 
-  const anterior = sel.value;
-  sel.innerHTML = '<option value="">Todos os Modelos</option>' +
-    modelos.map(m => `<option value="${m}"${m===anterior?' selected':''}>${m}</option>`).join('');
-  sel.style.display = '';
+  // Preserva seleção atual
+  const anterior = getSelectedModelos();
+
+  btn.style.display = 'flex';
+
+  cont.innerHTML = modelos.map(m =>
+    `<label class="modelo-check-label" style="display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:6px;cursor:pointer;font-size:12px">
+      <input type="checkbox" class="modelo-check" value="${m}" ${anterior===null||anterior.has(m)?'checked':''} onchange="onModeloCheckChange()">
+      ${m}
+    </label>`
+  ).join('');
+
+  _sincModeloAllCheck();
+  _updateModeloLabel();
+}
+
+function toggleModeloDropdown() {
+  const menu = document.getElementById('modelo-dropdown-menu');
+  if (!menu) return;
+  const isOpen = menu.style.display !== 'none';
+  // Fecha outros dropdowns
+  document.getElementById('op-dropdown-menu').style.display = 'none';
+  const pm = document.getElementById('placa-dropdown-menu'); if(pm) pm.style.display='none';
+  menu.style.display = isOpen ? 'none' : 'block';
+  if (!isOpen) setTimeout(() => document.getElementById('modelo-search')?.focus(), 50);
+}
+
+function filtrarModelosDropdown() {
+  const q = (document.getElementById('modelo-search')?.value || '').toLowerCase();
+  document.querySelectorAll('.modelo-check-label').forEach(lbl => {
+    lbl.style.display = (lbl.querySelector('.modelo-check')?.value||'').toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+
+function toggleAllModelos(cb) {
+  document.querySelectorAll('.modelo-check').forEach(c => c.checked = cb.checked);
+  onModeloCheckChange();
+}
+
+function onModeloCheckChange() {
+  _sincModeloAllCheck();
+  _updateModeloLabel();
+  renderDashboard();
+}
+
+function _sincModeloAllCheck() {
+  const allCheck = document.getElementById('modelo-all-check');
+  if (!allCheck) return;
+  const all     = document.querySelectorAll('.modelo-check');
+  const checked = document.querySelectorAll('.modelo-check:checked');
+  allCheck.checked       = all.length === checked.length;
+  allCheck.indeterminate = checked.length > 0 && checked.length < all.length;
+}
+
+function _updateModeloLabel() {
+  const all     = [...document.querySelectorAll('.modelo-check')];
+  const checked = all.filter(c => c.checked);
+  const label   = document.getElementById('modelo-dropdown-label');
+  if (!label) return;
+  const n = checked.length;
+  label.textContent =
+    n === 0 || n === all.length ? 'Todos os Modelos' :
+    n === 1 ? checked[0].value :
+    `${n} modelos`;
+}
+
+function getSelectedModelos() {
+  const allCheck = document.getElementById('modelo-all-check');
+  if (!allCheck || (allCheck.checked && !allCheck.indeterminate)) return null; // todos = sem filtro
+  const checked = [...document.querySelectorAll('.modelo-check:checked')];
+  return new Set(checked.map(c => c.value));
 }
 
 function populatePlacaDropdown() {
@@ -2690,6 +2785,8 @@ document.addEventListener('click', e=>{
   if(compWrap && !compWrap.contains(e.target)) document.getElementById('comp-op-dropdown-menu').style.display='none';
   const placaWrap=document.getElementById('placa-dropdown-wrap');
   if(placaWrap && !placaWrap.contains(e.target)) { const m=document.getElementById('placa-dropdown-menu'); if(m) m.style.display='none'; }
+  const modeloWrap=document.getElementById('modelo-dropdown-wrap');
+  if(modeloWrap && !modeloWrap.contains(e.target)) { const m=document.getElementById('modelo-dropdown-menu'); if(m) m.style.display='none'; }
 });
 
 function toggleCompOpDropdown() {
@@ -2807,10 +2904,13 @@ function getFilteredAbast(opF,maqF) {
   else if(maqF) list=list.filter(a=>a.placa===maqF);
   else return []; // sem filtro = não mostra nada
 
-  // Filtro de modelo (dropdown Modelo)
-  const modeloF = (document.getElementById('dash-modelo-filter')?.value||'').trim().toUpperCase();
-  if (modeloF) {
-    list = list.filter(a => (getMaquina(a.placa)?.modelo || a.modelo || '').trim().toUpperCase() === modeloF);
+  // Filtro de modelo (dropdown Modelo — multi-select)
+  const modelosSel = getSelectedModelos();
+  if (modelosSel instanceof Set && modelosSel.size > 0) {
+    list = list.filter(a => {
+      const m = (getMaquina(a.placa)?.modelo || a.modelo || '').trim().toUpperCase();
+      return modelosSel.has(m);
+    });
   }
 
   return list;
@@ -3067,6 +3167,8 @@ function _opUpdateVisual() {
   const lbl = document.getElementById('op-filter-label');
   if (ind) ind.style.display = sel.size>0 ? 'flex' : 'none';
   if (lbl && sel.size>0) lbl.textContent = sel.size===1 ? '1 operação filtrada' : `${sel.size} operações filtradas`;
+  // Re-popula modelos conforme ops selecionadas
+  populateModeloDropdown();
 }
 
 function _renderBarAndRanking() {
