@@ -2601,10 +2601,20 @@ function populateModeloDropdown() {
     return a.placa === maqF;
   });
 
-  // Se há operações selecionadas nos cards, filtra modelos por essas ops
-  const selOps = window._selectedOps;
-  const base = (selOps && selOps.size > 0)
-    ? byTipo.filter(a => { const op=(getMaquina(a.placa)?.operacao||a.operacao||'Sem Operação').replace(/_/g,' '); return selOps.has(op); })
+  // Se há operações selecionadas (cards OU dropdown), filtra modelos por essas ops
+  const selOpsCards = window._selectedOps;
+  const selOpsDrop  = getSelectedOps(); // null = todas
+
+  // Monta Set unificado: prioriza dropdown se tiver seleção, senão usa cards
+  let opsAtivas = null; // null = sem filtro
+  if (selOpsDrop instanceof Set && selOpsDrop.size > 0) {
+    opsAtivas = new Set([...selOpsDrop].map(o => o.replace(/_/g,' ')));
+  } else if (selOpsCards && selOpsCards.size > 0) {
+    opsAtivas = selOpsCards;
+  }
+
+  const base = opsAtivas
+    ? byTipo.filter(a => { const op=(getMaquina(a.placa)?.operacao||a.operacao||'Sem Operação').replace(/_/g,' '); return opsAtivas.has(op); })
     : byTipo;
 
   const modelos = [...new Set(
@@ -2774,6 +2784,7 @@ function onOpCheckChange() {
     n===0||n===all.length?'Todas as Operações':
     n===1?checked[0].value.replace(/_/g,' '):
     `${n} operações`;
+  populateModeloDropdown();
   renderDashboard();
 }
 
