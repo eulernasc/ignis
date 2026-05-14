@@ -1928,19 +1928,19 @@ async function syncFromFirebase() {
   }
 }
 
+// CÓDIGO CORRIGIDO
 function saveState() {
-  localStorage.setItem('fueltracker_v3', JSON.stringify(state));
-  if (window.firebaseReady && window.fbSave) {
-    const agora = Date.now();
-    window._ultimoSaveAt = agora;
-    const users = (() => { try { return JSON.parse(localStorage.getItem('ignis_users_cache')||'{}'); } catch(e){ return {}; } })();
-    const dataToSave = { ...state, _savedAt: agora };
-    if (Object.keys(users).length) dataToSave._users = users;
-    window.fbSave(dataToSave).then(ok => {
-      if (ok) updateSyncStatus('connected');
-      else updateSyncStatus('error');
-    });
-  }
+    const state = {
+        // Removemos os abastecimentos do localStorage para evitar o erro de Quota
+        abastecimentos: [], 
+        maquinas: stateApp.maquinas,
+        operacoes: stateApp.operacoes
+    };
+    try {
+        localStorage.setItem('fueltracker_v3', JSON.stringify(state));
+    } catch (e) {
+        console.warn("Não foi possível salvar o estado no LocalStorage:", e);
+    }
 }
 
 // ── NAV ───────────────────────────────────────────────────────────────────────
