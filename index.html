@@ -1791,6 +1791,42 @@ function doPost(e) {
 }
 `;
 
+
+// ── INDEXEDDB — BACKUP LOCAL COMPLETO (sem limite de tamanho) ─────────────────
+const IDB_NAME = 'ignis_fullbackup', IDB_STORE = 'state', IDB_VER = 1;
+function _idbOpen() {
+  return new Promise((res, rej) => {
+    const r = indexedDB.open(IDB_NAME, IDB_VER);
+    r.onupgradeneeded = e => e.target.result.createObjectStore(IDB_STORE, { keyPath:'id' });
+    r.onsuccess = () => res(r.result);
+    r.onerror   = () => rej(r.error);
+  });
+}
+async function idbSave(data) {
+  try {
+    const db = await _idbOpen();
+    await new Promise((res, rej) => {
+      const tx = db.transaction(IDB_STORE, 'readwrite');
+      tx.objectStore(IDB_STORE).put({ id:'main', ...data, _idbAt: Date.now() });
+      tx.oncomplete = res; tx.onerror = rej;
+    });
+    db.close();
+  } catch(e) { console.warn('IDB save erro:', e); }
+}
+async function idbLoad() {
+  try {
+    const db = await _idbOpen();
+    const data = await new Promise((res, rej) => {
+      const tx = db.transaction(IDB_STORE, 'readonly');
+      const req = tx.objectStore(IDB_STORE).get('main');
+      req.onsuccess = () => res(req.result || null);
+      req.onerror   = () => res(null);
+    });
+    db.close();
+    return data;
+  } catch(e) { console.warn('IDB load erro:', e); return null; }
+}
+
 // ── STATE ─────────────────────────────────────────────────────────────────────
 let state = { maquinas:[], abastecimentos:[], semanas:{}, tab:'semanal', sheetsUrl:'', arlaEgr:[], arlaMeses:[], arlaGrupos:[], dieselPrecos:{}, opConfigs:{}, metaRotaModelos:{} };
 let selectedIds = new Set();
@@ -1798,6 +1834,21 @@ let abastFiltrados = [];
 
 async function loadState() {
   try { const s=localStorage.getItem('fueltracker_v3'); if(s) state=JSON.parse(s); } catch(e){}
+  // Tenta recuperar backup completo do IDB (tem abastecimentos + semanas completas)
+  try {
+    const idb = await idbLoad();
+    if (idb && idb._idbAt) {
+      const idbAbast = idb.abastecimentos?.length || 0;
+      const locAbast = state.abastecimentos?.length || 0;
+      const idbSem   = Object.keys(idb.semanas||{}).length;
+      const locSem   = Object.keys(state.semanas||{}).length;
+      // Usa IDB se tiver mais dados que o localStorage lean
+      if (idbAbast > locAbast || idbSem > locSem) {
+        state = { ...state, ...idb };
+        console.info(`IDB recovery: ${idbAbast} abast, ${idbSem} semanas`);
+      }
+    }
+  } catch(e) { console.warn('IDB load skip:', e); }
   // Migrar preços antigos do localStorage para o state (única vez)
   if (!state.dieselPrecos || !Object.keys(state.dieselPrecos).length) {
     try { const old = JSON.parse(localStorage.getItem('diesel_precos')||'{}'); if(Object.keys(old).length) state.dieselPrecos = old; } catch(e){}
@@ -1859,6 +1910,9 @@ async function syncFromFirebase() {
           if (!maqMap[m.placa] || (m.meta && !maqMap[m.placa].meta)) maqMap[m.placa] = m;
         });
         dados.maquinas = Object.values(maqMap);
+        // Firebase incompleto detectado — salva dados locais de volta
+        console.warn(`Ignis: Firebase tinha ${fbAbast} abast / ${fbSem} semanas vs local ${localAbast} / ${localSem}. Restaurando local.`);
+        showToast('⚠️ Firebase incompleto detectado — dados locais preservados', 'error');
         setTimeout(() => saveState(), 2000);
       }
 
@@ -1947,6 +2001,8 @@ function saveState() {
       if (ok) updateSyncStatus('connected');
       else updateSyncStatus('error');
     });
+    // Backup completo no IndexedDB (sem limite de tamanho, sobrevive reload)
+    idbSave({ ...state, _savedAt: agora });
   }
 }
 
