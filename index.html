@@ -1976,35 +1976,51 @@ async function syncFromFirebase() {
   }
 }
 
+let _saveFirebaseTimer = null;
 function saveState() {
-  // Salva versão leve no localStorage — sem abastecimentos e sem registros de semanas (ficam só no Firebase)
+  // 1. IDB local imediato — sem limite, sobrevive reload (não espera Firebase)
+  idbSave({ ...state, _savedAt: Date.now() });
+
+  // 2. localStorage lean imediato — sem abastecimentos e sem registros de semanas (ficam só no Firebase)
   try {
     const _lean = { ...state };
     delete _lean.abastecimentos;
-    // Remove registros pesados de cada semana — mantém só metadados
     if (_lean.semanas) {
       const semanasMeta = {};
       Object.entries(_lean.semanas).forEach(([k, v]) => {
-        semanasMeta[k] = { label: v.label, importedAt: v.importedAt, dataIni: v.dataIni, dataFim: v.dataFim, count: v.registros ? v.registros.length : 0 };
+        semanasMeta[k] = { label: v.label, importedAt: v.importedAt, dataIni: v.dataIni, dataFim: v.dataFim, count: v.registros ? v.registros.length : (v.count||0) };
       });
       _lean.semanas = semanasMeta;
     }
     localStorage.setItem('fueltracker_v3', JSON.stringify(_lean));
   } catch(e) { console.warn('localStorage quota ignorada (dados no Firebase):', e); }
-  if (window.firebaseReady && window.fbSave) {
-    const agora = Date.now();
-    window._ultimoSaveAt = agora;
-    const users = (() => { try { return JSON.parse(localStorage.getItem('ignis_users_cache')||'{}'); } catch(e){ return {}; } })();
-    const dataToSave = { ...state, _savedAt: agora };
-    if (Object.keys(users).length) dataToSave._users = users;
-    window.fbSave(dataToSave).then(ok => {
-      if (ok) updateSyncStatus('connected');
-      else updateSyncStatus('error');
-    });
-    // Backup completo no IndexedDB (sem limite de tamanho, sobrevive reload)
-    idbSave({ ...state, _savedAt: agora });
-  }
+
+  // 3. Firebase: DEBOUNCED — evita saves concorrentes que corrompem os chunks
+  //    Se várias semanas são importadas em sequência, só dispara 1 save com tudo junto
+  updateSyncStatus('syncing'); // mostra "Sincronizando..." durante o debounce
+  clearTimeout(_saveFirebaseTimer);
+  _saveFirebaseTimer = setTimeout(() => {
+    if (window.firebaseReady && window.fbSave) {
+      const agora = Date.now();
+      window._ultimoSaveAt = agora;
+      const users = (() => { try { return JSON.parse(localStorage.getItem('ignis_users_cache')||'{}'); } catch(e){ return {}; } })();
+      const dataToSave = { ...state, _savedAt: agora };
+      if (Object.keys(users).length) dataToSave._users = users;
+      window.fbSave(dataToSave).then(ok => {
+        if (ok) { updateSyncStatus('connected'); idbSave({ ...state, _savedAt: agora }); }
+        else updateSyncStatus('error');
+      });
+    }
+  }, 1500); // 1.5s de espera — agrupa imports consecutivos num único save
 }
+
+// Avisa o usuário se tentar fechar/recarregar com save pendente
+window.addEventListener('beforeunload', e => {
+  if (_saveFirebaseTimer !== null) {
+    e.preventDefault();
+    return (e.returnValue = 'Dados ainda sendo salvos no Firebase. Aguarde antes de fechar.');
+  }
+});
 
 // ── NAV ───────────────────────────────────────────────────────────────────────
 // ══════════════════════════════════════════════════════════════════════════════
