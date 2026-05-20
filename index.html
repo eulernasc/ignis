@@ -89,12 +89,20 @@ window.fbLoad = async function() {
       // Reconstrói registros das semanas a partir dos abastecimentos
       if (dados.semanas) {
         Object.keys(dados.semanas).forEach(id => {
-          const regs = abastecimentos.filter(a => a.periodoId === id);
-          dados.semanas[id].registros = regs;
-          // Garante count sempre consistente (fallback para Firebase metadata)
-          if (!dados.semanas[id].count || regs.length > 0) {
-            dados.semanas[id].count = regs.length;
+          const p = dados.semanas[id];
+          let regs = abastecimentos.filter(a => a.periodoId === id);
+          // Fallback: registros sem periodoId dentro da faixa de datas → retaguarda e retaguarda
+          if (regs.length === 0 && p.dataIni && p.dataFim) {
+            const ini = new Date(p.dataIni), fim = new Date(p.dataFim);
+            fim.setHours(23,59,59);
+            regs = abastecimentos.filter(a => {
+              if (a.periodoId && a.periodoId !== id) return false;
+              const d = new Date(a.data); return d >= ini && d <= fim;
+            });
+            regs.forEach(a => { if (!a.periodoId) a.periodoId = id; });
           }
+          p.registros = regs;
+          if (!p.count || regs.length > 0) p.count = regs.length;
         });
       }
     }
@@ -935,7 +943,7 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
       </div>
       <div class="sheets-config" id="config-danger-zone" style="margin-top:16px;border-color:rgba(239,68,68,.3)">
         <div class="sheets-config-title" style="color:var(--red)">⚠️ Zona de Perigo</div>
-        <button class="btn btn-danger btn-sm" onclick="verificarSenha(limparTodosDados)">🗑️ Apagar todos os dados locais</button>
+        <button class="btn btn-danger btn-sm" onclick="verificarSenha(limparTodosDados)">🗑️ Reset completo (local + Firebase)</button>
       </div>
       <div class="sheets-config" style="margin-top:16px;border-color:rgba(245,158,11,.4)">
         <div class="sheets-config-title">⛽ Preço do Diesel por Operação</div>
@@ -3933,14 +3941,30 @@ function renderHistoricoPeriodos() {
     c.innerHTML='<div style="font-size:13px;color:var(--text3);text-align:center;padding:16px">Nenhum período importado ainda</div>';
     return;
   }
-  c.innerHTML = periodos.map(([id, p])=>`
+  c.innerHTML = periodos.map(([id, p])=>{
+    // Conta direto de state.abastecimentos — fonte de verdade, não depende de cache
+    const periodoCount = (() => {
+      const byId = state.abastecimentos.filter(a => a.periodoId === id);
+      if (byId.length > 0) return byId.length;
+      // Fallback por faixa de datas (registros sem periodoId)
+      if (p.dataIni && p.dataFim) {
+        const ini = new Date(p.dataIni), fim = new Date(p.dataFim);
+        fim.setHours(23,59,59);
+        const byDate = state.abastecimentos.filter(a => { const d = new Date(a.data); return d >= ini && d <= fim; });
+        if (byDate.length > 0) return byDate.length;
+      }
+      // Último recurso: count salvo em cache
+      return p.registros ? p.registros.length : (p.count ?? 0);
+    })();
+    return `
     <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--bg3);border-radius:8px;border:1px solid var(--border)">
       <div style="flex:1">
         <div style="font-size:13px;font-weight:600">${p.label||id}</div>
-        <div style="font-size:11px;color:var(--text2);margin-top:2px">${(p.registros ? p.registros.length : (p.count ?? 0))} máquinas · importado em ${p.importedAt||'—'}${p.dataIni?` · ref: ${p.dataIni.split('-').reverse().join('/')} a ${(p.dataFim||p.dataIni).split('-').reverse().join('/')}`:''}  </div>
+        <div style="font-size:11px;color:var(--text2);margin-top:2px">${periodoCount} máquinas · importado em ${p.importedAt||'—'}${p.dataIni?` · ref: ${p.dataIni.split('-').reverse().join('/')} a ${(p.dataFim||p.dataIni).split('-').reverse().join('/')}`:''}  </div>
       </div>
       <button class="btn-icon del" onclick="verificarSenha(()=>limparPeriodo('${id}'))" title="Apagar período">🗑️</button>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 function limparPeriodo(id) {
@@ -4267,12 +4291,46 @@ function importarJSON(input) {
 }
 
 function limparTodosDados() {
-  if(!confirm('Tem certeza? Isso apagará TODOS os dados locais permanentemente!')) return;
-  if(!confirm('Confirme novamente: apagar tudo?')) return;
-  state={maquinas:[],abastecimentos:[],semanas:{},tab:'semanal',sheetsUrl:state.sheetsUrl};
-  _periodosSelec=new Set();
-  saveState(); updateFilters(); renderDashboard();
-  showToast('Todos os dados foram apagados','success');
+  if(!confirm('Tem certeza? Isso apagará TODOS os dados (local + Firebase) permanentemente!')) return;
+  if(!confirm('Confirme novamente: apagar tudo incluindo Firebase?')) return;
+
+  // Reseta estado em memória
+  state = { maquinas:[], abastecimentos:[], semanas:{}, tab:'semanal', sheetsUrl:state.sheetsUrl,
+            arlaEgr:[], arlaMeses:[], arlaGrupos:[], dieselPrecos:{}, opConfigs:{}, metaRotaModelos:{} };
+  _periodosSelec = new Set();
+  window._selectedOps = new Set();
+  window._dashList = []; window._dashIsKmL = false;
+
+  // Limpa localStorage completamente
+  try { localStorage.removeItem('fueltracker_v3'); } catch(e){}
+
+  // Limpa IDB completamente
+  (async () => {
+    try {
+      const db = await _idbOpen();
+      await new Promise((res, rej) => {
+        const tx = db.transaction(IDB_STORE, 'readwrite');
+        tx.objectStore(IDB_STORE).delete('main');
+        tx.oncomplete = res; tx.onerror = rej;
+      });
+      db.close();
+    } catch(e) { console.warn('IDB clear erro:', e); }
+  })();
+
+  // Cancela qualquer save pendente e salva imediatamente no Firebase (sem debounce)
+  clearTimeout(_saveFirebaseTimer);
+  _saveFirebaseTimer = null;
+  if (window.firebaseReady && window.fbSave) {
+    const agora = Date.now();
+    window._ultimoSaveAt = agora;
+    updateSyncStatus('syncing');
+    window.fbSave({ ...state, _savedAt: agora }).then(ok => {
+      updateSyncStatus(ok ? 'connected' : 'error');
+    });
+  }
+
+  updateFilters(); renderDashboard();
+  showToast('Todos os dados apagados (local + Firebase)!', 'success');
 }
 
 function copiarScriptApps() {
