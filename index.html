@@ -5512,10 +5512,38 @@ function arlaInit() {
       }
     } catch(e) {}
   }
+  // Migração: dados importados antes do sistema de Segmentos (status antigo FAIL/OK)
+  // precisam ser reclassificados pro novo esquema (CRITICO/ATENCAO/IDEAL), senão ficam invisíveis nos filtros.
+  arlaMigrarClassificacaoAntiga();
+
   // Seleciona o mês mais recente como atual
   if (window._arlaState.meses.length) {
     window._arlaState.mesAtual = window._arlaState.meses[window._arlaState.meses.length-1].id;
     window._arlaState.processados = window._arlaState.meses[window._arlaState.meses.length-1].dados;
+  }
+}
+
+function arlaMigrarClassificacaoAntiga() {
+  const egr = window._arlaState.egrSet;
+  let migrou = false;
+  function precisaMigrar(r) { return r.status === 'FAIL' || r.status === 'OK' || r.status === undefined; }
+  function reclass(r) {
+    if (!precisaMigrar(r)) return;
+    migrou = true;
+    const isEgr = egr.has(r.placa);
+    const pct = (!isEgr && r.diesel > 0) ? (r.arla / r.diesel * 100) : null;
+    const segCfg = arlaGetSegmentoConfig(r.operacao);
+    let status, direcao;
+    if (isEgr) { status = 'EGR'; direcao = null; }
+    else if (pct === null) { status = 'SEM_DIESEL'; direcao = null; }
+    else { const c = arlaClassificar(pct, segCfg); status = c.status; direcao = c.direcao; }
+    r.pct = pct; r.status = status; r.direcao = direcao; r.segmento = state.opSegmento[r.operacao] || null;
+  }
+  (window._arlaState.meses || []).forEach(m => (m.dados || []).forEach(reclass));
+  if (migrou) {
+    state.arlaMeses = window._arlaState.meses;
+    localStorage.setItem('arla_meses', JSON.stringify(state.arlaMeses));
+    saveState();
   }
 }
 
