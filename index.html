@@ -474,7 +474,7 @@ body{overflow-x:hidden;}
 .arla-tab-group{display:flex;background:var(--bg2);border:1px solid var(--border);border-radius:8px;overflow:hidden;margin-bottom:20px;}
 .arla-tab{padding:9px 18px;font-size:13px;font-weight:500;cursor:pointer;border:none;background:none;color:var(--text2);transition:.2s;font-family:'DM Sans',sans-serif;}
 .arla-tab.active{background:var(--accent);color:#fff;}
-.arla-kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px;}
+.arla-kpi-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:20px;}
 .arla-kpi{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:14px 18px;}
 .arla-kpi-val{font-size:26px;font-weight:700;font-family:monospace;}
 .arla-kpi-label{font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.8px;margin-top:4px;}
@@ -482,6 +482,7 @@ body{overflow-x:hidden;}
 .arla-row:last-child{border-bottom:none;}
 .arla-row-header{background:var(--bg3);font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.7px;color:var(--text2);border-radius:8px 8px 0 0;}
 .arla-badge-ok{background:rgba(34,197,94,.15);color:var(--green);border-radius:20px;padding:3px 10px;font-size:11px;font-weight:700;text-align:center;}
+.arla-badge-atencao{background:rgba(245,158,11,.15);color:#f59e0b;border-radius:20px;padding:3px 10px;font-size:11px;font-weight:700;text-align:center;}
 .arla-badge-fail{background:rgba(239,68,68,.15);color:var(--red);border-radius:20px;padding:3px 10px;font-size:11px;font-weight:700;text-align:center;}
 .arla-badge-egr{background:rgba(79,142,247,.12);color:var(--accent);border-radius:20px;padding:3px 10px;font-size:11px;font-weight:700;text-align:center;}
 .arla-op-header{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:12px 16px;margin-bottom:4px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;}
@@ -1167,6 +1168,7 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
     <!-- Tabs -->
     <div class="arla-tab-group">
       <button class="arla-tab active" onclick="arlaSetTab('relatorio',this)">📊 Relatório</button>
+      <button class="arla-tab" onclick="arlaSetTab('segmentos',this)">🎯 Segmentos</button>
       <button class="arla-tab" onclick="arlaSetTab('egr',this)">🚛 Banco EGR</button>
       <button class="arla-tab" onclick="arlaSetTab('grupos',this)">📧 Grupos de E-mail</button>
     </div>
@@ -1195,8 +1197,9 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
       <!-- KPIs -->
         <div class="arla-kpi-grid">
           <div class="arla-kpi"><div class="arla-kpi-val" id="arla-kpi-total" style="color:var(--accent)">0</div><div class="arla-kpi-label">Total SRC Analisadas</div></div>
-          <div class="arla-kpi" style="cursor:pointer;border-color:rgba(239,68,68,.3)" onclick="arlaSetStatusTab('abaixo',document.getElementById('arla-tab-status-abaixo'))"><div class="arla-kpi-val" id="arla-kpi-fail" style="color:var(--red)">0</div><div class="arla-kpi-label">Abaixo de 5% ↗</div></div>
-          <div class="arla-kpi" style="cursor:pointer;border-color:rgba(34,197,94,.3)" onclick="arlaSetStatusTab('acima',document.getElementById('arla-tab-status-acima'))"><div class="arla-kpi-val" id="arla-kpi-ok" style="color:var(--green)">0</div><div class="arla-kpi-label">Acima de 5% ↗</div></div>
+          <div class="arla-kpi" style="cursor:pointer;border-color:rgba(239,68,68,.3)" onclick="arlaSetStatusTab('critico',document.getElementById('arla-tab-status-critico'))"><div class="arla-kpi-val" id="arla-kpi-fail" style="color:var(--red)">0</div><div class="arla-kpi-label">🔴 Crítico</div></div>
+          <div class="arla-kpi" style="cursor:pointer;border-color:rgba(245,158,11,.3)" onclick="arlaSetStatusTab('atencao',document.getElementById('arla-tab-status-atencao'))"><div class="arla-kpi-val" id="arla-kpi-atencao" style="color:#f59e0b">0</div><div class="arla-kpi-label">🟡 Atenção</div></div>
+          <div class="arla-kpi" style="cursor:pointer;border-color:rgba(34,197,94,.3)" onclick="arlaSetStatusTab('ideal',document.getElementById('arla-tab-status-ideal'))"><div class="arla-kpi-val" id="arla-kpi-ok" style="color:var(--green)">0</div><div class="arla-kpi-label">🟢 Ideal</div></div>
           <div class="arla-kpi"><div class="arla-kpi-val" id="arla-kpi-egr" style="color:var(--text2)">0</div><div class="arla-kpi-label">Ignoradas (EGR)</div></div>
         </div>
 
@@ -1205,8 +1208,9 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
 
         <!-- Tabs de status -->
         <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
-          <button class="arla-status-tab active" id="arla-tab-status-abaixo" onclick="arlaSetStatusTab('abaixo',this)" style="padding:7px 16px;border-radius:8px;border:1px solid rgba(239,68,68,.4);background:rgba(239,68,68,.12);color:var(--red);font-size:13px;font-weight:600;cursor:pointer;transition:.2s">⚠️ Abaixo de 5%</button>
-          <button class="arla-status-tab" id="arla-tab-status-acima" onclick="arlaSetStatusTab('acima',this)" style="padding:7px 16px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--text2);font-size:13px;font-weight:600;cursor:pointer;transition:.2s">✅ Acima de 5%</button>
+          <button class="arla-status-tab active" id="arla-tab-status-critico" onclick="arlaSetStatusTab('critico',this)" style="padding:7px 16px;border-radius:8px;border:1px solid rgba(239,68,68,.4);background:rgba(239,68,68,.12);color:var(--red);font-size:13px;font-weight:600;cursor:pointer;transition:.2s">🔴 Crítico</button>
+          <button class="arla-status-tab" id="arla-tab-status-atencao" onclick="arlaSetStatusTab('atencao',this)" style="padding:7px 16px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--text2);font-size:13px;font-weight:600;cursor:pointer;transition:.2s">🟡 Atenção</button>
+          <button class="arla-status-tab" id="arla-tab-status-ideal" onclick="arlaSetStatusTab('ideal',this)" style="padding:7px 16px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--text2);font-size:13px;font-weight:600;cursor:pointer;transition:.2s">🟢 Ideal</button>
           <button class="arla-status-tab" id="arla-tab-status-todos" onclick="arlaSetStatusTab('todos',this)" style="padding:7px 16px;border-radius:8px;border:1px solid var(--border);background:none;color:var(--text2);font-size:13px;font-weight:600;cursor:pointer;transition:.2s">📋 Todos SRC</button>
         </div>
         <!-- Filtros -->
@@ -1232,6 +1236,41 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
 
         <!-- Conteúdo -->
         <div id="arla-conteudo"></div>
+      </div>
+    </div>
+
+    <!-- ABA SEGMENTOS (metas por segmento + mapeamento de operações) -->
+    <div id="arla-tab-segmentos" style="display:none">
+      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:16px">
+        <div style="font-size:14px;font-weight:700;margin-bottom:6px">🎯 Faixas de Meta por Segmento</div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:16px;line-height:1.6">
+          Cada segmento tem sua própria faixa ideal de consumo de Arla. O relatório principal mostra por padrão só as placas na <b style="color:var(--red)">faixa vermelha (crítico)</b> — abaixo do mínimo ou acima do máximo. Edite os valores conforme o estudo da operação.
+        </div>
+        <div style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;font-size:13px">
+            <thead><tr style="text-align:center;color:var(--text2);font-size:11px;text-transform:uppercase">
+              <th style="text-align:left;padding:8px">Segmento</th>
+              <th style="padding:8px">Meta (%)</th>
+              <th style="padding:8px;color:var(--red)">Vermelho ↓</th>
+              <th style="padding:8px;color:#f59e0b">Verde ↓</th>
+              <th style="padding:8px;color:#f59e0b">Verde ↑</th>
+              <th style="padding:8px;color:var(--red)">Vermelho ↑</th>
+            </tr></thead>
+            <tbody id="arla-segmentos-tbody"></tbody>
+          </table>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:10px;line-height:1.6">
+          <b>Vermelho ↓</b>: abaixo deste valor = crítico (baixo) · <b>Verde ↓/↑</b>: faixa ideal · <b>Vermelho ↑</b>: acima deste valor = crítico (alto). Entre Vermelho e Verde = faixa amarela (atenção).
+        </div>
+      </div>
+
+      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:20px">
+        <div style="font-size:14px;font-weight:700;margin-bottom:6px">🔗 Mapear Operação → Segmento</div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:14px;line-height:1.6">
+          Diga a qual segmento cada operação pertence. Operações sem segmento definido continuam na regra antiga (alerta só abaixo de 5%, sem alerta de excesso).
+        </div>
+        <input type="text" class="filter-input" id="arla-segmap-busca" placeholder="🔍 Buscar operação..." oninput="arlaRenderSegmentosMap()" style="margin-bottom:12px;width:100%;box-sizing:border-box">
+        <div id="arla-segmentos-map-lista" style="display:flex;flex-direction:column;gap:6px"></div>
       </div>
     </div>
 
@@ -1836,7 +1875,7 @@ async function idbLoad() {
 }
 
 // ── STATE ─────────────────────────────────────────────────────────────────────
-let state = { maquinas:[], abastecimentos:[], semanas:{}, tab:'semanal', sheetsUrl:'', arlaEgr:[], arlaMeses:[], arlaGrupos:[], dieselPrecos:{}, opConfigs:{}, metaRotaModelos:{} };
+let state = { maquinas:[], abastecimentos:[], semanas:{}, tab:'semanal', sheetsUrl:'', arlaEgr:[], arlaMeses:[], arlaGrupos:[], arlaSegmentos:{}, opSegmento:{}, dieselPrecos:{}, opConfigs:{}, metaRotaModelos:{} };
 let selectedIds = new Set();
 let abastFiltrados = [];
 
@@ -5384,6 +5423,31 @@ function onShowExcluir() {
 }
 
 // ── CONTROLE DE ARLA ─────────────────────────────────────────────────────────
+// ── ARLA: SEGMENTOS E FAIXAS DE META ──────────────────────────────────────────
+const ARLA_SEGMENTOS_DEFAULT = {
+  'Distribuição (Truck)':     { meta:5.0, vermelhoBaixo:3.0, verdeBaixo:4.0, verdeAlto:6.0, vermelhoAlto:7.0  },
+  'Rodoviário (Cavalos)':     { meta:5.5, vermelhoBaixo:3.5, verdeBaixo:4.5, verdeAlto:6.5, vermelhoAlto:7.5  },
+  'Químico':                  { meta:6.0, vermelhoBaixo:4.0, verdeBaixo:5.0, verdeAlto:7.0, vermelhoAlto:8.0  },
+  'Florestal':                { meta:6.5, vermelhoBaixo:4.5, verdeBaixo:5.5, verdeAlto:7.5, vermelhoAlto:8.5  },
+  'Mineração / Caçamba':      { meta:7.5, vermelhoBaixo:5.0, verdeBaixo:6.0, verdeAlto:9.0, vermelhoAlto:10.0 },
+};
+// Regra antiga (sem segmento mapeado): só alerta abaixo de 5%, nunca por excesso — mantém compatibilidade
+const ARLA_SEGMENTO_LEGADO = { meta:5.0, vermelhoBaixo:5.0, verdeBaixo:5.0, verdeAlto:Infinity, vermelhoAlto:Infinity };
+
+function arlaGetSegmentoConfig(operacao) {
+  const nomeSeg = state.opSegmento && state.opSegmento[operacao];
+  if (nomeSeg && window._arlaState.segmentos[nomeSeg]) return window._arlaState.segmentos[nomeSeg];
+  return ARLA_SEGMENTO_LEGADO;
+}
+
+function arlaClassificar(pct, seg) {
+  if (pct < seg.vermelhoBaixo) return { status:'CRITICO', direcao:'baixo' };
+  if (pct < seg.verdeBaixo)    return { status:'ATENCAO', direcao:'baixo' };
+  if (pct <= seg.verdeAlto)    return { status:'IDEAL',   direcao:null   };
+  if (pct <= seg.vermelhoAlto) return { status:'ATENCAO', direcao:'alto' };
+  return { status:'CRITICO', direcao:'alto' };
+}
+
 const ARLA_EGR_DEFAULT = ["LK52LRGP", "LM24FWGP", "LK52NRGP", "LK52LZGP", "LM24GCGP", "LK52NYGP", "LK44BCGP", "LK52MWGP", "LK43ZZGP", "LK52MRGP", "LK43ZRGP", "LK52MKGP", "LK52PGGP", "LK52LGGP", "LK44BJGP", "LM34ZHGP", "LM34ZJGP", "LJ39YLGP", "LT85YSGP", "LK16LRGP", "LL20LRGP", "LT85ZNGP", "LT97NKGP", "LT85ZDGP", "LL20KFGP", "LK16LZGP", "LK16KVGP", "LL20HZGP", "LJ39ZNGP", "LW96TCGP", "LT89LGGP", "LT85NNGP", "LJ40DNGP", "LK16KJGP", "LJ49MJGP", "LJ39XHGP", "LT85ZSGP", "LT85RTGP", "LL20LZGP", "LK16DRGP", "LL20LSGP", "LT85ZWGP", "LT85NTGP", "LL20LJGP", "LL20LCGP", "LJ39VFGP", "LT85WBGP", "LT85SLGP", "LT89JHGP", "LJ49LWGP", "LT85XHGP", "LK16GCGP", "LT85YXGP", "LK16MFGP", "LT85NCGP", "LT85TXGP", "LT85YYGP", "LL20KWGP", "LJ39TXGP", "LT85YBGP", "LT85WVGP", "LK16JJGP", "LK16FXGP", "LW96TJGP", "LT85TRGP", "LT89KRGP", "LK16GHGP", "LW96SWGP", "LK16KCGP", "LT85PXGP", "MD05RSGP", "LT85XDGP", "LK16ZCGP", "LL20JNGP", "LW96TNGP", "LT85XSGP", "LJ39TRGP", "LT97PLGP", "LJ39XBGP", "LW96TPGP", "LW96TGGP", "LT85SBGP", "LK16GMGP", "LJ39YYGP", "LK16CWGP", "LJ39WXGP", "LT89KBGP", "LJ40BZGP", "LJ39VLGP", "LL20MBGP", "LK16CJGP", "LT85TCGP", "LJ39WTGP", "LT97NSGP", "LT85TJGP", "LT86BDGP", "LT89HKGP", "LT89JRGP", "LK16JWGP", "LL20HRGP", "LK16DDGP", "LW96STGP", "LT85MKGP", "LK16FRGP", "LK16GKGP", "LW96TLGP", "LT85RLGP", "LT85NGGP", "LJ39ZGGP", "LL20LPGP", "LT89HTGP", "LW96TFGP", "LJ49MFGP", "LL20JLGP", "LL22LSGP", "LK16JBGP", "LT85WLGP", "LW96SZGP", "LK16DSGP", "LK16DMGP", "LT85RRGP", "LT85RGGP", "LT85WKGP", "LT85RFGP", "LT85PTGP", "LT85PFGP", "LJ49LYGP", "LK16LBGP", "LK16DWGP", "LJ40BRGP", "LL20JFGP", "LJ49LZGP", "LT85ZZGP", "LJ49LXGP", "LT85YNGP", "LT85TPGP", "LT85SYGP", "LT85MRGP", "LW96TRGP", "LJ39XZGP", "LJ49MKGP", "LT97MHGP", "LL20LVGP", "LK16FMGP", "LK16LXGP", "LL20JRGP", "LT89LLGP", "LJ39VRGP", "LK16JRGP", "LJ40DCGP", "LT89KYGP", "LT85YFGP", "LJ39WNGP", "LJ40BHGP", "LW96TDGP", "LT85STGP", "LT85XYGP", "LK16HMGP", "LT85VCGP", "LT89KJGP", "LT89LVGP", "LJ39YGGP", "LJ49MLGP", "LK16FFGP", "LJ40CNGP", "ENZ9H39", "EGJ6E55", "FIY8C17", "GHK9A16", "FKG9J56", "FK02J03", "FXG6D19", "GJV3C99", "FSG1D75", "FZJ7I47", "FVW0I23", "FXZ9F06", "FCA1B34", "FZA7I32", "CUK7C34", "FCW6C69", "GCH2C69", "GAT7I65"];
 
 // Estado Arla
@@ -5393,7 +5457,8 @@ window._arlaState = {
   meses: [],       // [{id, label, dados, importadoEm}]
   mesAtual: null,
   grupos: [],
-  egrSet: new Set()
+  egrSet: new Set(),
+  segmentos: JSON.parse(JSON.stringify(ARLA_SEGMENTOS_DEFAULT))
 };
 
 function arlaInit() {
@@ -5422,6 +5487,19 @@ function arlaInit() {
   } else {
     const savedMeses = localStorage.getItem('arla_meses');
     if (savedMeses) { try { window._arlaState.meses = JSON.parse(savedMeses); } catch(e) {} }
+  }
+  // Carrega faixas de segmento (meta/verde/amarela/vermelha): prioridade = state (Firebase) > localStorage > default
+  if (state.arlaSegmentos && Object.keys(state.arlaSegmentos).length) {
+    window._arlaState.segmentos = state.arlaSegmentos;
+  } else {
+    const savedSeg = localStorage.getItem('arla_segmentos');
+    if (savedSeg) { try { window._arlaState.segmentos = JSON.parse(savedSeg); } catch(e) {} }
+  }
+  // Carrega mapeamento Operação → Segmento: prioridade = state (Firebase) > localStorage
+  if (!state.opSegmento) state.opSegmento = {};
+  if (!Object.keys(state.opSegmento).length) {
+    const savedMap = localStorage.getItem('arla_op_segmento');
+    if (savedMap) { try { state.opSegmento = JSON.parse(savedMap); } catch(e) {} }
   }
   // Compatibilidade com formato antigo
   const savedDados = localStorage.getItem('arla_dados');
@@ -5540,11 +5618,97 @@ function arlaOnShow() {
 }
 
 function arlaSetTab(tab, el) {
-  ['relatorio','egr','grupos'].forEach(t => {
+  ['relatorio','segmentos','egr','grupos'].forEach(t => {
     document.getElementById('arla-tab-' + t).style.display = t === tab ? '' : 'none';
   });
   document.querySelectorAll('.arla-tab').forEach(b => b.classList.remove('active'));
   if (el) el.classList.add('active');
+  if (tab === 'segmentos') { arlaRenderSegmentosTabela(); arlaRenderSegmentosMap(); }
+}
+
+// ── SEGMENTOS: tabela de faixas editável ──────────────────────────────────────
+function arlaRenderSegmentosTabela() {
+  const tbody = document.getElementById('arla-segmentos-tbody');
+  if (!tbody) return;
+  const segs = window._arlaState.segmentos;
+  const campos = ['meta','vermelhoBaixo','verdeBaixo','verdeAlto','vermelhoAlto'];
+  tbody.innerHTML = Object.entries(segs).map(([nome, cfg]) => {
+    const inputs = campos.map(c =>
+      `<td style="padding:6px;text-align:center"><input type="number" step="0.1" value="${cfg[c]}" onchange="arlaOnSegmentoChange('${nome.replace(/'/g,"&apos;")}','${c}',this.value)" style="width:70px;text-align:center;background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:5px;font-size:13px"></td>`
+    ).join('');
+    return `<tr style="border-bottom:1px solid var(--border)"><td style="padding:8px;font-weight:600">${nome}</td>${inputs}</tr>`;
+  }).join('');
+}
+
+function arlaOnSegmentoChange(nome, campo, valor) {
+  const v = parseFloat(valor);
+  if (isNaN(v)) return;
+  window._arlaState.segmentos[nome][campo] = v;
+  state.arlaSegmentos = window._arlaState.segmentos;
+  localStorage.setItem('arla_segmentos', JSON.stringify(state.arlaSegmentos));
+  saveState();
+  arlaReclassificarTodos();
+  showToast('Faixa de ' + nome + ' atualizada', 'success');
+}
+
+// ── SEGMENTOS: mapeamento Operação → Segmento ────────────────────────────────
+function arlaRenderSegmentosMap() {
+  const cont = document.getElementById('arla-segmentos-map-lista');
+  if (!cont) return;
+  const busca = (document.getElementById('arla-segmap-busca')?.value || '').toLowerCase();
+  // Operações vêm dos dados já importados (todos os meses, não só o atual)
+  const opsSet = new Set();
+  (window._arlaState.meses || []).forEach(m => (m.dados || []).forEach(r => { if (r.operacao) opsSet.add(r.operacao); }));
+  (window._arlaState.processados || []).forEach(r => { if (r.operacao) opsSet.add(r.operacao); });
+  let ops = [...opsSet].sort();
+  if (busca) ops = ops.filter(o => o.toLowerCase().includes(busca));
+
+  if (!ops.length) {
+    cont.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:12px">Nenhuma operação encontrada. Carregue um relatório de Arla primeiro.</div>';
+    return;
+  }
+
+  const segNomes = Object.keys(window._arlaState.segmentos);
+  cont.innerHTML = ops.map(op => {
+    const atual = state.opSegmento[op] || '';
+    const opEsc = op.replace(/'/g,"&apos;");
+    const options = '<option value="">— Sem segmento (regra antiga 5%) —</option>' +
+      segNomes.map(s => `<option value="${s}"${s===atual?' selected':''}>${s}</option>`).join('');
+    return `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--bg3);border-radius:8px;flex-wrap:wrap">
+      <span style="flex:1;font-size:13px;font-weight:600;min-width:160px">${op.replace(/_/g,' ')}</span>
+      <select class="filter-select" style="min-width:240px" onchange="arlaOnOpSegmentoChange('${opEsc}',this.value)">${options}</select>
+    </div>`;
+  }).join('');
+}
+
+function arlaOnOpSegmentoChange(operacao, segmento) {
+  if (segmento) state.opSegmento[operacao] = segmento;
+  else delete state.opSegmento[operacao];
+  localStorage.setItem('arla_op_segmento', JSON.stringify(state.opSegmento));
+  saveState();
+  arlaReclassificarTodos();
+  showToast(segmento ? operacao.replace(/_/g,' ') + ' → ' + segmento : 'Segmento removido de ' + operacao.replace(/_/g,' '), 'success');
+}
+
+// Recalcula status/direção de todos os registros já importados (todos os meses) sem precisar reimportar
+function arlaReclassificarTodos() {
+  const egr = window._arlaState.egrSet;
+  function reclass(r) {
+    const isEgr = egr.has(r.placa);
+    const pct = (!isEgr && r.diesel > 0) ? (r.arla / r.diesel * 100) : null;
+    const segCfg = arlaGetSegmentoConfig(r.operacao);
+    let status, direcao;
+    if (isEgr) { status = 'EGR'; direcao = null; }
+    else if (pct === null) { status = 'SEM_DIESEL'; direcao = null; }
+    else { const c = arlaClassificar(pct, segCfg); status = c.status; direcao = c.direcao; }
+    r.pct = pct; r.status = status; r.direcao = direcao; r.segmento = state.opSegmento[r.operacao] || null;
+  }
+  (window._arlaState.meses || []).forEach(m => (m.dados || []).forEach(reclass));
+  (window._arlaState.processados || []).forEach(reclass);
+  state.arlaMeses = window._arlaState.meses;
+  localStorage.setItem('arla_meses', JSON.stringify(state.arlaMeses));
+  saveState();
+  if (window._arlaState.processados && window._arlaState.processados.length) arlaExibirResultado();
 }
 
 // ── CARREGAR ARQUIVO ──────────────────────────────────────────────────────────
@@ -5603,8 +5767,13 @@ function arlaProcessar(rows) {
     const arla = getNum(row, 'volarla', 'arla', 'vol.arla', 'litrosarla');
     const isEgr = egr.has(placa);
     const pct = (!isEgr && diesel > 0) ? (arla / diesel * 100) : null;
-    const status = isEgr ? 'EGR' : (pct === null ? 'SEM_DIESEL' : pct >= 5 ? 'OK' : 'FAIL');
-    return { placa, operacao, modelo, diesel, arla, pct, status };
+    const segNome = state.opSegmento[operacao] || null;
+    const segCfg = arlaGetSegmentoConfig(operacao);
+    let status, direcao;
+    if (isEgr) { status = 'EGR'; direcao = null; }
+    else if (pct === null) { status = 'SEM_DIESEL'; direcao = null; }
+    else { const c = arlaClassificar(pct, segCfg); status = c.status; direcao = c.direcao; }
+    return { placa, operacao, modelo, diesel, arla, pct, status, direcao, segmento: segNome };
   }).filter(r => r.placa);
 
   // Salva como mês
@@ -5686,12 +5855,14 @@ function arlaExibirResultado() {
   if (infoEl && mesAtual) infoEl.textContent = 'Importado em ' + (mesAtual.importadoEm || '—');
 
   const srcDados = dados.filter(r => r.status !== 'EGR' && r.status !== 'SEM_DIESEL');
-  const fail = srcDados.filter(r => r.status === 'FAIL');
-  const ok = srcDados.filter(r => r.status === 'OK');
+  const fail = srcDados.filter(r => r.status === 'CRITICO');
+  const atencao = srcDados.filter(r => r.status === 'ATENCAO');
+  const ok = srcDados.filter(r => r.status === 'IDEAL');
   const egr = dados.filter(r => r.status === 'EGR');
 
   document.getElementById('arla-kpi-total').textContent = srcDados.length;
   document.getElementById('arla-kpi-fail').textContent = fail.length;
+  document.getElementById('arla-kpi-atencao').textContent = atencao.length;
   document.getElementById('arla-kpi-ok').textContent = ok.length;
   document.getElementById('arla-kpi-egr').textContent = egr.length;
 
@@ -5709,10 +5880,11 @@ function arlaExibirResultado() {
     const circ = 2 * Math.PI * r;
     const seg = (pct) => (pct/100) * circ;
     const segs = [
-      {val:fail.length, color:'#c0392b', label:'Abaixo 5%'},
-      {val:ok.length,   color:'#2a9d6a', label:'OK'},
-      {val:egr.length,  color:'#3b82f6', label:'EGR'},
-      {val:semD.length, color:'#9a8f85', label:'Sem diesel'},
+      {val:fail.length,    color:'#c0392b', label:'Crítico'},
+      {val:atencao.length, color:'#f59e0b', label:'Atenção'},
+      {val:ok.length,      color:'#2a9d6a', label:'Ideal'},
+      {val:egr.length,     color:'#3b82f6', label:'EGR'},
+      {val:semD.length,    color:'#9a8f85', label:'Sem diesel'},
     ];
     let offset = 0;
     const paths = segs.map(s => {
@@ -5733,11 +5905,11 @@ function arlaExibirResultado() {
     </div>`;
   }
 
-  // Reset status tab to abaixo when loading new data
-  window._arlaStatusTab = 'abaixo';
+  // Reset status tab to crítico quando carregar dados novos (foco do gestor)
+  window._arlaStatusTab = 'critico';
   document.querySelectorAll('.arla-status-tab').forEach(b => { b.style.background='none'; b.style.color='var(--text2)'; b.style.borderColor='var(--border)'; });
-  const tabAbaixo = document.getElementById('arla-tab-status-abaixo');
-  if (tabAbaixo) { tabAbaixo.style.background='rgba(239,68,68,.12)'; tabAbaixo.style.color='var(--red)'; tabAbaixo.style.borderColor='rgba(239,68,68,.4)'; }
+  const tabCritico = document.getElementById('arla-tab-status-critico');
+  if (tabCritico) { tabCritico.style.background='rgba(239,68,68,.12)'; tabCritico.style.color='var(--red)'; tabCritico.style.borderColor='rgba(239,68,68,.4)'; }
 
   // Badge no nav
   const badge = document.getElementById('arla-nav-badge');
@@ -5815,7 +5987,7 @@ document.addEventListener('click', e => {
   }
 });
 
-window._arlaStatusTab = 'abaixo';
+window._arlaStatusTab = 'critico';
 
 function arlaSetStatusTab(tab, el) {
   window._arlaStatusTab = tab;
@@ -5825,7 +5997,7 @@ function arlaSetStatusTab(tab, el) {
     b.style.borderColor = 'var(--border)';
   });
   if (el) {
-    const colors = { abaixo: ['rgba(239,68,68,.12)', 'var(--red)', 'rgba(239,68,68,.4)'], acima: ['rgba(34,197,94,.12)', 'var(--green)', 'rgba(34,197,94,.4)'], todos: ['rgba(79,142,247,.12)', 'var(--accent)', 'rgba(192,57,43,.4)'] };
+    const colors = { critico: ['rgba(239,68,68,.12)', 'var(--red)', 'rgba(239,68,68,.4)'], atencao: ['rgba(245,158,11,.12)', '#f59e0b', 'rgba(245,158,11,.4)'], ideal: ['rgba(34,197,94,.12)', 'var(--green)', 'rgba(34,197,94,.4)'], todos: ['rgba(79,142,247,.12)', 'var(--accent)', 'rgba(192,57,43,.4)'] };
     const [bg, color, border] = colors[tab] || colors.todos;
     el.style.background = bg; el.style.color = color; el.style.borderColor = border;
   }
@@ -5836,20 +6008,22 @@ function arlaRenderRelatorio() {
   const busca = (document.getElementById('arla-busca')?.value || '').toLowerCase();
   const opF = arlaGetSelectedOps();
   const dados = window._arlaState.processados;
-  const tab = window._arlaStatusTab || 'abaixo';
+  const tab = window._arlaStatusTab || 'critico';
 
   // Atualiza KPIs com base nas operações selecionadas
   const dadosFiltradosOp = opF.size ? dados.filter(r => opF.has(r.operacao)) : dados;
   const srcFiltrado = dadosFiltradosOp.filter(r => r.status !== 'EGR' && r.status !== 'SEM_DIESEL');
   document.getElementById('arla-kpi-total').textContent = srcFiltrado.length;
-  document.getElementById('arla-kpi-fail').textContent = srcFiltrado.filter(r => r.status === 'FAIL').length;
-  document.getElementById('arla-kpi-ok').textContent = srcFiltrado.filter(r => r.status === 'OK').length;
+  document.getElementById('arla-kpi-fail').textContent = srcFiltrado.filter(r => r.status === 'CRITICO').length;
+  document.getElementById('arla-kpi-atencao').textContent = srcFiltrado.filter(r => r.status === 'ATENCAO').length;
+  document.getElementById('arla-kpi-ok').textContent = srcFiltrado.filter(r => r.status === 'IDEAL').length;
   document.getElementById('arla-kpi-egr').textContent = dadosFiltradosOp.filter(r => r.status === 'EGR').length;
 
   // Filtra por status tab
   let registros = dadosFiltradosOp.filter(r => r.status !== 'EGR' && r.status !== 'SEM_DIESEL');
-  if (tab === 'abaixo') registros = registros.filter(r => r.status === 'FAIL');
-  else if (tab === 'acima') registros = registros.filter(r => r.status === 'OK');
+  if (tab === 'critico') registros = registros.filter(r => r.status === 'CRITICO');
+  else if (tab === 'atencao') registros = registros.filter(r => r.status === 'ATENCAO');
+  else if (tab === 'ideal') registros = registros.filter(r => r.status === 'IDEAL');
   if (busca) registros = registros.filter(r => (r.placa + r.operacao + r.modelo).toLowerCase().includes(busca));
 
   // Para compatibilidade com o código existente
@@ -5864,28 +6038,42 @@ function arlaRenderRelatorio() {
 
   const container = document.getElementById('arla-conteudo');
   if (!fail.length) {
-    const emptyMsg = window._arlaStatusTab === 'acima' ? 'Nenhuma placa acima de 5%' : window._arlaStatusTab === 'todos' ? 'Nenhum registro encontrado' : 'Nenhuma placa abaixo de 5%';
+    const emptyMsgs = { critico:'Nenhuma placa em estado crítico 🎉', atencao:'Nenhuma placa em atenção', ideal:'Nenhuma placa na faixa ideal', todos:'Nenhum registro encontrado' };
+    const emptyMsg = emptyMsgs[window._arlaStatusTab] || emptyMsgs.todos;
   container.innerHTML = '<div class="empty" style="padding:40px"><div class="empty-icon">✅</div><div class="empty-text">' + emptyMsg + '</div></div>';
     return;
   }
 
   let html = '';
 
+  // Calcula desvio em relação à faixa ideal (verde) de cada registro — funciona pros dois lados (baixo/alto)
+  function arlaDesvio(r) {
+    if (r.pct === null) return 0;
+    const seg = arlaGetSegmentoConfig(r.operacao);
+    if (r.pct < seg.verdeBaixo) return seg.verdeBaixo - r.pct;
+    if (r.pct > seg.verdeAlto)  return r.pct - seg.verdeAlto;
+    return 0;
+  }
+
+  const tabLabels = { critico:'crítica(s)', atencao:'em atenção', ideal:'na faixa ideal', todos:'no relatório' };
+  const tabLabel = tabLabels[window._arlaStatusTab] || tabLabels.todos;
+
   // Ranking por operação
   html += '<div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:16px">';
   html += '<div style="padding:14px 18px;border-bottom:1px solid var(--border);font-size:15px;font-weight:600;display:flex;align-items:center;justify-content:space-between">';
   html += '<span>📍 Ranking por Operação</span><span class="comp-badge">' + Object.keys(byOp).length + ' operações</span></div>';
   html += '<div style="overflow-x:auto"><table><thead><tr>';
-  html += '<th>Operação</th><th style="text-align:center">Placas Abaixo</th><th style="text-align:center">Pior %</th><th style="text-align:center">Média %</th>';
+  html += '<th>Operação</th><th style="text-align:center">Placas ' + tabLabel + '</th><th style="text-align:center">Maior Desvio</th><th style="text-align:center">Média %</th>';
   html += '</tr></thead><tbody>';
   Object.entries(byOp).sort((a,b) => b[1].length - a[1].length).forEach(([op, rows]) => {
-    const pcts = rows.map(r => r.pct);
-    const pior = Math.min(...pcts);
-    const media = pcts.reduce((a,b)=>a+b,0)/pcts.length;
+    const pcts = rows.map(r => r.pct).filter(p => p !== null);
+    const piorRow = rows.reduce((a,b) => arlaDesvio(b) > arlaDesvio(a) ? b : a, rows[0]);
+    const piorDesvio = arlaDesvio(piorRow);
+    const media = pcts.length ? pcts.reduce((a,b)=>a+b,0)/pcts.length : 0;
     html += '<tr>';
     html += '<td style="font-weight:600">' + op.replace(/_/g,' ') + '</td>';
     html += '<td style="text-align:center"><span class="badge badge-red">' + rows.length + '</span></td>';
-    html += '<td style="text-align:center"><span class="badge badge-red">' + pior.toFixed(1) + '%</span></td>';
+    html += '<td style="text-align:center"><span class="badge badge-red">' + (piorDesvio>0 ? (piorRow.direcao==='baixo'?'↓ ':'↑ ')+piorDesvio.toFixed(1)+'pp' : '—') + '</span></td>';
     html += '<td style="text-align:center">' + media.toFixed(1) + '%</td>';
     html += '</tr>';
   });
@@ -5893,24 +6081,28 @@ function arlaRenderRelatorio() {
 
   // Tabela detalhada por operação
   Object.entries(byOp).sort((a,b) => b[1].length - a[1].length).forEach(([op, rows]) => {
-    const sorted = rows.sort((a,b) => a.pct - b.pct);
+    const sorted = rows.sort((a,b) => arlaDesvio(b) - arlaDesvio(a));
     html += '<div style="margin-bottom:12px">';
-    const isAbaixo = window._arlaStatusTab !== 'acima';
-    const headerColor = isAbaixo ? 'var(--red)' : 'var(--green)';
-    const headerIcon = isAbaixo ? '⚠️' : '✅';
-    const headerLabel = isAbaixo ? ' placa(s) abaixo de 5%' : ' placa(s) acima de 5%';
+    const tabAtual = window._arlaStatusTab;
+    const headerColor = tabAtual === 'ideal' ? 'var(--green)' : tabAtual === 'atencao' ? '#f59e0b' : 'var(--red)';
+    const headerIcon  = tabAtual === 'ideal' ? '✅' : tabAtual === 'atencao' ? '🟡' : '🔴';
+    const headerLabel = ' placa(s) ' + tabLabel;
     html += '<div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px 10px 0 0;padding:11px 16px;font-size:13px;font-weight:700;color:' + headerColor + ';display:flex;align-items:center;gap:8px">';
     html += headerIcon + ' ' + op.replace(/_/g,' ') + '<span style="font-size:11px;font-weight:400;color:var(--text2);margin-left:4px">' + rows.length + headerLabel + '</span></div>';
     html += '<div style="background:var(--bg2);border:1px solid var(--border);border-top:none;border-radius:0 0 10px 10px;overflow:hidden">';
     html += '<div class="arla-row arla-row-header"><span>Placa</span><span>Modelo</span><span style="text-align:center">Diesel</span><span style="text-align:center">Arla</span><span style="text-align:center">%</span><span style="text-align:center">Status</span></div>';
     sorted.forEach(r => {
+      const pctColor = r.status === 'IDEAL' ? 'var(--green)' : r.status === 'ATENCAO' ? '#f59e0b' : 'var(--red)';
+      const badgeClass = r.status === 'IDEAL' ? 'arla-badge-ok' : r.status === 'ATENCAO' ? 'arla-badge-atencao' : 'arla-badge-fail';
+      const dirSeta = r.direcao === 'baixo' ? '↓' : r.direcao === 'alto' ? '↑' : '';
+      const badgeLabel = r.status === 'IDEAL' ? '✅ IDEAL' : (r.status === 'ATENCAO' ? '🟡 ATENÇÃO ' : '🔴 CRÍTICO ') + dirSeta;
       html += '<div class="arla-row">';
       html += '<span style="font-family:monospace;font-weight:700">' + r.placa + '</span>';
       html += '<span style="font-size:12px;color:var(--text2)">' + (r.modelo||'—') + '</span>';
       html += '<span style="text-align:center">' + r.diesel.toFixed(0) + 'L</span>';
       html += '<span style="text-align:center">' + r.arla.toFixed(1) + 'L</span>';
-      html += '<span style="text-align:center;font-weight:700;color:var(--red)">' + (r.pct !== null ? r.pct.toFixed(1)+'%' : '—') + '</span>';
-      html += '<span><div class="' + (r.status === 'OK' ? 'arla-badge-ok' : 'arla-badge-fail') + '">' + (r.status === 'OK' ? '✅ ACIMA' : '⚠️ ABAIXO') + '</div></span>';
+      html += '<span style="text-align:center;font-weight:700;color:' + pctColor + '">' + (r.pct !== null ? r.pct.toFixed(1)+'%' : '—') + '</span>';
+      html += '<span><div class="' + badgeClass + '">' + badgeLabel + '</div></span>';
       html += '</div>';
     });
     html += '</div></div>';
@@ -6133,15 +6325,16 @@ function arlaBuildEmailHTML(registros, nomeGrupo, mesRef, obs) {
 
   let secoes = '';
   Object.entries(byOp).sort((a,b) => b[1].length - a[1].length).forEach(([op, rows]) => {
-    const sorted = rows.sort((a,b) => a.pct - b.pct);
-    secoes += '<tr><td colspan="5" style="background:#1e3a8a;padding:10px 16px;color:#fff;font-weight:700;font-size:13px">⚠️ ' + op.replace(/_/g,' ') + ' — ' + rows.length + ' placa(s) abaixo</td></tr>';
+    const sorted = rows.sort((a,b) => (a.direcao==='baixo'?a.pct:-a.pct) - (b.direcao==='baixo'?b.pct:-b.pct));
+    secoes += '<tr><td colspan="5" style="background:#1e3a8a;padding:10px 16px;color:#fff;font-weight:700;font-size:13px">🔴 ' + op.replace(/_/g,' ') + ' — ' + rows.length + ' placa(s) crítica(s)</td></tr>';
     sorted.forEach(r => {
+      const setaDir = r.direcao === 'baixo' ? '↓' : r.direcao === 'alto' ? '↑' : '';
       secoes += '<tr style="border-bottom:1px solid #e2e8f0">' +
         '<td style="padding:10px 14px;font-family:monospace;font-weight:700;color:#1e293b">' + r.placa + '</td>' +
         '<td style="padding:10px 14px;color:#475569;font-size:12px">' + (r.modelo||'—') + '</td>' +
         '<td style="padding:10px 14px;text-align:center;color:#1e293b">' + r.diesel.toFixed(0) + 'L</td>' +
         '<td style="padding:10px 14px;text-align:center;color:#1e293b">' + r.arla.toFixed(1) + 'L</td>' +
-        '<td style="padding:10px 14px;text-align:center;font-weight:700;color:#dc2626">' + (r.pct !== null ? r.pct.toFixed(1)+'%' : '—') + '</td>' +
+        '<td style="padding:10px 14px;text-align:center;font-weight:700;color:#dc2626">' + (r.pct !== null ? setaDir+' '+r.pct.toFixed(1)+'%' : '—') + '</td>' +
         '</tr>';
     });
   });
@@ -6153,7 +6346,7 @@ function arlaBuildEmailHTML(registros, nomeGrupo, mesRef, obs) {
     '<div style="font-size:12px;color:#93c5fd;margin-top:3px">Controle de Arla — ' + (mesRef || '') + (nomeGrupo ? ' · ' + nomeGrupo : '') + '</div>' +
     '</td></tr>' +
     '<tr><td style="background:#eff6ff;padding:10px 24px;font-size:12px;color:#1d4ed8;border-bottom:1px solid #bfdbfe">' +
-    '<strong>⚠️ Atenção:</strong> As placas abaixo estão com consumo de Arla inferior a 5% do Diesel.' +
+    '<strong>🔴 Atenção:</strong> As placas abaixo estão na faixa crítica de consumo de Arla — abaixo do mínimo (↓) ou acima do máximo (↑) esperado para o segmento.' +
     '</td></tr>' +
     (obs ? '<tr><td style="padding:14px 24px;font-size:13px;color:#334155;border-bottom:1px solid #e2e8f0;line-height:1.7;white-space:pre-line">' + obs + '</td></tr>' : '') +
     '<tr><td><table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">' +
@@ -6172,8 +6365,8 @@ function arlaEnviarEmailGrupo(grupoId) {
   const g = window._arlaState.grupos.find(g => g.id === grupoId);
   if (!g) return;
   const dados = window._arlaState.processados;
-  const registros = dados.filter(r => r.status === 'FAIL' && g.ops.includes(r.operacao));
-  if (!registros.length) { showToast('Nenhuma placa abaixo de 5% neste grupo', 'error'); return; }
+  const registros = dados.filter(r => r.status === 'CRITICO' && g.ops.includes(r.operacao));
+  if (!registros.length) { showToast('Nenhuma placa em estado crítico neste grupo', 'error'); return; }
   const html = arlaBuildEmailHTML(registros, g.nome, '', g.obs || '');
   navigator.clipboard.write([new ClipboardItem({'text/html': new Blob([html], {type:'text/html'})})]).then(() => {
     showToast('✅ Tabela copiada! Cole no e-mail (Ctrl+V)', 'success');
@@ -6188,13 +6381,13 @@ function arlaEnviarEmail() {
   // Pega operações selecionadas no filtro
   const selectedOps = arlaGetSelectedOps(); // Set vazio = todas
 
-  // Filtra só os FAIL das operações selecionadas
-  let dados = window._arlaState.processados.filter(r => r.status === 'FAIL');
+  // Filtra só os CRÍTICOS das operações selecionadas (faixa vermelha — abaixo do mínimo ou acima do máximo)
+  let dados = window._arlaState.processados.filter(r => r.status === 'CRITICO');
   if (selectedOps.size > 0) {
     dados = dados.filter(r => selectedOps.has(r.operacao));
   }
 
-  if (!dados.length) { showToast('Nenhuma máquina abaixo de 5% nas operações selecionadas', 'error'); return; }
+  if (!dados.length) { showToast('Nenhuma máquina em estado crítico nas operações selecionadas', 'error'); return; }
 
   // Nome do grupo para o cabeçalho do e-mail
   const opsLabel = selectedOps.size === 0
@@ -7841,18 +8034,20 @@ function arlaExportarExcel() {
   const dataHoje = new Date().toLocaleDateString('pt-BR');
   const fmtN = v => (v||0).toLocaleString('pt-BR', {minimumFractionDigits:1, maximumFractionDigits:1});
 
-  const fails = dados.filter(r => r.status === 'FAIL').sort((a,b) => (a.pct||0)-(b.pct||0));
-  const oks   = dados.filter(r => r.status === 'OK');
-  const egrs  = dados.filter(r => r.status === 'EGR');
-  const semD  = dados.filter(r => r.status === 'SEM_DIESEL');
+  const fails    = dados.filter(r => r.status === 'CRITICO').sort((a,b) => (a.direcao==='baixo'?(a.pct||0):-( a.pct||0)) - (b.direcao==='baixo'?(b.pct||0):-(b.pct||0)));
+  const atencoes = dados.filter(r => r.status === 'ATENCAO');
+  const oks      = dados.filter(r => r.status === 'IDEAL');
+  const egrs     = dados.filter(r => r.status === 'EGR');
+  const semD     = dados.filter(r => r.status === 'SEM_DIESEL');
 
   const porOp = {};
   dados.forEach(r => {
     const op = r.operacao||'—';
-    if (!porOp[op]) porOp[op]={total:0,fail:0,ok:0,diesel:0,arla:0};
+    if (!porOp[op]) porOp[op]={total:0,fail:0,atencao:0,ok:0,diesel:0,arla:0};
     porOp[op].total++;
-    if(r.status==='FAIL') porOp[op].fail++;
-    if(r.status==='OK') porOp[op].ok++;
+    if(r.status==='CRITICO') porOp[op].fail++;
+    if(r.status==='ATENCAO') porOp[op].atencao++;
+    if(r.status==='IDEAL') porOp[op].ok++;
     porOp[op].diesel+=(r.diesel||0); porOp[op].arla+=(r.arla||0);
   });
 
@@ -7866,20 +8061,24 @@ function arlaExportarExcel() {
   const mono  = bg => `font-family:"Courier New",monospace;font-weight:bold;font-size:10pt;text-align:center;padding:4px 8px;border:1px solid #CCCCCC;background-color:${bg};`;
 
   const rowBg = (r,i) => {
-    if(r.status==='FAIL') return i%2===0?'#FFF0F0':'#FFF8F8';
-    if(r.status==='OK')   return i%2===0?'#F0FFF4':'#F8FFF8';
+    if(r.status==='CRITICO') return i%2===0?'#FFF0F0':'#FFF8F8';
+    if(r.status==='ATENCAO') return i%2===0?'#FFFBEB':'#FFFDF5';
+    if(r.status==='IDEAL')   return i%2===0?'#F0FFF4':'#F8FFF8';
     return i%2===0?'#F5F5F5':'#FFFFFF';
   };
   const stStyle = (r,bg) => {
-    const map = {FAIL:base+'background-color:#FEE2E2;color:#991B1B;font-weight:bold;text-align:center;', OK:base+'background-color:#DCFCE7;color:#166534;font-weight:bold;text-align:center;', EGR:base+'background-color:#EFF6FF;color:#1E40AF;font-weight:bold;text-align:center;', SEM_DIESEL:base+'background-color:#FEF9C3;color:#854D0E;font-weight:bold;text-align:center;'};
+    const map = {CRITICO:base+'background-color:#FEE2E2;color:#991B1B;font-weight:bold;text-align:center;', ATENCAO:base+'background-color:#FEF3C7;color:#92400E;font-weight:bold;text-align:center;', IDEAL:base+'background-color:#DCFCE7;color:#166534;font-weight:bold;text-align:center;', EGR:base+'background-color:#EFF6FF;color:#1E40AF;font-weight:bold;text-align:center;', SEM_DIESEL:base+'background-color:#FEF9C3;color:#854D0E;font-weight:bold;text-align:center;'};
     return map[r.status]||cell(bg);
   };
-  const stLabel = r => ({FAIL:'ABAIXO 5%', OK:'OK', EGR:'EGR', SEM_DIESEL:'SEM DIESEL'}[r.status]||r.status);
+  const stLabel = r => {
+    const seta = r.direcao === 'baixo' ? ' ↓' : r.direcao === 'alto' ? ' ↑' : '';
+    return ({CRITICO:'CRÍTICO'+seta, ATENCAO:'ATENÇÃO'+seta, IDEAL:'IDEAL', EGR:'EGR', SEM_DIESEL:'SEM DIESEL'}[r.status]||r.status);
+  };
 
   const mkLinha = (r,i) => {
     const bg = rowBg(r,i);
     const pct = r.pct!==null ? r.pct.toFixed(1)+'%' : '—';
-    const pctColor = r.status==='FAIL'?'#CC0000':r.status==='OK'?'#166534':null;
+    const pctColor = r.status==='CRITICO'?'#CC0000':r.status==='ATENCAO'?'#92400E':r.status==='IDEAL'?'#166534':null;
     return `<tr>
       <td style="${mono(bg)}">${r.placa}</td>
       <td style="${cell(bg)}">${r.operacao||'—'}</td>
@@ -7906,10 +8105,10 @@ function arlaExportarExcel() {
 
   <tr><td colspan="7" style="${sec('#1F2937')}">Resumo</td></tr>
   <tr>
-    <td colspan="2" style="${cell('#FEE2E2')}"><b style="color:#991B1B">${fails.length}</b> &nbsp;Abaixo de 5%</td>
-    <td colspan="2" style="${cell('#DCFCE7')}"><b style="color:#166534">${oks.length}</b> &nbsp;OK (acima de 5%)</td>
+    <td colspan="2" style="${cell('#FEE2E2')}"><b style="color:#991B1B">${fails.length}</b> &nbsp;Crítico (faixa vermelha)</td>
+    <td colspan="2" style="${cell('#FEF3C7')}"><b style="color:#92400E">${atencoes.length}</b> &nbsp;Atenção (faixa amarela)</td>
+    <td style="${cell('#DCFCE7')}"><b style="color:#166534">${oks.length}</b> &nbsp;Ideal</td>
     <td style="${cell('#EFF6FF')}"><b style="color:#1E40AF">${egrs.length}</b> &nbsp;EGR</td>
-    <td style="${cell('#FEF9C3')}"><b style="color:#854D0E">${semD.length}</b> &nbsp;Sem diesel</td>
     <td style="${cell('#F5F5F5')}"><b>${dados.length}</b> &nbsp;Total</td>
   </tr>
   <tr><td colspan="7" style="padding:4px"></td></tr>
@@ -7918,9 +8117,9 @@ function arlaExportarExcel() {
   <tr>
     <td colspan="2" style="${thGrn}">Operacao</td>
     <td style="${thGrn}">Total</td>
-    <td style="${th}background-color:#991B1B;">Abaixo 5%</td>
-    <td style="${thGrn}">OK</td>
-    <td style="${thGrn}">Diesel (L)</td>
+    <td style="${th}background-color:#991B1B;">Crítico</td>
+    <td style="${th}background-color:#92400E;">Atenção</td>
+    <td style="${thGrn}">Ideal</td>
     <td style="${thGrn}">% Media Arla</td>
   </tr>
   ${Object.entries(porOp).sort((a,b)=>b[1].fail-a[1].fail).map(([op,d],i)=>{
@@ -7931,17 +8130,23 @@ function arlaExportarExcel() {
       <td colspan="2" style="${cell(bg)}">${op}</td>
       <td style="${numC(bg,null)}">${d.total}</td>
       <td style="${d.fail>0?base+'background-color:#FEE2E2;color:#991B1B;font-weight:bold;text-align:center;':numC(bg,null)}">${d.fail||'—'}</td>
+      <td style="${d.atencao>0?base+'background-color:#FEF3C7;color:#92400E;font-weight:bold;text-align:center;':numC(bg,null)}">${d.atencao||'—'}</td>
       <td style="${d.ok>0?base+'background-color:#DCFCE7;color:#166534;font-weight:bold;text-align:center;':numC(bg,null)}">${d.ok||'—'}</td>
-      <td style="${numC(bg,null)}">${fmtN(d.diesel)}</td>
       <td style="${numC(bg,pmColor)}">${pm}${pm!=='—'?'%':''}</td>
     </tr>`;
   }).join('')}
   <tr><td colspan="7" style="padding:4px"></td></tr>
 
   ${fails.length?`
-  <tr><td colspan="7" style="${sec('#991B1B')}">Abaixo de 5% (${fails.length} SRCs)</td></tr>
+  <tr><td colspan="7" style="${sec('#991B1B')}">Crítico — Faixa Vermelha (${fails.length} SRCs)</td></tr>
   <tr><td style="${th}">Placa</td><td style="${th}">Operacao</td><td style="${th}">Modelo</td><td style="${th}">Diesel (L)</td><td style="${th}">Arla (L)</td><td style="${th}">% Arla</td><td style="${th}">Status</td></tr>
   ${fails.map((r,i)=>mkLinha(r,i)).join('')}
+  <tr><td colspan="7" style="padding:4px"></td></tr>`:''}
+
+  ${atencoes.length?`
+  <tr><td colspan="7" style="${sec('#92400E')}">Atenção — Faixa Amarela (${atencoes.length} SRCs)</td></tr>
+  <tr><td style="${th}">Placa</td><td style="${th}">Operacao</td><td style="${th}">Modelo</td><td style="${th}">Diesel (L)</td><td style="${th}">Arla (L)</td><td style="${th}">% Arla</td><td style="${th}">Status</td></tr>
+  ${atencoes.map((r,i)=>mkLinha(r,i)).join('')}
   <tr><td colspan="7" style="padding:4px"></td></tr>`:''}
 
   <tr><td colspan="7" style="${sec('#374151')}">Todos os SRC (${dados.length})</td></tr>
