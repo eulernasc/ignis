@@ -5227,7 +5227,7 @@ function atualizarExcluirUI() {
   }
   if (alertas.length) {
     const concluidos = JSON.parse(localStorage.getItem('excluir_concluidos') || '[]');
-    const pendentes = alertas.filter(r => !concluidos.includes(r.placa + '|' + r.data));
+    const pendentes = alertas.filter(r => !concluidos.includes(r.placa + '|' + r.data + '|' + (r.hora||'')));
     if (pendentes.length) {
       banner.style.display = '';
       let html = '<div style="background:rgba(239,68,68,.12);border:1.5px solid rgba(239,68,68,.5);border-radius:12px;padding:16px 18px;margin-bottom:16px">';
@@ -5245,7 +5245,7 @@ function atualizarExcluirUI() {
         if (r.combustivel) html += '<span style="font-size:11px;color:var(--text2);margin-left:6px">' + r.combustivel + '</span>';
         if (r.motivo) html += '<div style="font-size:11px;color:var(--text2);margin-top:3px">📝 ' + r.motivo + '</div>';
         html += '</div>';
-        html += '<button class="btn btn-danger btn-sm" onclick="marcarConcluido(\'' + r.placa + '\',\'' + r.data + '\')">✓ Concluído</button>';
+        html += '<button class="btn btn-danger btn-sm" onclick="marcarConcluido(\'' + r.placa + '\',\'' + r.data + '\',\'' + (r.hora||'') + '\')">✓ Concluído</button>';
         html += '</div>';
       });
       html += '</div>';
@@ -5260,16 +5260,16 @@ function atualizarExcluirUI() {
   renderExcluirLista();
 }
 
-function marcarConcluido(placa, data) {
+function marcarConcluido(placa, data, hora) {
   const concluidos = JSON.parse(localStorage.getItem('excluir_concluidos') || '[]');
-  const key = placa + '|' + data;
+  const key = placa + '|' + data + '|' + (hora||'');
   if (!concluidos.includes(key)) concluidos.push(key);
   localStorage.setItem('excluir_concluidos', JSON.stringify(concluidos));
 
-  // Atualiza status na lista para EXCLUÍDO e remove alerta
+  // Atualiza status na lista para EXCLUÍDO e remove alerta — só na linha exata (placa+data+hora)
   const todos = window._excluirDadosTodos || [];
   todos.forEach(r => {
-    if (r.placa === placa && r.data === data) {
+    if (r.placa === placa && r.data === data && (r.hora||'') === (hora||'')) {
       r.status = 'EXCLUÍDO';
       r.alerta72h = false;
     }
@@ -5350,8 +5350,8 @@ function onShowExcluir() {
         const agora = new Date();
         const concluidos = JSON.parse(localStorage.getItem('excluir_concluidos') || '[]');
         dados.forEach(r => {
-          // Aplica marcações de concluído
-          if (concluidos.includes(r.placa + '|' + r.data)) {
+          // Aplica marcações de concluído (chave única: placa+data+hora)
+          if (concluidos.includes(r.placa + '|' + r.data + '|' + (r.hora||''))) {
             r.status = 'EXCLUÍDO';
             r.alerta72h = false;
           }
@@ -5367,7 +5367,7 @@ function onShowExcluir() {
               }
               if (!isNaN(d)) {
                 r.horasPassadas = (agora - d) / (1000 * 60 * 60);
-                if (!concluidos.includes(r.placa + '|' + r.data)) {
+                if (!concluidos.includes(r.placa + '|' + r.data + '|' + (r.hora||''))) {
                   r.alerta72h = r.status && r.status.toUpperCase().includes('AGUARDANDO') && r.horasPassadas >= 72;
                 }
               }
