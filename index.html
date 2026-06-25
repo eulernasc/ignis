@@ -2594,24 +2594,26 @@ function getOperacoes() {
 }
 function getMaquina(placa) { return state.maquinas.find(m=>m.placa===placa); }
 
+// Filtra uma lista de operações pra mostrar só as que têm veículos do tipo selecionado
+// tipoFiltro: '' (sem filtro), '__maquinas__'/'__tratores__'/'__pesada__'/'__leve__'/'__empilhadeiras__' (categoria), ou uma placa específica
+function filtrarOpsPorTipo(tipoFiltro, opsBase) {
+  if (!tipoFiltro) return opsBase;
+  if (tipoFiltro === '__maquinas__' || tipoFiltro === '__tratores__' || tipoFiltro === '__pesada__' || tipoFiltro === '__leve__' || tipoFiltro === '__empilhadeiras__') {
+    const tipoAlvo = tipoFiltro === '__maquinas__' ? 'maquina' : tipoFiltro === '__tratores__' ? 'trator' : tipoFiltro === '__pesada__' ? 'pesada' : tipoFiltro === '__leve__' ? 'leve' : 'empilhadeira';
+    const opsDoTipo = new Set(state.abastecimentos.filter(a => getTipoIgnis(a) === tipoAlvo).map(a => getMaquina(a.placa)?.operacao || a.operacao || '').filter(Boolean));
+    const filtradas = opsBase.filter(o => opsDoTipo.has(o));
+    return filtradas.length > 0 ? filtradas : opsBase;
+  }
+  const maq = getMaquina(tipoFiltro);
+  return maq?.operacao ? [maq.operacao] : opsBase;
+}
+
 function updateFilters() {
   const ops=getOperacoes();
 
   // Filtra operações conforme o filtro de máquina selecionado no dashboard
   const maqFiltro = document.getElementById('dash-maq-filter')?.value || '';
-  const getOpsParaFiltro = () => {
-    if (!maqFiltro) return ops;
-    if (maqFiltro === '__maquinas__' || maqFiltro === '__tratores__' || maqFiltro === '__pesada__' || maqFiltro === '__leve__' || maqFiltro === '__empilhadeiras__') {
-      const tipoAlvo = maqFiltro === '__maquinas__' ? 'maquina' : maqFiltro === '__tratores__' ? 'trator' : maqFiltro === '__pesada__' ? 'pesada' : maqFiltro === '__leve__' ? 'leve' : 'empilhadeira';
-      const opsDotipo = new Set(state.abastecimentos.filter(a => getTipoIgnis(a) === tipoAlvo).map(a => getMaquina(a.placa)?.operacao || a.operacao || '').filter(Boolean));
-      // Se nenhuma op encontrada pro tipo (dados sem tipoIgnis), retorna todas as ops
-      const filtradas = ops.filter(o => opsDotipo.has(o));
-      return filtradas.length > 0 ? filtradas : ops;
-    }
-    const maq = getMaquina(maqFiltro);
-    return maq?.operacao ? [maq.operacao] : ops;
-  };
-  const opsFiltradas = getOpsParaFiltro();
+  const opsFiltradas = filtrarOpsPorTipo(maqFiltro, ops);
 
   // Multi-select operações do dashboard
   const cb=document.getElementById('op-checkboxes');
@@ -2638,22 +2640,24 @@ function updateFilters() {
     sel.innerHTML='<option value="">Todas as Operações</option>'+ops.map(o=>`<option value="${o}">${o.replace(/_/g,' ')}</option>`).join('');
     sel.value=val;
   });
-  // Popular multi-select do Comparativo
+  // Popular multi-select do Comparativo (também filtrado pelo tipo selecionado)
+  const compMaqFiltro = document.getElementById('comp-maq-filter')?.value || '';
+  const compOpsFiltradas = filtrarOpsPorTipo(compMaqFiltro, ops);
   const compCb=document.getElementById('comp-op-checkboxes');
   if(compCb){
     const existingOps=new Set([...document.querySelectorAll('.comp-op-check')].map(c=>c.value));
     const hasExisting=existingOps.size>0;
     const currentChecked=new Set([...document.querySelectorAll('.comp-op-check:checked')].map(c=>c.value));
-    compCb.innerHTML=ops.map(o=>`
+    compCb.innerHTML=compOpsFiltradas.map(o=>`
       <label style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:13px">
         <input type="checkbox" class="comp-op-check" value="${o}" ${!hasExisting||currentChecked.has(o)||!existingOps.has(o)?'checked':''} onchange="onCompOpCheckChange()">
         ${o.replace(/_/g,' ')}
       </label>`).join('');
     const allCheck=document.getElementById('comp-op-all-check');
     if(allCheck){
-      const nChecked=hasExisting?[...document.querySelectorAll('.comp-op-check:checked')].length:ops.length;
-      allCheck.checked=nChecked===ops.length;
-      allCheck.indeterminate=nChecked>0&&nChecked<ops.length;
+      const nChecked=hasExisting?[...document.querySelectorAll('.comp-op-check:checked')].length:compOpsFiltradas.length;
+      allCheck.checked=nChecked===compOpsFiltradas.length;
+      allCheck.indeterminate=nChecked>0&&nChecked<compOpsFiltradas.length;
     }
   }
   ['dash-maq-filter'].forEach(id=>{
@@ -7132,6 +7136,7 @@ function dieselPopularOps() {
 function execSetTipo(el, tipo) {
   document.querySelectorAll('.exec-tipo-btn').forEach(b => b.classList.remove('active'));
   el.classList.add('active');
+  execPopularFiltroOp(); // re-popula operações conforme o tipo selecionado
 }
 
 function execSetRange(opt) {
@@ -7148,8 +7153,12 @@ function execPopularFiltroOp() {
   const sel = document.getElementById('exec-op-filter');
   if (!sel) return;
   const ops = getOperacoes();
+  const execTipo = document.querySelector('.exec-tipo-btn.active')?.dataset?.tipo || '';
+  const opsFiltradas = filtrarOpsPorTipo(execTipo, ops);
   const cur = sel.value;
-  sel.innerHTML = '<option value="">Todas as Operações</option>' + ops.map(o => '<option value="' + o + '"' + (o === cur ? ' selected' : '') + '>' + o.replace(/_/g,' ') + '</option>').join('');
+  sel.innerHTML = '<option value="">Todas as Operações</option>' + opsFiltradas.map(o => '<option value="' + o + '"' + (o === cur ? ' selected' : '') + '>' + o.replace(/_/g,' ') + '</option>').join('');
+  // Se a operação anteriormente selecionada não existe mais nesse tipo, reseta pra "Todas"
+  if (cur && !opsFiltradas.includes(cur)) sel.value = '';
 }
 
 function renderExecutivo() {
@@ -8718,6 +8727,8 @@ function setCompMaq(el) {
   // Highlight selected
   document.querySelectorAll('.comp-maq-opt').forEach(o => o.style.background = '');
   el.style.background = 'var(--bg3)';
+  // Re-popula operações disponíveis pro tipo selecionado antes de renderizar
+  updateFilters();
   // Trigger render
   const tabFin = document.getElementById('comp-tab-financeiro');
   if (tabFin && tabFin.style.display !== 'none') renderCompFinanceiro();
