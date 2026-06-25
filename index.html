@@ -729,7 +729,21 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
             <div id="placa-checkboxes"></div>
           </div>
         </div>
-        <select class="filter-select" id="dash-maq-filter" onchange="updateFilters();populatePlacaDropdown();renderDashboard()"><option value="">Selecione o tipo...</option></select>
+        <select class="filter-select" id="dash-maq-filter" onchange="updateFilters();populatePlacaDropdown();populateModeloDropdown();renderDashboard()"><option value="">Selecione o tipo...</option></select>
+        <!-- Multi-select modelos -->
+        <div style="position:relative" id="modelo-dropdown-wrap">
+          <button class="filter-select" id="modelo-dropdown-btn" onclick="toggleModeloDropdown()" style="cursor:pointer;text-align:left;min-width:170px;display:none;align-items:center;justify-content:space-between;gap:8px">
+            <span id="modelo-dropdown-label">Todos os Modelos</span>
+            <span style="font-size:10px">▼</span>
+          </button>
+          <div id="modelo-dropdown-menu" style="display:none;position:absolute;top:calc(100% + 4px);left:0;min-width:280px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:8px;z-index:200;box-shadow:0 8px 24px rgba(0,0,0,.4);max-height:340px;overflow-y:auto">
+            <input type="text" id="modelo-search" placeholder="🔍 Buscar modelo..." oninput="filtrarModelosDropdown()" style="width:100%;box-sizing:border-box;padding:6px 10px;border-radius:7px;border:1px solid var(--border);background:var(--bg3);color:var(--text);font-size:12px;margin-bottom:6px;outline:none">
+            <label style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--border);margin-bottom:4px">
+              <input type="checkbox" id="modelo-all-check" checked onchange="toggleAllModelos(this)"> Todos os Modelos
+            </label>
+            <div id="modelo-checkboxes"></div>
+          </div>
+        </div>
         <div class="tab-group">
           <button class="tab-btn active" id="tab-semanal" onclick="setTab('semanal')">Semanal</button>
           <button class="tab-btn" id="tab-mensal" onclick="setTab('mensal')">Mensal</button>
@@ -757,7 +771,12 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
     </div>
     <!-- Consumo por Operação (linha 1, largura total) -->
     <div class="chart-card" style="margin-bottom:16px;height:280px;display:flex;flex-direction:column;min-height:0;overflow:hidden">
-      <div class="chart-title" style="flex-shrink:0">Consumo por Operação — <span id="chart-period-label2">Semanal</span></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-shrink:0;margin-bottom:0">
+        <div class="chart-title" style="margin-bottom:0">Consumo por Operação — <span id="chart-period-label2">Semanal</span></div>
+        <div id="op-filter-indicator" style="display:none;align-items:center;gap:6px;font-size:11px;color:var(--accent);background:rgba(192,57,43,.12);border:1px solid rgba(192,57,43,.3);border-radius:8px;padding:4px 10px;cursor:pointer" onclick="opClearSelection()">
+          <span>🔍</span><span id="op-filter-label">1 operação filtrada</span><span style="font-size:10px;color:var(--text2)">✕ limpar</span>
+        </div>
+      </div>
       <div id="op-chart-container" style="flex:1;min-height:0;overflow-x:auto;overflow-y:hidden;padding-bottom:12px"><div class="empty"><div class="empty-icon">🏭</div><div class="empty-text">Sem dados</div></div></div>
     </div>
     <!-- Consumo por Máquina (largura total) -->
@@ -2703,6 +2722,114 @@ function togglePlacaDropdown() {
   }
 }
 
+function populateModeloDropdown() {
+  const btn  = document.getElementById('modelo-dropdown-btn');
+  const cont = document.getElementById('modelo-checkboxes');
+  if (!btn || !cont) return;
+
+  const maqF = document.getElementById('dash-maq-filter')?.value || '';
+  if (!maqF) { btn.style.display = 'none'; return; }
+
+  const byTipo = state.abastecimentos.filter(a => {
+    const ti = getTipoIgnis(a);
+    if (ti === 'ignorado') return false;
+    if (maqF === '__maquinas__')      return ti === 'maquina';
+    if (maqF === '__tratores__')      return ti === 'trator';
+    if (maqF === '__pesada__')        return ti === 'pesada';
+    if (maqF === '__leve__')          return ti === 'leve';
+    if (maqF === '__empilhadeiras__') return ti === 'empilhadeira';
+    return a.placa === maqF;
+  });
+
+  // Se há operações selecionadas (cards OU dropdown), filtra modelos por essas ops
+  const selOpsCards = window._selectedOps;
+  const selOpsDrop  = typeof getSelectedOps === 'function' ? getSelectedOps() : null;
+  let opsAtivas = null;
+  if (selOpsDrop instanceof Set && selOpsDrop.size > 0) {
+    opsAtivas = new Set([...selOpsDrop].map(o => o.replace(/_/g,' ')));
+  } else if (selOpsCards && selOpsCards.size > 0) {
+    opsAtivas = selOpsCards;
+  }
+
+  const base = opsAtivas
+    ? byTipo.filter(a => { const op=(getMaquina(a.placa)?.operacao||a.operacao||'Sem Operação').replace(/_/g,' '); return opsAtivas.has(op); })
+    : byTipo;
+
+  const modelos = [...new Set(
+    base.map(a => (getMaquina(a.placa)?.modelo || a.modelo || '').trim().toUpperCase()).filter(Boolean)
+  )].sort();
+
+  if (modelos.length === 0) { btn.style.display = 'none'; cont.innerHTML = ''; return; }
+
+  const anterior = getSelectedModelos();
+  btn.style.display = 'flex';
+  cont.innerHTML = modelos.map(m =>
+    `<label class="modelo-check-label" style="display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:6px;cursor:pointer;font-size:12px">
+      <input type="checkbox" class="modelo-check" value="${m}" ${anterior===null||anterior.has(m)?'checked':''} onchange="onModeloCheckChange()">
+      ${m}
+    </label>`
+  ).join('');
+
+  _sincModeloAllCheck();
+  _updateModeloLabel();
+}
+
+function toggleModeloDropdown() {
+  const menu = document.getElementById('modelo-dropdown-menu');
+  if (!menu) return;
+  const isOpen = menu.style.display !== 'none';
+  const opMenu = document.getElementById('op-dropdown-menu'); if (opMenu) opMenu.style.display = 'none';
+  const pm = document.getElementById('placa-dropdown-menu'); if (pm) pm.style.display = 'none';
+  menu.style.display = isOpen ? 'none' : 'block';
+  if (!isOpen) setTimeout(() => document.getElementById('modelo-search')?.focus(), 50);
+}
+
+function filtrarModelosDropdown() {
+  const q = (document.getElementById('modelo-search')?.value || '').toLowerCase();
+  document.querySelectorAll('.modelo-check-label').forEach(lbl => {
+    lbl.style.display = (lbl.querySelector('.modelo-check')?.value||'').toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+
+function toggleAllModelos(cb) {
+  document.querySelectorAll('.modelo-check').forEach(c => c.checked = cb.checked);
+  onModeloCheckChange();
+}
+
+function onModeloCheckChange() {
+  _sincModeloAllCheck();
+  _updateModeloLabel();
+  renderDashboard();
+}
+
+function _sincModeloAllCheck() {
+  const allCheck = document.getElementById('modelo-all-check');
+  if (!allCheck) return;
+  const all     = document.querySelectorAll('.modelo-check');
+  const checked = document.querySelectorAll('.modelo-check:checked');
+  allCheck.checked       = all.length === checked.length;
+  allCheck.indeterminate = checked.length > 0 && checked.length < all.length;
+}
+
+function _updateModeloLabel() {
+  const all     = [...document.querySelectorAll('.modelo-check')];
+  const checked = all.filter(c => c.checked);
+  const label   = document.getElementById('modelo-dropdown-label');
+  if (!label) return;
+  const n = checked.length;
+  label.textContent =
+    n === 0 || n === all.length ? 'Todos os Modelos' :
+    n === 1 ? checked[0].value :
+    `${n} modelos`;
+}
+
+function getSelectedModelos() {
+  const allCheck = document.getElementById('modelo-all-check');
+  if (!allCheck || (allCheck.checked && !allCheck.indeterminate)) return null;
+  const checked = [...document.querySelectorAll('.modelo-check:checked')];
+  return new Set(checked.map(c => c.value));
+}
+
 function populatePlacaDropdown() {
   const cont = document.getElementById('placa-checkboxes');
   if(!cont) return;
@@ -2787,6 +2914,7 @@ function onOpCheckChange() {
     n===0||n===all.length?'Todas as Operações':
     n===1?checked[0].value.replace(/_/g,' '):
     `${n} operações`;
+  populateModeloDropdown();
   renderDashboard();
 }
 
@@ -2798,6 +2926,8 @@ document.addEventListener('click', e=>{
   if(compWrap && !compWrap.contains(e.target)) document.getElementById('comp-op-dropdown-menu').style.display='none';
   const placaWrap=document.getElementById('placa-dropdown-wrap');
   if(placaWrap && !placaWrap.contains(e.target)) { const m=document.getElementById('placa-dropdown-menu'); if(m) m.style.display='none'; }
+  const modeloWrap=document.getElementById('modelo-dropdown-wrap');
+  if(modeloWrap && !modeloWrap.contains(e.target)) { const m=document.getElementById('modelo-dropdown-menu'); if(m) m.style.display='none'; }
 });
 
 function toggleCompOpDropdown() {
@@ -2914,6 +3044,16 @@ function getFilteredAbast(opF,maqF) {
   else if(maqF === '__empilhadeiras__') list=list.filter(a=>getTipoIgnis(a)==='empilhadeira');
   else if(maqF) list=list.filter(a=>a.placa===maqF);
   else return []; // sem filtro = não mostra nada
+
+  // Filtro de modelo (dropdown Modelo — multi-select)
+  const modelosSel = getSelectedModelos();
+  if (modelosSel instanceof Set && modelosSel.size > 0) {
+    list = list.filter(a => {
+      const m = (getMaquina(a.placa)?.modelo || a.modelo || '').trim().toUpperCase();
+      return modelosSel.has(m);
+    });
+  }
+
   return list;
 }
 
@@ -3060,7 +3200,11 @@ function renderDashboard() {
     lbl = 'Período';
   }
   if(document.getElementById('chart-period-label2')) document.getElementById('chart-period-label2').textContent=lbl;
-  renderOpChart(list, isKmL); renderBarChart(list, isKmL); renderRanking(list, isKmL);
+  window._dashList  = list;
+  window._dashIsKmL = isKmL;
+  populateModeloDropdown();
+  renderOpChart(list, isKmL);
+  _renderBarAndRanking();
   relChecarReincidencia();
 }
 
@@ -3086,7 +3230,9 @@ function renderOpChart(list, isKmL=false) {
   const maxM = isKmL
     ? Math.max(...ops.map(o=>{ const meta=byOp[o].meta||0; const m=byOp[o].litros>0?byOp[o].horas/byOp[o].litros:0; return Math.max(meta,m)*1.3; }), 1)
     : Math.max(...ops.map(o=>byOp[o].horas>0?byOp[o].litros/byOp[o].horas:0), 1);
-  const H=120;
+
+  if (!window._selectedOps) window._selectedOps = new Set();
+  const sel = window._selectedOps;
 
   c.innerHTML=`<div style="display:inline-flex;gap:8px;padding:6px 2px 4px;min-width:max-content">`+
     ops.map(op=>{
@@ -3104,12 +3250,18 @@ function renderOpChart(list, isKmL=false) {
       : maxM>0 ? Math.max((m/maxM)*32, 3) : 3;
     // Barra litros (só L/h)
     const barHL = maxL>0 ? Math.max((l/maxL)*32, 3) : 3;
-    return `<div style="background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;min-width:130px;max-width:160px">
+    // Estado visual baseado na seleção (clique pra filtrar)
+    const isSelected = sel.size===0 || sel.has(op);
+    const borderStyle = sel.has(op) ? `2px solid ${mColor}` : '1px solid var(--border)';
+    const opacStyle = isSelected ? '1' : '0.3';
+    const scaleStyle = sel.has(op) ? 'scale(1.03)' : 'scale(1)';
+    const opEsc = op.replace(/'/g,"&apos;");
+    return `<div data-op="${opEsc}" onclick="opCardClick(event,'${opEsc}')" style="background:var(--bg3);border:${borderStyle};border-radius:10px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;min-width:130px;max-width:160px;cursor:pointer;opacity:${opacStyle};transform:${scaleStyle};transition:opacity .2s,transform .2s,border .15s;user-select:none">
       <div style="display:flex;align-items:baseline;gap:4px">
         <span style="font-size:18px;font-weight:700;color:${mColor};font-family:monospace;line-height:1">${m.toFixed(2)}</span>
         <span style="font-size:10px;color:var(--text3)">${unidadeMedia}</span>
       </div>
-      ${meta>0?`<div style="font-size:10px;color:${mColor};white-space:nowrap">${icone} ${desvio!==null?(desvio>0?'+':'')+desvio.toFixed(1)+'%':''} · meta ${meta.toFixed(1)}</div>`:'<div style="font-size:10px;color:var(--text3)">sem meta</div>'}
+      ${meta>0?`<div style="font-size:10px;color:${mColor};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${icone} ${desvio!==null?(desvio>0?'+':'')+desvio.toFixed(1)+'%':''} · meta ${meta.toFixed(1)}</div>`:'<div style="font-size:10px;color:var(--text3)">sem meta</div>'}
       <div style="display:flex;gap:3px;align-items:flex-end;height:36px;margin-top:2px">
         ${!isKmL ? `<div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end">
           <div style="background:var(--accent);border-radius:2px 2px 0 0;height:${barHL}px;opacity:.7"></div>
@@ -3122,6 +3274,67 @@ function renderOpChart(list, isKmL=false) {
     </div>`;
   }).join('')+'</div>';
 }
+
+function opCardClick(e, op) {
+  e.stopPropagation();
+  if (!window._selectedOps) window._selectedOps = new Set();
+  const sel = window._selectedOps;
+  if (e.ctrlKey || e.metaKey) {
+    if (sel.has(op)) sel.delete(op); else sel.add(op);
+  } else {
+    if (sel.size===1 && sel.has(op)) sel.clear(); else { sel.clear(); sel.add(op); }
+  }
+  _opUpdateVisual();
+  _renderBarAndRanking();
+}
+
+function opClearSelection() {
+  if (window._selectedOps) window._selectedOps.clear();
+  _opUpdateVisual();
+  _renderBarAndRanking();
+}
+
+function _opUpdateVisual() {
+  if (!window._selectedOps) window._selectedOps = new Set();
+  const sel = window._selectedOps;
+  document.querySelectorAll('#op-chart-container [data-op]').forEach(card => {
+    const op = card.dataset.op;
+    const isSelected = sel.size===0 || sel.has(op);
+    const isActive   = sel.has(op);
+    card.style.opacity   = isSelected ? '1' : '0.3';
+    card.style.transform = isActive   ? 'scale(1.03)' : 'scale(1)';
+  });
+  const ind = document.getElementById('op-filter-indicator');
+  const lbl = document.getElementById('op-filter-label');
+  if (ind) ind.style.display = sel.size>0 ? 'flex' : 'none';
+  if (lbl && sel.size>0) lbl.textContent = sel.size===1 ? '1 operação filtrada' : `${sel.size} operações filtradas`;
+  // Re-popula modelos disponíveis conforme operações selecionadas
+  if (typeof populateModeloDropdown === 'function') populateModeloDropdown();
+}
+
+function _renderBarAndRanking() {
+  const list  = window._dashList  || [];
+  const isKmL = window._dashIsKmL || false;
+  const sel   = window._selectedOps;
+  const filtered = (sel && sel.size>0)
+    ? list.filter(a => { const op=(getMaquina(a.placa)?.operacao||a.operacao||'Sem Operação').replace(/_/g,' '); return sel.has(op); })
+    : list;
+  renderBarChart(filtered, isKmL);
+  renderRanking(filtered, isKmL);
+}
+
+// Click fora do gráfico de operações → limpa seleção
+document.addEventListener('click', function(e) {
+  const c = document.getElementById('op-chart-container');
+  const ind = document.getElementById('op-filter-indicator');
+  if (!c) return;
+  if (c.contains(e.target) || (ind && ind.contains(e.target))) return;
+  if (window._selectedOps && window._selectedOps.size>0) {
+    window._selectedOps.clear();
+    _opUpdateVisual();
+    _renderBarAndRanking();
+  }
+});
 
 function renderBarChart(list, isKmL=false) {
   const c=document.getElementById('bar-chart-container');
@@ -4335,7 +4548,7 @@ function limparTodosDados() {
 
   // Reseta estado em memória
   state = { maquinas:[], abastecimentos:[], semanas:{}, tab:'semanal', sheetsUrl:state.sheetsUrl,
-            arlaEgr:[], arlaMeses:[], arlaGrupos:[], dieselPrecos:{}, opConfigs:{}, metaRotaModelos:{} };
+            arlaEgr:[], arlaMeses:[], arlaGrupos:[], arlaSegmentos:{}, opSegmento:{}, dieselPrecos:{}, opConfigs:{}, metaRotaModelos:{} };
   _periodosSelec = new Set();
   window._selectedOps = new Set();
   window._dashList = []; window._dashIsKmL = false;
