@@ -2922,16 +2922,25 @@ function onOpCheckChange() {
   renderDashboard();
 }
 
+// ── PROTEÇÃO CONTRA FECHAMENTO ACIDENTAL AO SELECIONAR TEXTO ─────────────────
+// Problema: ao arrastar o mouse para selecionar/apagar texto dentro de um input que
+// está num dropdown/modal, se o mouseup termina fora da caixa, o evento "click" é
+// disparado no ancestral comum (o próprio wrap/overlay), fazendo parecer um "clique fora"
+// e fechando a caixa no meio da edição. Solução: só considera "clique fora" se o
+// mousedown TAMBÉM começou fora — texto sendo selecionado nunca fecha a caixa.
+let _mousedownTarget = null;
+document.addEventListener('mousedown', e => { _mousedownTarget = e.target; });
+
 // Fechar dropdown ao clicar fora
 document.addEventListener('click', e=>{
   const wrap=document.getElementById('op-dropdown-wrap');
-  if(wrap && !wrap.contains(e.target)) document.getElementById('op-dropdown-menu').style.display='none';
+  if(wrap && !wrap.contains(e.target) && !wrap.contains(_mousedownTarget)) document.getElementById('op-dropdown-menu').style.display='none';
   const compWrap=document.getElementById('comp-op-dropdown-wrap');
-  if(compWrap && !compWrap.contains(e.target)) document.getElementById('comp-op-dropdown-menu').style.display='none';
+  if(compWrap && !compWrap.contains(e.target) && !compWrap.contains(_mousedownTarget)) document.getElementById('comp-op-dropdown-menu').style.display='none';
   const placaWrap=document.getElementById('placa-dropdown-wrap');
-  if(placaWrap && !placaWrap.contains(e.target)) { const m=document.getElementById('placa-dropdown-menu'); if(m) m.style.display='none'; }
+  if(placaWrap && !placaWrap.contains(e.target) && !placaWrap.contains(_mousedownTarget)) { const m=document.getElementById('placa-dropdown-menu'); if(m) m.style.display='none'; }
   const modeloWrap=document.getElementById('modelo-dropdown-wrap');
-  if(modeloWrap && !modeloWrap.contains(e.target)) { const m=document.getElementById('modelo-dropdown-menu'); if(m) m.style.display='none'; }
+  if(modeloWrap && !modeloWrap.contains(e.target) && !modeloWrap.contains(_mousedownTarget)) { const m=document.getElementById('modelo-dropdown-menu'); if(m) m.style.display='none'; }
 });
 
 function toggleCompOpDropdown() {
@@ -4237,7 +4246,7 @@ function limparPeriodo(id) {
 }
 
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
-document.querySelectorAll('.modal-overlay').forEach(m=>{m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open');});});
+document.querySelectorAll('.modal-overlay').forEach(m=>{m.addEventListener('click',e=>{if(e.target===m && _mousedownTarget===m)m.classList.remove('open');});});
 
 function salvarAbastecimento() {
   const placa=document.getElementById('abast-placa').value;
@@ -4702,7 +4711,7 @@ function toggleRelOpMenu() {
 }
 document.addEventListener('click', e => {
   const wrap = document.getElementById('rel-op-dropdown-wrap');
-  if (wrap && !wrap.contains(e.target)) {
+  if (wrap && !wrap.contains(e.target) && !wrap.contains(_mousedownTarget)) {
     const m = document.getElementById('rel-op-menu');
     if (m) m.style.display = 'none';
   }
@@ -6226,7 +6235,7 @@ function arlaToggleOpDropdown() {
 // Fecha dropdown ao clicar fora
 document.addEventListener('click', e => {
   const wrap = document.getElementById('arla-op-dropdown-wrap');
-  if (wrap && !wrap.contains(e.target)) {
+  if (wrap && !wrap.contains(e.target) && !wrap.contains(_mousedownTarget)) {
     const menu = document.getElementById('arla-op-dropdown-menu');
     if (menu) menu.style.display = 'none';
   }
