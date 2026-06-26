@@ -7544,6 +7544,31 @@ function kmNormalizarOp(op) {
   return s;
 }
 
+// Encontra a linha do cabeçalho real, ignorando títulos/logos nas primeiras linhas
+// (ex: "Média KM / Litro" + logo nas linhas 1-8, cabeçalho de verdade só na linha 9)
+// Lê uma planilha detectando o cabeçalho real automaticamente (ignora título/logo nas primeiras linhas)
+// e devolve as linhas já como objetos {coluna: valor} — tudo numa única passada, sem depender de
+// como o Excel calcula o "intervalo usado" da planilha (evita desalinhamento em arquivos com
+// formatação/espaçamento levemente diferente entre exportações).
+function kmLerComHeaderDinamico(ws) {
+  const raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+  const chaves = ['placa', 'operação', 'operacao', 'km real', 'km produtivo', 'modelo'];
+  let headerIdx = 0;
+  for (let i = 0; i < Math.min(raw.length, 30); i++) {
+    const linha = (raw[i]||[]).map(c => String(c||'').toLowerCase().trim());
+    const acertos = chaves.filter(k => linha.some(c => c === k || c.includes(k))).length;
+    if (acertos >= 2) { headerIdx = i; break; } // linha com pelo menos 2 colunas reconhecidas = é o cabeçalho
+  }
+  const headers = (raw[headerIdx] || []).map(h => String(h||'').trim());
+  return raw.slice(headerIdx + 1)
+    .filter(row => row.some(c => c !== '' && c !== undefined && c !== null)) // ignora linhas totalmente vazias
+    .map(row => {
+      const obj = {};
+      headers.forEach((h, j) => { if (h) obj[h] = row[j] !== undefined ? row[j] : ''; });
+      return obj;
+    });
+}
+
 function kmCarregarSistema(input) {
   const file = input.files[0]; if (!file) return;
   const r = new FileReader();
@@ -7551,7 +7576,7 @@ function kmCarregarSistema(input) {
     try {
       const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
       const ws = wb.Sheets[wb.SheetNames[0]];
-      const raw = XLSX.utils.sheet_to_json(ws, { defval: '' });
+      const raw = kmLerComHeaderDinamico(ws);
       // Agrupa por placa somando KM (horas = km neste contexto)
       const byPlaca = {};
       raw.forEach(row => {
@@ -7559,6 +7584,7 @@ function kmCarregarSistema(input) {
         const km = parseFloat(row['Km Real'] || row['km_real'] || row['KM Real'] || row['Horas'] || row['horas'] || 0);
         const op = kmNormalizarOp(String(row['Operação'] || row['operacao'] || row['Operacao'] || '').trim());
         if (!placa || !placa.match(/[A-Z]{2,}/)) return;
+        if (placa.startsWith('MAQ')) return; // ignora máquinas — comparativo de KM é só pra frota que roda em km
         if (!byPlaca[placa]) byPlaca[placa] = { km: 0, operacao: op };
         byPlaca[placa].km += km;
         if (!byPlaca[placa].operacao && op) byPlaca[placa].operacao = op;
@@ -7585,7 +7611,7 @@ function kmCarregarCliente(input) {
     try {
       const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
       const ws = wb.Sheets[wb.SheetNames[0]];
-      const raw = XLSX.utils.sheet_to_json(ws, { defval: '' });
+      const raw = kmLerComHeaderDinamico(ws);
       const byPlaca = {};
       raw.forEach(row => {
         const placa = String(row['Placa'] || row['PLACA'] || row['placa'] || '').trim().toUpperCase();
