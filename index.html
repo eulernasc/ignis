@@ -1761,7 +1761,10 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
 
     <!-- Histórico de períodos -->
     <div style="margin-top:16px">
-      <div style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px">📋 Histórico de Períodos</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.8px">📋 Histórico de Períodos</div>
+        <button class="btn btn-secondary" id="btn-apagar-todos-periodos" onclick="limparTodosPeriodos()" style="display:none;padding:5px 10px;font-size:11px;color:var(--red);border-color:rgba(239,68,68,.3)">🗑️ Apagar Todos</button>
+      </div>
       <div id="historico-periodos" style="display:flex;flex-direction:column;gap:6px;max-height:200px;overflow-y:auto"></div>
     </div>
 
@@ -4216,7 +4219,9 @@ function openImport() {
 
 function renderHistoricoPeriodos() {
   const c = document.getElementById('historico-periodos');
+  const btnTodos = document.getElementById('btn-apagar-todos-periodos');
   const periodos = Object.entries(state.semanas).sort((a,b) => (b[1].dataIni||b[1].label||b[0]).localeCompare(a[1].dataIni||a[1].label||a[0]));
+  if (btnTodos) btnTodos.style.display = periodos.length ? '' : 'none';
   if(!periodos.length){
     c.innerHTML='<div style="font-size:13px;color:var(--text3);text-align:center;padding:16px">Nenhum período importado ainda</div>';
     return;
@@ -4260,6 +4265,25 @@ function limparPeriodo(id) {
   saveState();
   renderHistoricoPeriodos();
   showToast(`Período "${p.label||id}" apagado! (${removidos} registro(s) removido(s))`, 'success');
+}
+
+function limparTodosPeriodos() {
+  const periodos = Object.entries(state.semanas);
+  if (!periodos.length) return;
+  verificarSenha(() => {
+    if (!confirm(`Apagar TODOS os ${periodos.length} período(s) do histórico? Todos os abastecimentos vinculados a eles também serão removidos. Essa ação não pode ser desfeita.`)) return;
+    if (!confirm(`Confirme novamente: apagar os ${periodos.length} período(s) e todos os abastecimentos vinculados?`)) return;
+    const antes = state.abastecimentos.length;
+    // Remove só os abastecimentos vinculados a algum período (têm periodoId) — preserva
+    // lançamentos manuais feitos via "Novo Registro", que não têm periodoId.
+    state.abastecimentos = state.abastecimentos.filter(a => !a.periodoId);
+    const removidos = antes - state.abastecimentos.length;
+    state.semanas = {};
+    saveState();
+    renderHistoricoPeriodos();
+    updateFilters(); renderDashboard();
+    showToast(`${periodos.length} período(s) apagado(s)! (${removidos} registro(s) removido(s))`, 'success');
+  });
 }
 
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
