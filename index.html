@@ -1745,6 +1745,20 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
     <input type="file" id="file-input" accept=".xlsx,.xls" style="display:none" onchange="importarRelatorio(this)">
     <div id="import-preview"></div>
 
+    <div style="margin:18px 0;display:flex;align-items:center;gap:10px">
+      <div style="flex:1;height:1px;background:var(--border)"></div>
+      <div style="font-size:11px;color:var(--text2);text-transform:uppercase;letter-spacing:.6px">ou</div>
+      <div style="flex:1;height:1px;background:var(--border)"></div>
+    </div>
+
+    <div class="import-area" style="border-color:var(--accent);background:rgba(192,57,43,.04)" onclick="document.getElementById('file-input-diario').click()">
+      <div class="import-icon">📅</div>
+      <div class="import-text">Importar Relatório Diário (mês inteiro)</div>
+      <div class="import-sub">Detecta as semanas automaticamente — Gestão de Abastecimentos*.xlsx</div>
+    </div>
+    <input type="file" id="file-input-diario" accept=".xlsx,.xls" style="display:none" onchange="importarRelatorioDiario(this)">
+    <div id="import-diario-preview"></div>
+
     <!-- Histórico de períodos -->
     <div style="margin-top:16px">
       <div style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px">📋 Histórico de Períodos</div>
@@ -1933,6 +1947,7 @@ async function loadState() {
     });
   }
   updateSyncStatus('idle');
+  window._dadosCarregados = true; // libera importação só depois do sync inicial terminar
 }
 
 async function syncFromFirebase() {
@@ -4236,13 +4251,15 @@ function limparPeriodo(id) {
   const p = state.semanas[id];
   if(!p) return;
   if(!confirm(`Apagar o período "${p.label||id}"? Os abastecimentos deste período também serão removidos.`)) return;
-  const registros = p.registros || [];
-  const chaves = new Set(registros.map(r=>`${r.placa}|${r.data}|${r.litros}|${r.horas}`));
-  state.abastecimentos = state.abastecimentos.filter(a => !chaves.has(`${a.placa}|${a.data}|${a.litros}|${a.horas}`));
+  const antes = state.abastecimentos.length;
+  // Remove por periodoId direto — nunca por chave reconstruída de "registros",
+  // que pode estar vazio/desatualizado em memória e deixar dados órfãos (parecendo que "voltam")
+  state.abastecimentos = state.abastecimentos.filter(a => a.periodoId !== id);
+  const removidos = antes - state.abastecimentos.length;
   delete state.semanas[id];
   saveState();
   renderHistoricoPeriodos();
-  showToast(`Período "${p.label||id}" apagado!`, 'success');
+  showToast(`Período "${p.label||id}" apagado! (${removidos} registro(s) removido(s))`, 'success');
 }
 
 function closeModal(id) { document.getElementById(id).classList.remove('open'); }
@@ -4318,8 +4335,14 @@ function salvarMaquina() {
 // ── IMPORTAR ──────────────────────────────────────────────────────────────────
 function importarRelatorio(input) {
   const file=input.files[0]; if(!file) return;
+  if (!window._dadosCarregados) {
+    showToast('Aguarde o carregamento dos dados antes de importar (alguns segundos)...', 'error');
+    input.value=''; return;
+  }
   const nomePeriodo = document.getElementById('import-periodo-nome').value.trim() || `Importação ${new Date().toLocaleDateString('pt-BR')}`;
   const periodoId = nomePeriodo.toLowerCase().replace(/[^a-z0-9]/g,'_').replace(/_+/g,'_').substring(0,40) + '_' + Date.now();
+  const dataIniNova = document.getElementById('import-data-ini')?.value || '';
+  const dataFimNova = document.getElementById('import-data-fim')?.value || '';
   const reader=new FileReader();
   reader.onload=function(e){
     try {
@@ -4334,13 +4357,25 @@ function importarRelatorio(input) {
       // Pula as 8 primeiras linhas + linha de cabeçalho (linha 9 = índice 8) → dados a partir do índice 9
       const dataRows = rawData.slice(9);
 
-      // Remove registros antigos se já existe período com mesmo nome (reimportação)
-      const periodoExistente = Object.entries(state.semanas).find(([,p])=>p.label===nomePeriodo);
+      // Detecta se já existe um período pra esse MESMO intervalo de datas (sinal confiável)
+      // ou com o mesmo nome (fallback). Datas iguais = é o mesmo período, mesmo que o
+      // rótulo digitado tenha sido diferente ou repetido por acidente.
+      const periodoExistente = Object.entries(state.semanas).find(([,p]) => {
+        const mesmaData = dataIniNova && dataFimNova && p.dataIni === dataIniNova && p.dataFim === dataFimNova;
+        const mesmoLabel = p.label === nomePeriodo;
+        return mesmaData || mesmoLabel;
+      });
       if(periodoExistente) {
-        const registrosAntigos = periodoExistente[1].registros || [];
-        const chavesAntigas = new Set(registrosAntigos.map(r=>`${r.placa}|${r.data}|${r.litros}|${r.horas}`));
-        state.abastecimentos = state.abastecimentos.filter(a => !chavesAntigas.has(`${a.placa}|${a.data}|${a.litros}|${a.horas}`));
-        delete state.semanas[periodoExistente[0]];
+        const [idAntigo, pAntigo] = periodoExistente;
+        if (!confirm(`Já existe um período pra esse intervalo:\n"${pAntigo.label}" (importado em ${pAntigo.importedAt}).\n\nSubstituir os dados antigos pelos desse novo arquivo?`)) {
+          input.value=''; return;
+        }
+        // Remove por periodoId direto — nunca por chave reconstruída de "registros" em memória
+        // (que pode estar vazio/desatualizado e deixar duplicados invisíveis no dashboard)
+        const antesCount = state.abastecimentos.length;
+        state.abastecimentos = state.abastecimentos.filter(a => a.periodoId !== idAntigo);
+        console.info(`Reimportação "${nomePeriodo}": removidos ${antesCount - state.abastecimentos.length} registro(s) do período antigo.`);
+        delete state.semanas[idAntigo];
       }
 
       let novaMaq=0,metaAtualizada=0,dadosSemana=[];
@@ -4464,6 +4499,209 @@ function importarRelatorio(input) {
       const isQuota = err.name==='QuotaExceededError' || (err.message||'').toLowerCase().includes('quota') || (err.message||'').toLowerCase().includes('exceeded');
       if (isQuota) { console.warn('localStorage quota ignorada no import (dados no Firebase):', err); }
       else { showToast('Erro: '+err.message,'error'); }
+    }
+    input.value='';
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ── IMPORTAR RELATÓRIO DIÁRIO (consolida automaticamente em semanas) ─────────
+const MESES_PT = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+
+function parseDataBR(v) {
+  if (v instanceof Date) return v;
+  if (typeof v === 'number') {
+    const d = XLSX.SSF.parse_date_code(v);
+    return new Date(d.y, d.m-1, d.d, d.H||0, d.M||0, d.S||0);
+  }
+  const s = String(v||'').trim();
+  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+  if (m) return new Date(+m[3], +m[2]-1, +m[1], +(m[4]||0), +(m[5]||0), +(m[6]||0));
+  return null;
+}
+function dataParaISO(d) { return d.toISOString().split('T')[0]; }
+
+function importarRelatorioDiario(input) {
+  const file = input.files[0]; if (!file) return;
+  if (!window._dadosCarregados) {
+    showToast('Aguarde o carregamento dos dados antes de importar (alguns segundos)...', 'error');
+    input.value=''; return;
+  }
+  const previewEl = document.getElementById('import-diario-preview');
+  previewEl.innerHTML = '<div style="font-size:13px;color:var(--text2);margin-top:10px">⏳ Lendo e consolidando o relatório...</div>';
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const wb = XLSX.read(e.target.result, { type: 'array', dense: true, cellDates: false });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const raw = kmLerComHeaderDinamico(ws); // mesma detecção robusta de cabeçalho do KM Comparativo
+
+      const excluirOps = ['MANUTENCAO','MANUTENÇÃO','LOCACAO','LOCAÇÃO','NAO DEFINIDO','NÃO DEFINIDO','DISPONIVEL','DISPONÍVEL','DESMOBILIZADA','VENDIDOS','SEMINOVOS'];
+
+      // 1ª passada: parseia e filtra linhas válidas, ordenadas por data (pra "última operação vence" em trocas no meio do período)
+      const linhas = [];
+      let ignoradasExclusao = 0;
+      let ignoradasArla = 0;
+      raw.forEach(row => {
+        const placa = String(row['Placa']||'').trim().toUpperCase();
+        if (!placa) return;
+        const dataObj = parseDataBR(row['Data']);
+        if (!dataObj || isNaN(dataObj)) return;
+        // Esse relatório mistura todos os combustíveis numa tabela só (Diesel, Gasolina, Etanol, GLP, ARLA...).
+        // Arla não é combustível de propulsão — tem aba dedicada (Controle de Arla 32) — então é ignorado aqui.
+        const combustivel = String(row['Combustível']||'').trim().toUpperCase();
+        if (combustivel === 'ARLA') { ignoradasArla++; return; }
+        const operacao = String(row['Operação']||'').trim();
+        const modelo   = String(row['Modelo']||'').trim();
+        const tipoVeic = String(row['Tipo de Veículo']||'').trim();
+        const litros   = parseFloat(row['Litros Abast.']) || 0;
+        const kmReal   = Math.max(0, parseFloat(row['Km Real']) || 0); // negativo = correção de odômetro, não soma km fictício
+        const mediaIdeal = parseFloat(row['Média Ideal']) || 0;
+        const valorLitro  = parseFloat(row['Valor Litro']) || 0;
+
+        const opUp = operacao.toUpperCase(), modUp = modelo.toUpperCase();
+        if (modUp.startsWith('IEV')) { ignoradasExclusao++; return; }
+        if (excluirOps.some(x => opUp.includes(x))) { ignoradasExclusao++; return; }
+        if (litros <= 0) return;
+
+        linhas.push({ data: dataObj, placa, operacao, modelo, tipoVeic, litros, kmReal, mediaIdeal, valorLitro });
+      });
+      linhas.sort((a,b) => a.data - b.data);
+
+      if (!linhas.length) {
+        previewEl.innerHTML = '<div style="color:var(--red);font-size:13px;margin-top:10px">Nenhuma linha válida encontrada nesse arquivo.</div>';
+        input.value=''; return;
+      }
+
+      // 2ª passada: descobre o intervalo total e separa em blocos sequenciais de 7 dias
+      const minData = new Date(linhas[0].data.getFullYear(), linhas[0].data.getMonth(), linhas[0].data.getDate());
+      const maxData = linhas[linhas.length-1].data;
+      const blocos = [];
+      let cursor = new Date(minData);
+      while (cursor <= maxData) {
+        const inicio = new Date(cursor);
+        const fim = new Date(cursor); fim.setDate(fim.getDate()+6); fim.setHours(23,59,59,999);
+        blocos.push({ inicio, fim, porPlaca: {} });
+        cursor.setDate(cursor.getDate()+7);
+      }
+
+      // 3ª passada: distribui cada linha no bloco certo e consolida por placa
+      linhas.forEach(l => {
+        const bloco = blocos.find(b => l.data >= b.inicio && l.data <= b.fim);
+        if (!bloco) return;
+        if (!bloco.porPlaca[l.placa]) bloco.porPlaca[l.placa] = { litros:0, kmReal:0, operacao:l.operacao, modelo:l.modelo, tipoVeic:l.tipoVeic, mediaIdeal:l.mediaIdeal };
+        const p = bloco.porPlaca[l.placa];
+        p.litros += l.litros;
+        p.kmReal += l.kmReal;
+        // operação/modelo/tipo: como as linhas estão ordenadas por data, o último valor sobrescreve = "mais recente vence"
+        p.operacao = l.operacao; p.modelo = l.modelo; p.tipoVeic = l.tipoVeic;
+        if (l.mediaIdeal > 0) p.mediaIdeal = l.mediaIdeal;
+        if (l.valorLitro > 0) { p._somaPreco = (p._somaPreco||0) + l.valorLitro; p._countPreco = (p._countPreco||0) + 1; }
+      });
+
+      // 4ª passada: verifica conflitos com semanas já existentes (por intervalo de datas) ANTES de escrever qualquer coisa
+      const conflitos = [];
+      blocos.forEach(b => {
+        const dIni = dataParaISO(b.inicio), dFim = dataParaISO(b.fim);
+        const existente = Object.entries(state.semanas).find(([,p]) => p.dataIni === dIni && p.dataFim === dFim);
+        if (existente) conflitos.push({ bloco: b, idAntigo: existente[0], labelAntigo: existente[1].label });
+      });
+      if (conflitos.length) {
+        const lista = conflitos.map(c => '• ' + c.labelAntigo).join('\n');
+        if (!confirm(`${conflitos.length} semana(s) desse arquivo já existem no sistema:\n\n${lista}\n\nSubstituir os dados antigos pelos desse arquivo?`)) {
+          input.value=''; return;
+        }
+        conflitos.forEach(c => {
+          state.abastecimentos = state.abastecimentos.filter(a => a.periodoId !== c.idAntigo);
+          delete state.semanas[c.idAntigo];
+        });
+      }
+
+      // 5ª passada: cria as semanas de fato + atualiza cadastro de máquinas + preços médios de diesel
+      let novaMaq=0, semanasNovas=0, registrosTotais=0;
+      const precosPorOp = {};
+
+      blocos.forEach(b => {
+        const placas = Object.keys(b.porPlaca);
+        if (!placas.length) return; // bloco sem nenhum dado (ex: mês incompleto na ponta)
+        const dIni = dataParaISO(b.inicio), dFim = dataParaISO(b.fim);
+        const mesLabel = MESES_PT[b.inicio.getMonth()];
+        const nomePeriodo = `Semana ${semanasNovas+1} · ${mesLabel}. de ${b.inicio.getFullYear()}`;
+        const periodoId = nomePeriodo.toLowerCase().replace(/[^a-z0-9]/g,'_').replace(/_+/g,'_').substring(0,40) + '_' + Date.now() + '_' + semanasNovas;
+
+        const dadosSemana = [];
+        placas.forEach(placa => {
+          const p = b.porPlaca[placa];
+          const opUp = p.operacao.toUpperCase(), modUp = p.modelo.toUpperCase(), tipUp = p.tipoVeic.toUpperCase();
+
+          let tipoIgnis;
+          if (modUp.includes('MOFFETT') || placa.startsWith('EMP')) tipoIgnis = 'empilhadeira';
+          else if (tipUp === 'VEICULO LEVE' || opUp.startsWith('VL') || opUp.includes('MERCADO LIVRE')) tipoIgnis = 'leve';
+          else if (placa.startsWith('MAQ')) tipoIgnis = 'maquina';
+          else if (placa.startsWith('TRA')) tipoIgnis = 'trator';
+          else tipoIgnis = 'pesada';
+
+          const maqExistente = state.maquinas.find(m => m.placa === placa);
+          if (!maqExistente) {
+            state.maquinas.push({ placa, modelo:p.modelo, tipo:p.tipoVeic, tipoIgnis, operacao:p.operacao, status:'Ativa', meta:p.mediaIdeal||0 });
+            novaMaq++;
+          } else {
+            maqExistente.tipoIgnis = tipoIgnis;
+            if (p.mediaIdeal>0) maqExistente.meta = p.mediaIdeal;
+          }
+
+          if (p.litros>0 && p.kmReal>0) {
+            const entry = { placa, data:dIni, litros:p.litros, horas:p.kmReal, operador:'', operacao:p.operacao, modelo:p.modelo, tipo:p.tipoVeic, tipoIgnis, periodoId };
+            dadosSemana.push(entry);
+            state.abastecimentos.push(entry);
+          }
+
+          if (p._countPreco > 0 && p.operacao) {
+            if (!precosPorOp[p.operacao]) precosPorOp[p.operacao] = { soma:0, count:0 };
+            precosPorOp[p.operacao].soma += p._somaPreco;
+            precosPorOp[p.operacao].count += p._countPreco;
+          }
+        });
+
+        state.semanas[periodoId] = { label: nomePeriodo, registros: dadosSemana, count: dadosSemana.length, importedAt: new Date().toLocaleDateString('pt-BR'), dataIni: dIni, dataFim: dFim };
+        semanasNovas++;
+        registrosTotais += dadosSemana.length;
+      });
+
+      // Preços médios de diesel — mesma lógica do import semanal
+      if (!state.dieselPrecos) state.dieselPrecos = {};
+      let precosAtualizados = 0;
+      Object.entries(precosPorOp).forEach(([op, {soma, count}]) => {
+        const media = soma / count;
+        if (media > 0) { state.dieselPrecos[op] = parseFloat(media.toFixed(3)); precosAtualizados++; }
+      });
+      if (precosAtualizados > 0) {
+        try {
+          const backup = JSON.parse(localStorage.getItem('ignis_diesel_backup')||'{}');
+          Object.assign(backup, state.dieselPrecos);
+          localStorage.setItem('ignis_diesel_backup', JSON.stringify(backup));
+        } catch(e) {}
+      }
+
+      saveState(); // um único save pro lote inteiro, não um por semana
+      renderHistoricoPeriodos();
+      relChecarReincidencia();
+      updateFilters(); renderDashboard();
+
+      previewEl.innerHTML = `
+        <div style="background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);border-radius:10px;padding:16px;margin-top:12px">
+          <div style="font-size:15px;font-weight:600;color:var(--green);margin-bottom:8px">✅ ${semanasNovas} semana(s) detectada(s) e importada(s)!</div>
+          <div style="font-size:13px;color:var(--text2)">🚗 ${novaMaq} novo(s) veículo(s) · ⛽ ${registrosTotais} registro(s) consolidado(s)</div>
+          ${precosAtualizados>0?`<div style="font-size:13px;color:var(--yellow);margin-top:4px">💰 ${precosAtualizados} preço(s) de diesel atualizado(s)</div>`:''}
+          ${ignoradasExclusao>0?`<div style="font-size:12px;color:var(--text3);margin-top:4px">⏭ ${ignoradasExclusao} linha(s) ignorada(s) (IEV, manutenção, locação, etc.)</div>`:''}
+          ${ignoradasArla>0?`<div style="font-size:12px;color:var(--text3);margin-top:4px">🧪 ${ignoradasArla} linha(s) de Arla ignorada(s) — tem controle dedicado na aba Arla 32</div>`:''}
+          ${conflitos.length>0?`<div style="font-size:12px;color:var(--accent);margin-top:4px">🔄 ${conflitos.length} semana(s) substituída(s)</div>`:''}
+        </div>`;
+      showToast(`${semanasNovas} semanas importadas: ${registrosTotais} registros!`, 'success');
+    } catch(err) {
+      previewEl.innerHTML = `<div style="color:var(--red);font-size:13px;margin-top:10px">Erro: ${err.message}</div>`;
+      console.error(err);
     }
     input.value='';
   };
