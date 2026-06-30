@@ -1278,7 +1278,7 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
       <div style="background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:20px;margin-bottom:16px">
         <div style="font-size:14px;font-weight:700;margin-bottom:6px">🎯 Faixas de Meta por Segmento</div>
         <div style="font-size:12px;color:var(--text2);margin-bottom:16px;line-height:1.6">
-          Cada segmento tem sua própria faixa ideal de consumo de Arla. O relatório principal mostra por padrão só as placas na <b style="color:var(--red)">faixa vermelha (crítico)</b> — abaixo do mínimo ou acima do máximo. Edite os valores conforme o estudo da operação.
+          Cada segmento tem sua própria faixa ideal de consumo de Arla. O relatório principal mostra por padrão só as placas na <b style="color:var(--red)">faixa vermelha (crítico)</b> — abaixo do mínimo ou acima do máximo. Esta tabela é preenchida automaticamente ao importar a planilha de fechamento (acima) — você pode editar os valores depois conforme o estudo da operação.
         </div>
         <div style="overflow-x:auto">
           <table style="width:100%;border-collapse:collapse;font-size:13px">
@@ -5981,7 +5981,7 @@ window._arlaState = {
   mesAtual: null,
   grupos: [],
   egrSet: new Set(),
-  segmentos: JSON.parse(JSON.stringify(ARLA_SEGMENTOS_DEFAULT))
+  segmentos: {}    // vazio por padrão — só populado pela importação da planilha de fechamento
 };
 
 function arlaInit() {
@@ -6011,7 +6011,7 @@ function arlaInit() {
     const savedMeses = localStorage.getItem('arla_meses');
     if (savedMeses) { try { window._arlaState.meses = JSON.parse(savedMeses); } catch(e) {} }
   }
-  // Carrega faixas de segmento (meta/verde/amarela/vermelha): prioridade = state (Firebase) > localStorage > default
+  // Carrega faixas de segmento (meta/verde/amarela/vermelha): prioridade = state (Firebase) > localStorage > vazio
   if (state.arlaSegmentos && Object.keys(state.arlaSegmentos).length) {
     window._arlaState.segmentos = state.arlaSegmentos;
   } else {
@@ -6030,6 +6030,15 @@ function arlaInit() {
     const savedPlacaMap = localStorage.getItem('arla_placa_segmento');
     if (savedPlacaMap) { try { state.placaSegmento = JSON.parse(savedPlacaMap); } catch(e) {} }
   }
+  // Limpeza: remove os 5 segmentos pré-cadastrados antigos (Distribuição, Rodoviário, Químico, Florestal,
+  // Mineração/Caçamba) se ninguém estiver de fato usando eles — agora só os nomes vindos da planilha
+  // de fechamento devem existir. Defensivo: nunca apaga um segmento que ainda está em uso real.
+  Object.keys(ARLA_SEGMENTOS_DEFAULT).forEach(nomeAntigo => {
+    if (!window._arlaState.segmentos[nomeAntigo]) return;
+    const emUsoPorOp    = Object.values(state.opSegmento||{}).includes(nomeAntigo);
+    const emUsoPorPlaca = Object.values(state.placaSegmento||{}).includes(nomeAntigo);
+    if (!emUsoPorOp && !emUsoPorPlaca) delete window._arlaState.segmentos[nomeAntigo];
+  });
   // Compatibilidade com formato antigo
   const savedDados = localStorage.getItem('arla_dados');
   if (savedDados && !window._arlaState.meses.length) {
@@ -6261,6 +6270,10 @@ function arlaRenderSegmentosTabela() {
   const tbody = document.getElementById('arla-segmentos-tbody');
   if (!tbody) return;
   const segs = window._arlaState.segmentos;
+  if (!Object.keys(segs).length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="padding:18px;text-align:center;color:var(--text3);font-size:12.5px">Nenhum segmento cadastrado ainda — importe a planilha de fechamento acima para preencher esta tabela.</td></tr>';
+    return;
+  }
   const campos = ['meta','vermelhoBaixo','verdeBaixo','verdeAlto','vermelhoAlto'];
   tbody.innerHTML = Object.entries(segs).map(([nome, cfg]) => {
     const inputs = campos.map(c =>
