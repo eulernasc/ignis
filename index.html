@@ -1286,15 +1286,17 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
               <th style="text-align:left;padding:8px">Segmento</th>
               <th style="padding:8px">Meta (%)</th>
               <th style="padding:8px;color:var(--red)">Vermelho ↓</th>
-              <th style="padding:8px;color:#f59e0b">Verde ↓</th>
-              <th style="padding:8px;color:#f59e0b">Verde ↑</th>
+              <th style="padding:8px;color:var(--green)">Verde ↓</th>
+              <th style="padding:8px;color:var(--green)">Verde ↑</th>
               <th style="padding:8px;color:var(--red)">Vermelho ↑</th>
             </tr></thead>
             <tbody id="arla-segmentos-tbody"></tbody>
           </table>
         </div>
-        <div style="font-size:11px;color:var(--text3);margin-top:10px;line-height:1.6">
-          <b>Vermelho ↓</b>: abaixo deste valor = crítico (baixo) · <b>Verde ↓/↑</b>: faixa ideal · <b>Vermelho ↑</b>: acima deste valor = crítico (alto). Entre Vermelho e Verde = faixa amarela (atenção).
+        <div style="font-size:11px;color:var(--text3);margin-top:10px;line-height:1.8">
+          <span style="color:var(--red)">🔴 Crítico</span>: abaixo de "Vermelho ↓" ou acima de "Vermelho ↑" ·
+          <span style="color:#f59e0b">🟡 Atenção</span>: entre "Vermelho" e "Verde" (faixa intermediária) ·
+          <span style="color:var(--green)">🟢 Ideal</span>: entre "Verde ↓" e "Verde ↑"
         </div>
       </div>
 
