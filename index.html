@@ -1299,15 +1299,6 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
           <span style="color:var(--green)">🟢 Ideal</span>: entre "Verde ↓" e "Verde ↑"
         </div>
       </div>
-
-      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:20px">
-        <div style="font-size:14px;font-weight:700;margin-bottom:6px">🔗 Mapear Operação → Segmento <span style="color:var(--text-lo);font-weight:400;font-size:11.5px">— fallback manual</span></div>
-        <div style="font-size:12px;color:var(--text2);margin-bottom:14px;line-height:1.6">
-          Usado só pra placas que não vieram na planilha de fechamento. Quando a placa está mapeada (acima), ela sempre tem prioridade sobre esse mapeamento por operação.
-        </div>
-        <input type="text" class="filter-input" id="arla-segmap-busca" placeholder="🔍 Buscar operação..." oninput="arlaRenderSegmentosMap()" style="margin-bottom:12px;width:100%;box-sizing:border-box">
-        <div id="arla-segmentos-map-lista" style="display:flex;flex-direction:column;gap:6px"></div>
-      </div>
     </div>
 
     <!-- ABA BANCO EGR -->
@@ -1928,7 +1919,7 @@ async function idbLoad() {
 }
 
 // ── STATE ─────────────────────────────────────────────────────────────────────
-let state = { maquinas:[], abastecimentos:[], semanas:{}, tab:'semanal', sheetsUrl:'', arlaEgr:[], arlaMeses:[], arlaGrupos:[], arlaSegmentos:{}, opSegmento:{}, placaSegmento:{}, dieselPrecos:{}, opConfigs:{}, metaRotaModelos:{} };
+let state = { maquinas:[], abastecimentos:[], semanas:{}, tab:'semanal', sheetsUrl:'', arlaEgr:[], arlaMeses:[], arlaGrupos:[], arlaSegmentos:{}, placaSegmento:{}, dieselPrecos:{}, opConfigs:{}, metaRotaModelos:{} };
 let selectedIds = new Set();
 let abastFiltrados = [];
 
@@ -4840,7 +4831,7 @@ function limparTodosDados() {
 
   // Reseta estado em memória
   state = { maquinas:[], abastecimentos:[], semanas:{}, tab:'semanal', sheetsUrl:state.sheetsUrl,
-            arlaEgr:[], arlaMeses:[], arlaGrupos:[], arlaSegmentos:{}, opSegmento:{}, placaSegmento:{}, dieselPrecos:{}, opConfigs:{}, metaRotaModelos:{} };
+            arlaEgr:[], arlaMeses:[], arlaGrupos:[], arlaSegmentos:{}, placaSegmento:{}, dieselPrecos:{}, opConfigs:{}, metaRotaModelos:{} };
   _periodosSelec = new Set();
   window._selectedOps = new Set();
   window._dashList = []; window._dashIsKmL = false;
@@ -5955,12 +5946,10 @@ function arlaInferirFaixaPorNome(nome) {
 // Placa → Segmento tem prioridade máxima (granularidade real, vem da planilha de fechamento).
 // Operação → Segmento é fallback pra quando a placa não está mapeada.
 // Sem nenhum dos dois = regra antiga.
-function arlaGetSegmentoConfig(operacao, placa) {
-  if (placa) {
-    const nomeSegPlaca = state.placaSegmento && state.placaSegmento[placa];
-    if (nomeSegPlaca && window._arlaState.segmentos[nomeSegPlaca]) return window._arlaState.segmentos[nomeSegPlaca];
-  }
-  const nomeSeg = state.opSegmento && state.opSegmento[operacao];
+// Placa → Segmento é a única fonte de verdade (vem da planilha de fechamento mensal).
+// Sem mapeamento real por placa = regra antiga (5% simples), nunca chuta por operação.
+function arlaGetSegmentoConfig(placa) {
+  const nomeSeg = state.placaSegmento && state.placaSegmento[placa];
   if (nomeSeg && window._arlaState.segmentos[nomeSeg]) return window._arlaState.segmentos[nomeSeg];
   return ARLA_SEGMENTO_LEGADO;
 }
@@ -6020,13 +6009,7 @@ function arlaInit() {
     const savedSeg = localStorage.getItem('arla_segmentos');
     if (savedSeg) { try { window._arlaState.segmentos = JSON.parse(savedSeg); } catch(e) {} }
   }
-  // Carrega mapeamento Operação → Segmento: prioridade = state (Firebase) > localStorage
-  if (!state.opSegmento) state.opSegmento = {};
-  if (!Object.keys(state.opSegmento).length) {
-    const savedMap = localStorage.getItem('arla_op_segmento');
-    if (savedMap) { try { state.opSegmento = JSON.parse(savedMap); } catch(e) {} }
-  }
-  // Carrega mapeamento Placa → Segmento (granularidade real, vem da planilha de fechamento)
+  // Carrega mapeamento Placa → Segmento (granularidade real, vem da planilha de fechamento — única fonte de verdade)
   if (!state.placaSegmento) state.placaSegmento = {};
   if (!Object.keys(state.placaSegmento).length) {
     const savedPlacaMap = localStorage.getItem('arla_placa_segmento');
@@ -6037,9 +6020,8 @@ function arlaInit() {
   // de fechamento devem existir. Defensivo: nunca apaga um segmento que ainda está em uso real.
   Object.keys(ARLA_SEGMENTOS_DEFAULT).forEach(nomeAntigo => {
     if (!window._arlaState.segmentos[nomeAntigo]) return;
-    const emUsoPorOp    = Object.values(state.opSegmento||{}).includes(nomeAntigo);
     const emUsoPorPlaca = Object.values(state.placaSegmento||{}).includes(nomeAntigo);
-    if (!emUsoPorOp && !emUsoPorPlaca) delete window._arlaState.segmentos[nomeAntigo];
+    if (!emUsoPorPlaca) delete window._arlaState.segmentos[nomeAntigo];
   });
   // Compatibilidade com formato antigo
   const savedDados = localStorage.getItem('arla_dados');
@@ -6072,12 +6054,12 @@ function arlaMigrarClassificacaoAntiga() {
     migrou = true;
     const isEgr = egr.has(r.placa);
     const pct = (!isEgr && r.diesel > 0) ? (r.arla / r.diesel * 100) : null;
-    const segCfg = arlaGetSegmentoConfig(r.operacao, r.placa);
+    const segCfg = arlaGetSegmentoConfig(r.placa);
     let status, direcao;
     if (isEgr) { status = 'EGR'; direcao = null; }
     else if (pct === null) { status = 'SEM_DIESEL'; direcao = null; }
     else { const c = arlaClassificar(pct, segCfg); status = c.status; direcao = c.direcao; }
-    r.pct = pct; r.status = status; r.direcao = direcao; r.segmento = (state.placaSegmento && state.placaSegmento[r.placa]) || state.opSegmento[r.operacao] || null;
+    r.pct = pct; r.status = status; r.direcao = direcao; r.segmento = (state.placaSegmento && state.placaSegmento[r.placa]) || null;
   }
   (window._arlaState.meses || []).forEach(m => (m.dados || []).forEach(reclass));
   if (migrou) {
@@ -6191,7 +6173,7 @@ function arlaSetTab(tab, el) {
   });
   document.querySelectorAll('.arla-tab').forEach(b => b.classList.remove('active'));
   if (el) el.classList.add('active');
-  if (tab === 'segmentos') { arlaRenderSegmentosTabela(); arlaRenderSegmentosMap(); }
+  if (tab === 'segmentos') { arlaRenderSegmentosTabela(); }
 }
 
 // ── SEGMENTOS: tabela de faixas editável ──────────────────────────────────────
@@ -6248,7 +6230,6 @@ function arlaImportarSegmentosPlanilha(input) {
       saveState();
       arlaReclassificarTodos();
       arlaRenderSegmentosTabela();
-      arlaRenderSegmentosMap();
 
       statusEl.textContent = '';
       resultEl.innerHTML = `
@@ -6296,57 +6277,18 @@ function arlaOnSegmentoChange(nome, campo, valor) {
   showToast('Faixa de ' + nome + ' atualizada', 'success');
 }
 
-// ── SEGMENTOS: mapeamento Operação → Segmento ────────────────────────────────
-function arlaRenderSegmentosMap() {
-  const cont = document.getElementById('arla-segmentos-map-lista');
-  if (!cont) return;
-  const busca = (document.getElementById('arla-segmap-busca')?.value || '').toLowerCase();
-  // Operações vêm dos dados já importados (todos os meses, não só o atual)
-  const opsSet = new Set();
-  (window._arlaState.meses || []).forEach(m => (m.dados || []).forEach(r => { if (r.operacao) opsSet.add(r.operacao); }));
-  (window._arlaState.processados || []).forEach(r => { if (r.operacao) opsSet.add(r.operacao); });
-  let ops = [...opsSet].sort();
-  if (busca) ops = ops.filter(o => o.toLowerCase().includes(busca));
-
-  if (!ops.length) {
-    cont.innerHTML = '<div style="font-size:12px;color:var(--text3);padding:12px">Nenhuma operação encontrada. Carregue um relatório de Arla primeiro.</div>';
-    return;
-  }
-
-  const segNomes = Object.keys(window._arlaState.segmentos);
-  cont.innerHTML = ops.map(op => {
-    const atual = state.opSegmento[op] || '';
-    const opEsc = op.replace(/'/g,"&apos;");
-    const options = '<option value="">— Sem segmento (regra antiga 5%) —</option>' +
-      segNomes.map(s => `<option value="${s}"${s===atual?' selected':''}>${s}</option>`).join('');
-    return `<div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--bg3);border-radius:8px;flex-wrap:wrap">
-      <span style="flex:1;font-size:13px;font-weight:600;min-width:160px">${op.replace(/_/g,' ')}</span>
-      <select class="filter-select" style="min-width:240px" onchange="arlaOnOpSegmentoChange('${opEsc}',this.value)">${options}</select>
-    </div>`;
-  }).join('');
-}
-
-function arlaOnOpSegmentoChange(operacao, segmento) {
-  if (segmento) state.opSegmento[operacao] = segmento;
-  else delete state.opSegmento[operacao];
-  localStorage.setItem('arla_op_segmento', JSON.stringify(state.opSegmento));
-  saveState();
-  arlaReclassificarTodos();
-  showToast(segmento ? operacao.replace(/_/g,' ') + ' → ' + segmento : 'Segmento removido de ' + operacao.replace(/_/g,' '), 'success');
-}
-
 // Recalcula status/direção de todos os registros já importados (todos os meses) sem precisar reimportar
 function arlaReclassificarTodos() {
   const egr = window._arlaState.egrSet;
   function reclass(r) {
     const isEgr = egr.has(r.placa);
     const pct = (!isEgr && r.diesel > 0) ? (r.arla / r.diesel * 100) : null;
-    const segCfg = arlaGetSegmentoConfig(r.operacao, r.placa);
+    const segCfg = arlaGetSegmentoConfig(r.placa);
     let status, direcao;
     if (isEgr) { status = 'EGR'; direcao = null; }
     else if (pct === null) { status = 'SEM_DIESEL'; direcao = null; }
     else { const c = arlaClassificar(pct, segCfg); status = c.status; direcao = c.direcao; }
-    r.pct = pct; r.status = status; r.direcao = direcao; r.segmento = (state.placaSegmento && state.placaSegmento[r.placa]) || state.opSegmento[r.operacao] || null;
+    r.pct = pct; r.status = status; r.direcao = direcao; r.segmento = (state.placaSegmento && state.placaSegmento[r.placa]) || null;
   }
   (window._arlaState.meses || []).forEach(m => (m.dados || []).forEach(reclass));
   (window._arlaState.processados || []).forEach(reclass);
@@ -6412,8 +6354,8 @@ function arlaProcessar(rows) {
     const arla = getNum(row, 'volarla', 'arla', 'vol.arla', 'litrosarla');
     const isEgr = egr.has(placa);
     const pct = (!isEgr && diesel > 0) ? (arla / diesel * 100) : null;
-    const segNome = (state.placaSegmento && state.placaSegmento[placa]) || state.opSegmento[operacao] || null;
-    const segCfg = arlaGetSegmentoConfig(operacao, placa);
+    const segNome = (state.placaSegmento && state.placaSegmento[placa]) || null;
+    const segCfg = arlaGetSegmentoConfig(placa);
     let status, direcao;
     if (isEgr) { status = 'EGR'; direcao = null; }
     else if (pct === null) { status = 'SEM_DIESEL'; direcao = null; }
@@ -6694,7 +6636,7 @@ function arlaRenderRelatorio() {
   // Calcula desvio em relação à faixa ideal (verde) de cada registro — funciona pros dois lados (baixo/alto)
   function arlaDesvio(r) {
     if (r.pct === null) return 0;
-    const seg = arlaGetSegmentoConfig(r.operacao, r.placa);
+    const seg = arlaGetSegmentoConfig(r.placa);
     if (r.pct < seg.verdeBaixo) return seg.verdeBaixo - r.pct;
     if (r.pct > seg.verdeAlto)  return r.pct - seg.verdeAlto;
     return 0;
