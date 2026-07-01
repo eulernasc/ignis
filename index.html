@@ -3282,7 +3282,7 @@ function renderOpChart(list, isKmL=false) {
         <span style="font-size:18px;font-weight:700;color:${mColor};font-family:monospace;line-height:1">${m.toFixed(2)}</span>
         <span style="font-size:10px;color:var(--text3)">${unidadeMedia}</span>
       </div>
-      ${meta>0?`<div style="font-size:10px;color:${mColor};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${icone} ${desvio!==null?(desvio>0?'+':'')+desvio.toFixed(1)+'%':''} · meta ${meta.toFixed(1)}</div>`:'<div style="font-size:10px;color:var(--text3)">sem meta</div>'}
+      ${meta>0?`<div style="font-size:10px;color:${mColor};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${icone} ${desvio!==null?(desvio>0?'+':'')+desvio.toFixed(1)+'%':''} · meta ${meta.toFixed(2)}</div>`:'<div style="font-size:10px;color:var(--text3)">sem meta</div>'}
       <div style="display:flex;gap:3px;align-items:flex-end;height:36px;margin-top:2px">
         ${!isKmL ? `<div style="flex:1;display:flex;flex-direction:column;justify-content:flex-end">
           <div style="background:var(--accent);border-radius:2px 2px 0 0;height:${barHL}px;opacity:.7"></div>
@@ -3403,9 +3403,9 @@ function renderBarChart(list, isKmL=false) {
     // Linha de meta para km/L
     const metaLineH = isKmL && meta>0 ? Math.min((meta/Math.max(meta,m))*H, H) : 0;
     const metaText = meta > 0
-      ? `<div style="font-size:9px;font-weight:600;font-family:monospace;white-space:nowrap;margin-top:3px;padding:1px 5px;border-radius:4px;background:rgba(192,57,43,.15);color:var(--accent)">${meta.toFixed(1)}</div>`
+      ? `<div style="font-size:9px;font-weight:600;font-family:monospace;white-space:nowrap;margin-top:3px;padding:1px 5px;border-radius:4px;background:rgba(192,57,43,.15);color:var(--accent)">${meta.toFixed(2)}</div>`
       : `<div style="font-size:9px;margin-top:3px;padding:1px 5px;height:16px;visibility:hidden">—</div>`;
-    const tooltipContent = `${p} | ${maq?.operacao||'—'} | ${l.toFixed(0)}L · ${h.toFixed(0)}${isKmL?'km':'h'} · ${m.toFixed(2)} ${unidadeMedia}${meta>0?' · meta: '+meta.toFixed(1)+' '+unidadeMedia:''}${desvio!==null?' ('+( desvio>0?'+':'')+desvio.toFixed(1)+'%)':''}`;
+    const tooltipContent = `${p} | ${maq?.operacao||'—'} | ${l.toFixed(0)}L · ${h.toFixed(0)}${isKmL?'km':'h'} · ${m.toFixed(2)} ${unidadeMedia}${meta>0?' · meta: '+meta.toFixed(2)+' '+unidadeMedia:''}${desvio!==null?' ('+( desvio>0?'+':'')+desvio.toFixed(1)+'%)':''}`;
     return `<div class="bar-group" style="padding-bottom:20px;gap:16px;position:relative;cursor:pointer"
       onmouseenter="showBarTooltip(this,'${tooltipContent.replace(/'/g,"&apos;")}')"
       onmouseleave="hideBarTooltip()">
@@ -3415,7 +3415,7 @@ function renderBarChart(list, isKmL=false) {
           <div class="bar bar-litros" style="height:${Math.max(hL,2)}px;width:${barW}px"></div>
         </div>` : ''}
         <div style="display:flex;flex-direction:column;align-items:center;position:relative">
-          <span style="font-size:9px;color:${barColor};font-weight:700;margin-bottom:2px;font-family:monospace;white-space:nowrap">${m.toFixed(1)}</span>
+          <span style="font-size:9px;color:${barColor};font-weight:700;margin-bottom:2px;font-family:monospace;white-space:nowrap">${m.toFixed(2)}</span>
           <div style="position:relative;width:${barW}px">
             <div class="bar" style="height:${Math.max(hM,2)}px;width:${barW}px;background:${barColor};border-radius:4px 4px 0 0"></div>
             ${isKmL && meta>0 ? `<div style="position:absolute;bottom:${Math.min((meta/Math.max(meta,m))*Math.max(hM,2),Math.max(hM,2))}px;left:0;width:${barW}px;height:2px;background:rgba(255,255,255,0.5);border-radius:1px"></div>` : ''}
@@ -3464,7 +3464,7 @@ function renderRanking(list, isKmL=false) {
         <div class="rank-num">${i+1}</div>
         <div style="flex:1">
           <div class="rank-placa">${item.placa}</div>
-          <div class="rank-litros">${item.litros.toFixed(0)}L total${item.meta>0?' · meta: '+item.meta.toFixed(1)+' '+unidadeMedia:''}</div>
+          <div class="rank-litros">${item.litros.toFixed(0)}L total${item.meta>0?' · meta: '+item.meta.toFixed(2)+' '+unidadeMedia:''}</div>
         </div>
         <div style="text-align:right">
           <div class="rank-value" style="color:${alertColor}">${item.media.toFixed(2)} ${unidadeMedia}</div>
@@ -4045,7 +4045,7 @@ function renderAbastecimentos() {
       <td>${(a.litros||0).toFixed(1)}L</td>
       <td>${(a.horas||0).toFixed(1)}${rowIsKmL?'km':'h'}</td>
       <td><span class="badge ${cls}">${media} ${unid}${desvioLabel?' · '+desvioLabel:''}</span></td>
-      <td style="font-size:11px;color:var(--text2)">${meta>0?meta.toFixed(1)+' '+unid:''}</td>
+      <td style="font-size:11px;color:var(--text2)">${meta>0?meta.toFixed(2)+' '+unid:''}</td>
       <td>${a.operador||'—'}</td>
       <td>
         <button class="btn-icon" onclick="verificarSenha(()=>editarAbast(${idx}))" title="Editar">✏️</button>
@@ -5115,7 +5115,7 @@ function renderRelatorio() {
     const mediaReal = calcMedia(dados.litros, dados.horas);
     const eficiencia = meta > 0 && mediaReal > 0 ? (isKmL ? (mediaReal/meta)*100 : (meta/mediaReal)*100) : null;
     const desvio = meta > 0 && mediaReal > 0 ? ((mediaReal - meta) / meta * 100) : null;
-    const item = { placa, operacao: dados.operacao, mediaReal, meta, eficiencia, desvio };
+    const item = { placa, operacao: dados.operacao, modelo: maq?.modelo || '', litros: dados.litros, kmHoras: dados.horas, mediaReal, meta, eficiencia, desvio };
     if (eficiencia !== null && eficiencia < limite) maquinasProblema.push(item);
     else maquinasOk.push(item);
   }
@@ -5177,7 +5177,7 @@ function renderRelatorio() {
         return '<tr style="border-bottom:1px solid rgba(42,47,69,.5)">' +
           '<td style="padding:10px 12px;font-weight:600"><span class="placa-tag">' + m.placa + '</span></td>' +
           '<td style="padding:10px 12px;text-align:center;font-size:11px;color:var(--text2)">' + m.operacao + '</td>' +
-          '<td style="padding:10px 12px;text-align:center;font-family:monospace;color:var(--accent)">' + (m.meta>0?m.meta.toFixed(1)+' '+unidadeMedia:'—') + '</td>' +
+          '<td style="padding:10px 12px;text-align:center;font-family:monospace;color:var(--accent)">' + (m.meta>0?m.meta.toFixed(2)+' '+unidadeMedia:'—') + '</td>' +
           '<td style="padding:10px 12px;text-align:center;font-family:monospace;color:' + cor + ';font-weight:700">' + m.mediaReal.toFixed(2) + ' ' + unidadeMedia + '</td>' +
           '<td style="padding:10px 12px;text-align:center;font-family:monospace;color:' + cor + '">' + (m.desvio>0?'+':'') + m.desvio.toFixed(1) + '%</td>' +
           '<td style="padding:10px 12px;text-align:center"><span style="background:' + cor + ';color:#fff;padding:3px 10px;border-radius:99px;font-size:12px;font-weight:700">' + m.eficiencia.toFixed(1) + '%</span></td>' +
@@ -5353,18 +5353,22 @@ function relEmailFiltrar() {
 function buildEmailHTML(blocoOps, byOp, labelPeriodo, limite, labelBloco) {
   const corEfic = e => e < 90 ? '#dc2626' : e < 95 ? '#ea580c' : '#d97706';
   const bgEfic  = e => e < 90 ? '#fef2f2' : e < 95 ? '#fff7ed' : '#fffbeb';
-  let secoes = '';
+  const isKmL = window._relDados?.isKmL || false;
+  const unidadeMedia = window._relDados?.unidadeMedia || 'L/h';
+  const colKmHoras = isKmL ? 'KM Rodado' : 'Horas';
+  let linhas = '', totalPlacas = 0, rowIdx = 0;
   for (const op of blocoOps) {
     const maquinas = byOp[op];
     if (!maquinas) continue;
-    const linhas = maquinas.map((m,i) => {
+    totalPlacas += maquinas.length;
+    linhas += maquinas.map(m => {
       const cor = corEfic(m.eficiencia);
-      const bg  = i%2===0 ? '#ffffff' : '#f8fafc';
+      const bg  = rowIdx%2===0 ? '#ffffff' : '#f8fafc';
+      rowIdx++;
       const isReincidente = window._reincidentesSet && window._reincidentesSet.has(m.placa);
       const _shortLabel = lbl => {
-        // "Semana 2 · Abr. de 2026" → "S2 Abr" / "Semana 12/04" → "12/04"
         if (!lbl) return lbl;
-        let s = lbl.replace(/\s*·?\s*de\s+\d{4}/gi,'').replace(/de\s+\d{4}/gi,'').trim();
+        let s = lbl.replace(/\s*·?\s*de\s+\d{4}/gi,'').replace(/de\s+\d{4}/gi,'').trim();
         s = s.replace(/Semana\s+(\d+)/i, 'S$1');
         s = s.replace(/\s*·\s*/g, ' ').trim();
         return s;
@@ -5377,30 +5381,23 @@ function buildEmailHTML(blocoOps, byOp, labelPeriodo, limite, labelBloco) {
           (reincSemanas ? ' <span style="font-size:10px;color:#b91c1c;font-weight:400">(' + reincSemanas + ')</span>' : '')
         : '';
       return '<tr style="background:' + bg + '">' +
-        '<td style="padding:11px 16px;font-weight:700;font-family:monospace;font-size:13px;color:#1e293b;border-bottom:1px solid #e2e8f0">' + m.placa + reincBadge + '</td>' +
-        '<td style="padding:11px 16px;color:#2563eb;font-weight:600;text-align:center;font-size:13px;border-bottom:1px solid #e2e8f0">' + (m.meta>0?m.meta.toFixed(1)+' '+(window._relDados?.unidadeMedia||'L/h'):'—') + '</td>' +
-        '<td style="padding:11px 16px;font-weight:700;text-align:center;font-size:13px;color:' + cor + ';border-bottom:1px solid #e2e8f0">' + m.mediaReal.toFixed(2) + ' ' + (window._relDados?.unidadeMedia||'L/h') + '</td>' +
-        '<td style="padding:11px 16px;text-align:center;font-size:13px;color:' + cor + ';font-weight:600;border-bottom:1px solid #e2e8f0">+' + m.desvio.toFixed(1) + '%</td>' +
-        '<td style="padding:11px 16px;text-align:center;border-bottom:1px solid #e2e8f0">' +
-          '<span style="display:inline-block;background:' + bgEfic(m.eficiencia) + ';color:' + cor + ';border:1px solid ' + cor + ';padding:3px 12px;border-radius:99px;font-size:12px;font-weight:700">' + m.eficiencia.toFixed(1) + '%</span>' +
+        '<td style="padding:10px 12px;font-size:12px;color:#334155;border-bottom:1px solid #e2e8f0;white-space:nowrap">' + op + '</td>' +
+        '<td style="padding:10px 12px;font-weight:700;font-family:monospace;font-size:13px;color:#1e293b;border-bottom:1px solid #e2e8f0;white-space:nowrap">' + m.placa + reincBadge + '</td>' +
+        '<td style="padding:10px 12px;font-size:12px;color:#64748b;border-bottom:1px solid #e2e8f0">' + (m.modelo||'—') + '</td>' +
+        '<td style="padding:10px 12px;text-align:center;font-family:monospace;font-size:12px;color:#334155;border-bottom:1px solid #e2e8f0">' + (m.kmHoras||0).toFixed(1) + (isKmL?' km':' h') + '</td>' +
+        '<td style="padding:10px 12px;text-align:center;font-family:monospace;font-size:12px;color:#334155;border-bottom:1px solid #e2e8f0">' + (m.litros||0).toFixed(1) + ' L</td>' +
+        '<td style="padding:10px 12px;color:#2563eb;font-weight:600;text-align:center;font-size:13px;border-bottom:1px solid #e2e8f0;white-space:nowrap">' + (m.meta>0?m.meta.toFixed(2)+' '+unidadeMedia:'—') + '</td>' +
+        '<td style="padding:10px 12px;font-weight:700;text-align:center;font-size:13px;color:' + cor + ';border-bottom:1px solid #e2e8f0;white-space:nowrap">' + m.mediaReal.toFixed(2) + ' ' + unidadeMedia + '</td>' +
+        '<td style="padding:10px 12px;text-align:center;border-bottom:1px solid #e2e8f0">' +
+          '<span style="display:inline-block;background:' + bgEfic(m.eficiencia) + ';color:' + cor + ';border:1px solid ' + cor + ';padding:3px 10px;border-radius:99px;font-size:12px;font-weight:700">' + m.eficiencia.toFixed(1) + '%</span>' +
         '</td>' +
         '</tr>';
     }).join('');
-    secoes +=
-      '<tr><td colspan="5" style="padding:0"><table width="100%" cellpadding="0" cellspacing="0">' +
-        '<tr style="background:#1e40af">' +
-          '<td style="padding:10px 16px;color:#ffffff;font-family:Arial,sans-serif">' +
-            '<b style="font-size:13px;font-weight:700;color:#ffffff;letter-spacing:.3px">📍 ' + op + '</b>' +
-            '&nbsp;&nbsp;<span style="font-size:11px;color:#ffffff;font-weight:400">' + maquinas.length + ' máquina' + (maquinas.length>1?'s':'') + ' abaixo da meta</span>' +
-          '</td>' +
-        '</tr>' +
-      '</table></td></tr>' + linhas;
   }
 
   return '<!DOCTYPE html><html><body style="margin:0;padding:20px 0;font-family:Arial,Helvetica,sans-serif;background:#e2e8f0">' +
-    '<table width="620" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #cbd5e1">' +
+    '<table width="700" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #cbd5e1">' +
 
-    // Header
     '<tr><td style="background:linear-gradient(135deg,#1e3a8a 0%,#1d4ed8 100%);padding:22px 24px">' +
       '<table cellpadding="0" cellspacing="0"><tr>' +
         '<td style="font-size:30px;padding-right:14px;vertical-align:middle">⛽</td>' +
@@ -5411,7 +5408,6 @@ function buildEmailHTML(blocoOps, byOp, labelPeriodo, limite, labelBloco) {
       '</tr></table>' +
     '</td></tr>' +
 
-    // Info bar
     '<tr><td style="background:#eff6ff;padding:10px 24px;border-bottom:1px solid #bfdbfe">' +
       '<table cellpadding="0" cellspacing="0" width="100%"><tr>' +
         '<td style="font-size:12px;color:#1d4ed8"><strong>📅 Período:</strong> ' + labelPeriodo + '</td>' +
@@ -5419,21 +5415,26 @@ function buildEmailHTML(blocoOps, byOp, labelPeriodo, limite, labelBloco) {
       '</tr></table>' +
     '</td></tr>' +
 
-    // Table
+    '<tr><td style="background:#ffffff;padding:8px 24px;border-bottom:1px solid #e2e8f0">' +
+      '<span style="font-size:12px;color:#64748b">🔧 <strong style="color:#1e293b">' + totalPlacas + '</strong> placa' + (totalPlacas>1?'s':'') + ' abaixo da meta</span>' +
+    '</td></tr>' +
+
     '<tr><td>' +
       '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">' +
         '<thead><tr style="background:#f1f5f9">' +
-          '<th style="padding:11px 16px;text-align:left;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;border-bottom:2px solid #e2e8f0">Máquina</th>' +
-          '<th style="padding:11px 16px;text-align:center;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;border-bottom:2px solid #e2e8f0">Meta</th>' +
-          '<th style="padding:11px 16px;text-align:center;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;border-bottom:2px solid #e2e8f0">Real</th>' +
-          '<th style="padding:11px 16px;text-align:center;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;border-bottom:2px solid #e2e8f0">Desvio</th>' +
-          '<th style="padding:11px 16px;text-align:center;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;border-bottom:2px solid #e2e8f0">Eficiência</th>' +
+          '<th style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;border-bottom:2px solid #e2e8f0">Operação</th>' +
+          '<th style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;border-bottom:2px solid #e2e8f0">Placa</th>' +
+          '<th style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;border-bottom:2px solid #e2e8f0">Modelo</th>' +
+          '<th style="padding:10px 12px;text-align:center;font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;border-bottom:2px solid #e2e8f0">' + colKmHoras + '</th>' +
+          '<th style="padding:10px 12px;text-align:center;font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;border-bottom:2px solid #e2e8f0">Litros</th>' +
+          '<th style="padding:10px 12px;text-align:center;font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;border-bottom:2px solid #e2e8f0">Meta</th>' +
+          '<th style="padding:10px 12px;text-align:center;font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;border-bottom:2px solid #e2e8f0">Real</th>' +
+          '<th style="padding:10px 12px;text-align:center;font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;border-bottom:2px solid #e2e8f0">EFC</th>' +
         '</tr></thead>' +
-        '<tbody>' + secoes + '</tbody>' +
+        '<tbody>' + linhas + '</tbody>' +
       '</table>' +
     '</td></tr>' +
 
-    // Footer
     '<tr><td style="background:#f8fafc;padding:16px 24px;border-top:1px solid #e2e8f0;text-align:center">' +
       '<a href="https://" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 28px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:700">Abrir Ignis →</a>' +
       '<div style="margin-top:10px;font-size:11px;color:#94a3b8">Gerado pelo Ignis · </div>' +
@@ -5509,7 +5510,7 @@ function copiarRelatorio() {
   for (const [op, maquinas] of Object.entries(byOp)) {
     texto += '📍 ' + op + '\n';
     maquinas.forEach(m => {
-      texto += '• ' + m.placa + ' | Meta: ' + (m.meta>0?m.meta.toFixed(1):'-') + ' ' + unidadeMedia + ' | Real: ' + m.mediaReal.toFixed(2) + ' ' + unidadeMedia + ' | ' + (m.desvio>0?'+':'') + m.desvio.toFixed(1) + '% | ' + m.eficiencia.toFixed(1) + '%\n';
+      texto += '• ' + m.placa + ' | Meta: ' + (m.meta>0?m.meta.toFixed(2):'-') + ' ' + unidadeMedia + ' | Real: ' + m.mediaReal.toFixed(2) + ' ' + unidadeMedia + ' | ' + (m.desvio>0?'+':'') + m.desvio.toFixed(1) + '% | ' + m.eficiencia.toFixed(1) + '%\n';
     });
     texto += '\n';
   }
@@ -7702,7 +7703,7 @@ function renderExecutivo() {
       const metaCli = opGetMeta(getMaquina(m.placa)?.operacao || '');
       const metaEfetiva = metaCli > 0 ? metaCli : m.meta;
       const tunel = opGetTunel(getMaquina(m.placa)?.operacao || '');
-      const limiteLabel = tunel > 0 ? metaEfetiva.toFixed(1) + ' +' + tunel + '%' : (metaEfetiva > 0 ? metaEfetiva.toFixed(1) + ' ' + unidadeMedia : '—');
+      const limiteLabel = tunel > 0 ? metaEfetiva.toFixed(2) + ' +' + tunel + '%' : (metaEfetiva > 0 ? metaEfetiva.toFixed(2) + ' ' + unidadeMedia : '—');
       const eficCor = !m.efic ? 'var(--text3)' : m.efic >= 98 ? 'var(--green)' : m.efic >= 90 ? 'var(--yellow)' : 'var(--red)';
       const eficBadge = !m.efic ? '' : m.efic >= 98 ? 'badge-green' : m.efic >= 90 ? 'badge-yellow' : 'badge-red';
       html += '<tr>';
@@ -7770,7 +7771,7 @@ function exportarExecutivoEmail() {
     return '<tr style="background:' + (i%2===0?'#fff':'#f8fafc') + ';border-bottom:1px solid #e2e8f0">' +
       '<td style="padding:9px 12px;font-weight:700;font-family:monospace;font-size:13px;color:#1e293b">' + m.placa + '</td>' +
       '<td style="padding:9px 12px;font-size:12px;color:#64748b">' + m.op + '</td>' +
-      '<td style="padding:9px 12px;text-align:center;font-family:monospace;color:#2563eb">' + (m.meta>0?m.meta.toFixed(1)+' '+(window._execDados?.unidadeMedia||'L/h'):'—') + '</td>' +
+      '<td style="padding:9px 12px;text-align:center;font-family:monospace;color:#2563eb">' + (m.meta>0?m.meta.toFixed(2)+' '+(window._execDados?.unidadeMedia||'L/h'):'—') + '</td>' +
       '<td style="padding:9px 12px;text-align:center;font-weight:700;font-family:monospace;color:' + eficCor + '">' + m.media.toFixed(2) + ' ' + (window._execDados?.unidadeMedia||'L/h') + '</td>' +
       '<td style="padding:9px 12px;text-align:center;color:' + eficCor + ';font-weight:700">' + (m.efic?m.efic.toFixed(1)+'%':'—') + '</td>' +
       '<td style="padding:9px 12px;text-align:right;font-weight:700;color:#dc2626;font-family:monospace">' + fmtR(m.desperdicadoR) + '</td>' +
