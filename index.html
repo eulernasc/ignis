@@ -729,8 +729,7 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
             <div id="placa-checkboxes"></div>
           </div>
         </div>
-        <select class="filter-select" id="dash-maq-filter" onchange="updateFilters();populatePlacaDropdown();populateModeloDropdown();populateTipoVeicDropdown();renderDashboard()"><option value="">Selecione o tipo...</option></select>
-        <select class="filter-select" id="dash-tipo-veic-filter" onchange="renderDashboard()" style="display:none;min-width:160px"><option value="">Todos os Tipos</option></select>
+        <select class="filter-select" id="dash-maq-filter" onchange="updateFilters();populatePlacaDropdown();populateModeloDropdown();renderDashboard()"><option value="">Selecione o tipo...</option></select>
         <!-- Multi-select modelos -->
         <div style="position:relative" id="modelo-dropdown-wrap">
           <button class="filter-select" id="modelo-dropdown-btn" onclick="toggleModeloDropdown()" style="cursor:pointer;text-align:left;min-width:170px;display:none;align-items:center;justify-content:space-between;gap:8px">
@@ -852,7 +851,6 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
   </div>
   <input type="hidden" id="comp-maq-filter" value="">
 </div>
-        <select class="filter-select" id="comp-tipo-veic-filter" onchange="renderComparativo()" style="display:none;min-width:160px"><option value="">Todos os Tipos</option></select>
       </div>
     </div>
 
@@ -2736,38 +2734,6 @@ function togglePlacaDropdown() {
   }
 }
 
-function populateTipoVeicDropdown() {
-  // Popula ambos os dropdowns de Tipo de Veículo (Dashboard + Comparativo)
-  const maqF     = document.getElementById('dash-maq-filter')?.value || '';
-  const compMaqF = document.getElementById('comp-maq-filter')?.value || '';
-  const tipoFn   = (filterVal) => {
-    if (!filterVal) return [];
-    const tipoAlvo = { '__maquinas__':'maquina','__tratores__':'trator','__pesada__':'pesada','__leve__':'leve','__empilhadeiras__':'empilhadeira' }[filterVal];
-    const abasts = tipoAlvo
-      ? state.abastecimentos.filter(a => getTipoIgnis(a) === tipoAlvo)
-      : state.abastecimentos.filter(a => a.placa === filterVal);
-    const tipos = [...new Set(abasts.map(a => (getMaquina(a.placa)?.tipo || a.tipo || '').trim()).filter(Boolean))].sort();
-    return tipos;
-  };
-
-  const updateSel = (selId, tipos, prevVal) => {
-    const sel = document.getElementById(selId);
-    if (!sel) return;
-    if (!tipos.length) { sel.style.display = 'none'; sel.value = ''; return; }
-    sel.style.display = '';
-    sel.innerHTML = '<option value="">Todos os Tipos</option>' +
-      tipos.map(t => `<option value="${t}"${t===prevVal?' selected':''}>${t}</option>`).join('');
-  };
-
-  const dashTipos = tipoFn(maqF);
-  const curDash   = document.getElementById('dash-tipo-veic-filter')?.value || '';
-  updateSel('dash-tipo-veic-filter', dashTipos, curDash);
-
-  const compTipos = tipoFn(compMaqF);
-  const curComp   = document.getElementById('comp-tipo-veic-filter')?.value || '';
-  updateSel('comp-tipo-veic-filter', compTipos, curComp);
-}
-
 function populateModeloDropdown() {
   const btn  = document.getElementById('modelo-dropdown-btn');
   const cont = document.getElementById('modelo-checkboxes');
@@ -3109,19 +3075,12 @@ function getFilteredAbast(opF,maqF) {
     });
   }
 
-  // Filtro de Tipo de Veículo — lê de ambos os dropdowns (Dashboard e Comparativo)
-  const tipoVeicF = (document.getElementById('dash-tipo-veic-filter')?.value || document.getElementById('comp-tipo-veic-filter')?.value || '').trim();
-  if (tipoVeicF) {
-    list = list.filter(a => (getMaquina(a.placa)?.tipo || a.tipo || '').trim() === tipoVeicF);
-  }
-
   return list;
 }
 
 // ── DASHBOARD ─────────────────────────────────────────────────────────────────
 function renderDashboard() {
   updateFilters();
-  populateTipoVeicDropdown();
   const opsSelec=getSelectedOps();
   const maqF=document.getElementById('dash-maq-filter')?.value||'';
 
@@ -3619,8 +3578,6 @@ function renderComparativo() {
     else if(maqCompF === '__empilhadeiras__') rows = rows.filter(r=>getTipoIgnis(r)==='empilhadeira');
     else if(maqCompF) rows = rows.filter(r=>r.placa===maqCompF);
     else rows = rows.filter(r=>getTipoIgnis(r)!=='empilhadeira');
-    const compTipoVeicF = document.getElementById('comp-tipo-veic-filter')?.value?.trim() || '';
-    if (compTipoVeicF) rows = rows.filter(r => (getMaquina(r.placa)?.tipo || r.tipo || '').trim() === compTipoVeicF);
     const tL=rows.reduce((a,r)=>a+(r.litros||0),0), tH=rows.reduce((a,r)=>a+(r.horas||0),0);
     dadosPeriodo[id]={label:p.label||id, rows, totalL:tL, totalH:tH, media:calcMedia(tL,tH), maquinas:new Set(rows.map(r=>r.placa)).size};
   });
@@ -3789,8 +3746,6 @@ function renderCompFinanceiro() {
     else if (maqCompF === '__empilhadeiras__') rows = rows.filter(r=>getTipoIgnis(r)==='empilhadeira');
     else if (maqCompF) rows = rows.filter(r=>r.placa===maqCompF);
     else rows = rows.filter(r=>getTipoIgnis(r)!=='empilhadeira');
-    const compTipoVeicF2 = document.getElementById('comp-tipo-veic-filter')?.value?.trim() || '';
-    if (compTipoVeicF2) rows = rows.filter(r => (getMaquina(r.placa)?.tipo || r.tipo || '').trim() === compTipoVeicF2);
 
     const byMaqF = {};
     rows.forEach(r => {
@@ -9146,7 +9101,6 @@ function setCompMaq(el) {
   updateFilters();
   // Trigger render
   const tabFin = document.getElementById('comp-tab-financeiro');
-  populateTipoVeicDropdown(); // re-popula tipos disponíveis pra novo tipo de frota
   if (tabFin && tabFin.style.display !== 'none') renderCompFinanceiro();
   else renderComparativo();
 }
