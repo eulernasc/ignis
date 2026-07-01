@@ -4531,7 +4531,13 @@ function parseDataBR(v) {
   if (m) return new Date(+m[3], +m[2]-1, +m[1], +(m[4]||0), +(m[5]||0), +(m[6]||0));
   return null;
 }
-function dataParaISO(d) { return d.toISOString().split('T')[0]; }
+function dataParaISO(d) {
+  // Usa hora local (não UTC) pra evitar shift de fuso: 23:59:59 BRT vira dia seguinte em UTC
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,'0');
+  const day = String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
 
 function importarRelatorioDiario(input) {
   const file = input.files[0]; if (!file) return;
@@ -4586,16 +4592,23 @@ function importarRelatorioDiario(input) {
         input.value=''; return;
       }
 
-      // 2ª passada: descobre o intervalo total e separa em blocos sequenciais de 7 dias
+      // 2ª passada: separa em blocos de 7 dias exatos (dias do fuso horário local, não UTC)
+      // Dias sobrando no final (< 7 dias) são absorvidos pela última semana em vez de criar uma semana incompleta
       const minData = new Date(linhas[0].data.getFullYear(), linhas[0].data.getMonth(), linhas[0].data.getDate());
       const maxData = linhas[linhas.length-1].data;
+      const totalDias = Math.round((new Date(maxData.getFullYear(), maxData.getMonth(), maxData.getDate()) - minData) / 86400000) + 1;
+      const nSemanas = Math.ceil(totalDias / 7);
       const blocos = [];
-      let cursor = new Date(minData);
-      while (cursor <= maxData) {
-        const inicio = new Date(cursor);
-        const fim = new Date(cursor); fim.setDate(fim.getDate()+6); fim.setHours(23,59,59,999);
+      for (let i = 0; i < nSemanas; i++) {
+        const inicio = new Date(minData); inicio.setDate(inicio.getDate() + i * 7);
+        const fim = new Date(inicio);
+        if (i === nSemanas - 1) {
+          // Última semana: vai até o final real dos dados (absorve sobras)
+          fim.setTime(maxData.getTime()); fim.setHours(23,59,59,999);
+        } else {
+          fim.setDate(fim.getDate() + 6); fim.setHours(23,59,59,999);
+        }
         blocos.push({ inicio, fim, porPlaca: {} });
-        cursor.setDate(cursor.getDate()+7);
       }
 
       // 3ª passada: distribui cada linha no bloco certo e consolida por placa
@@ -4612,7 +4625,16 @@ function importarRelatorioDiario(input) {
         if (l.valorLitro > 0) { p._somaPreco = (p._somaPreco||0) + l.valorLitro; p._countPreco = (p._countPreco||0) + 1; }
       });
 
-      // 4ª passada: verifica conflitos com semanas já existentes (por intervalo de datas) ANTES de escrever qualquer coisa
+      // Se o último bloco tem menos de 7 dias, mescla com o anterior
+      // (dias 29-30 de junho ficam dentro da "Semana 4" em vez de criar "Semana 5 incompleta")
+      if (blocos.length >= 2) {
+        const ultimo  = blocos[blocos.length - 1];
+        const diasUlt = Math.round((new Date(ultimo.fim.getFullYear(), ultimo.fim.getMonth(), ultimo.fim.getDate()) - new Date(ultimo.inicio.getFullYear(), ultimo.inicio.getMonth(), ultimo.inicio.getDate())) / 86400000) + 1;
+        if (diasUlt < 7) {
+          blocos[blocos.length - 2].fim = ultimo.fim; // estende fim do penúltimo
+          blocos.pop();                               // remove o fragmento
+        }
+      }
       const conflitos = [];
       blocos.forEach(b => {
         const dIni = dataParaISO(b.inicio), dFim = dataParaISO(b.fim);
