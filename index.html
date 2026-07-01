@@ -1925,18 +1925,20 @@ let abastFiltrados = [];
 
 async function loadState() {
   try { const s=localStorage.getItem('fueltracker_v3'); if(s) state=JSON.parse(s); } catch(e){}
-  // Tenta recuperar backup completo do IDB (tem abastecimentos + semanas completas)
+  // IDB é usado APENAS como cache de abastecimentos/semanas em memória (o Firebase lean não os guarda).
+  // NÃO é mais usado como "fonte de verdade" para recuperação — isso fazia o sistema reverter
+  // exclusões intencionais ao detectar que o IDB tinha mais dados que o localStorage.
+  // A lógica agora é: Firebase sempre ganha; IDB só serve pra preencher a memória antes do Firebase responder.
   try {
     const idb = await idbLoad();
-    if (idb && idb._idbAt) {
-      const idbAbast = idb.abastecimentos?.length || 0;
-      const locAbast = state.abastecimentos?.length || 0;
-      const idbSem   = Object.keys(idb.semanas||{}).length;
-      const locSem   = Object.keys(state.semanas||{}).length;
-      // Usa IDB se tiver mais dados que o localStorage lean
-      if (idbAbast > locAbast || idbSem > locSem) {
-        state = { ...state, ...idb };
-        console.info(`IDB recovery: ${idbAbast} abast, ${idbSem} semanas`);
+    if (idb && idb._idbAt && idb.abastecimentos?.length > 0) {
+      // Preenche memória com dados do IDB apenas se o localStorage lean não tem abastecimentos
+      // (que é sempre o caso — o lean nunca guarda os registros pesados)
+      if (!state.abastecimentos?.length) {
+        state.abastecimentos = idb.abastecimentos || [];
+      }
+      if (!state.semanas || !Object.keys(state.semanas).length) {
+        state.semanas = idb.semanas || {};
       }
     }
   } catch(e) { console.warn('IDB load skip:', e); }
@@ -1986,29 +1988,9 @@ async function syncFromFirebase() {
       const dados = { ...rest };
       delete dados._savedAt;
 
-      // ── PROTEÇÃO ANTI-PERDA DE DADOS ──────────────────────────────────────────
-      // Se Firebase tem MENOS abastecimentos/semanas que local, mantém os locais
-      // Isso evita que outro usuário com dados mais antigos sobrescreva importações
-      const localAbast = state.abastecimentos?.length || 0;
-      const fbAbast    = dados.abastecimentos?.length || 0;
-      const localSem   = Object.keys(state.semanas||{}).length;
-      const fbSem      = Object.keys(dados.semanas||{}).length;
-
-      if (fbAbast < localAbast || fbSem < localSem) {
-        if (fbAbast < localAbast) dados.abastecimentos = state.abastecimentos;
-        if (fbSem < localSem) dados.semanas = { ...(dados.semanas||{}), ...(state.semanas||{}) };
-        const maqMap = {};
-        [...(dados.maquinas||[]), ...(state.maquinas||[])].forEach(m => {
-          if (!maqMap[m.placa] || (m.meta && !maqMap[m.placa].meta)) maqMap[m.placa] = m;
-        });
-        dados.maquinas = Object.values(maqMap);
-        // Firebase incompleto detectado — salva dados locais de volta
-        console.warn(`Ignis: Firebase tinha ${fbAbast} abast / ${fbSem} semanas vs local ${localAbast} / ${localSem}. Restaurando local.`);
-        showToast('⚠️ Firebase incompleto detectado — dados locais preservados', 'error');
-        setTimeout(() => saveState(), 2000);
-      }
-
-      // Sempre merge dieselPrecos e opConfigs — nunca sobrescrever configurações locais
+      // Firebase é sempre a fonte de verdade — o que está lá é o que vale.
+      // A "proteção anti-perda" anterior causava reverter exclusões intencionais. Removida.
+      // Merge apenas de configs locais (podem ter sido atualizadas entre dois syncs).
       dados.dieselPrecos = { ...(dados.dieselPrecos||{}), ...(state.dieselPrecos||{}) };
       dados.opConfigs    = { ...(dados.opConfigs||{}),    ...(state.opConfigs||{})    };
 
@@ -4265,12 +4247,11 @@ function limparPeriodo(id) {
   if(!p) return;
   if(!confirm(`Apagar o período "${p.label||id}"? Os abastecimentos deste período também serão removidos.`)) return;
   const antes = state.abastecimentos.length;
-  // Remove por periodoId direto — nunca por chave reconstruída de "registros",
-  // que pode estar vazio/desatualizado em memória e deixar dados órfãos (parecendo que "voltam")
   state.abastecimentos = state.abastecimentos.filter(a => a.periodoId !== id);
   const removidos = antes - state.abastecimentos.length;
   delete state.semanas[id];
   saveState();
+  idbSave({ ...state, _savedAt: Date.now() }); // atualiza IDB imediatamente pra não reverter essa exclusão
   renderHistoricoPeriodos();
   showToast(`Período "${p.label||id}" apagado! (${removidos} registro(s) removido(s))`, 'success');
 }
@@ -4282,12 +4263,11 @@ function limparTodosPeriodos() {
     if (!confirm(`Apagar TODOS os ${periodos.length} período(s) do histórico? Todos os abastecimentos vinculados a eles também serão removidos. Essa ação não pode ser desfeita.`)) return;
     if (!confirm(`Confirme novamente: apagar os ${periodos.length} período(s) e todos os abastecimentos vinculados?`)) return;
     const antes = state.abastecimentos.length;
-    // Remove só os abastecimentos vinculados a algum período (têm periodoId) — preserva
-    // lançamentos manuais feitos via "Novo Registro", que não têm periodoId.
     state.abastecimentos = state.abastecimentos.filter(a => !a.periodoId);
     const removidos = antes - state.abastecimentos.length;
     state.semanas = {};
     saveState();
+    idbSave({ ...state, _savedAt: Date.now() }); // atualiza IDB imediatamente pra não reverter essa exclusão
     renderHistoricoPeriodos();
     updateFilters(); renderDashboard();
     showToast(`${periodos.length} período(s) apagado(s)! (${removidos} registro(s) removido(s))`, 'success');
