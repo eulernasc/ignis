@@ -5190,8 +5190,8 @@ function renderRelatorio() {
   '</div>';
 
   c.innerHTML = html;
-  window._relDados = { labelPeriodo, maquinasProblema, byOp, limite, isKmL, unidadeMedia };
-  renderRelEmailBloco(Object.keys(byOp));
+  window._relDados = { labelPeriodo, maquinasProblema, byOp, limite, isKmL, unidadeMedia, relTipo };
+  renderRelEmailBloco(Object.keys(byOp), relTipo);
 }
 
 // ── Grupos de operações que compartilham destinatário ──────────────────────────
@@ -5204,32 +5204,34 @@ function relGetGrupoPorOp(op) {
 }
 
 // Constrói lista de "blocos de envio": cada bloco = 1 e-mail
-function relGetBlocos(operacoes) {
+function relGetBlocos(operacoes, relTipo) {
+  // Sufixo legível para o tipo de frota (ex: " · Pesada")
+  const tipoLabel = { '__pesada__': 'Pesada', '__leve__': 'Leve', '__maquinas__': 'Máquinas', '__tratores__': 'Tratores', '__maq_tra__': 'Máq+Tratores', '__empilhadeiras__': 'Empilhadeiras' };
+  const sufixo = relTipo && tipoLabel[relTipo] ? ' · ' + tipoLabel[relTipo] : '';
   const blocos = [];
   const usadas = new Set();
   for (const op of operacoes) {
     if (usadas.has(op)) continue;
     const grupo = relGetGrupoPorOp(op);
     if (grupo) {
-      // Pega só as ops do grupo que estão na lista
       const opsGrupo = grupo.ops.filter(o => operacoes.includes(o));
       opsGrupo.forEach(o => usadas.add(o));
-      blocos.push({ id: grupo.nome, label: grupo.nome, ops: opsGrupo, isGrupo: true });
+      blocos.push({ id: grupo.nome + sufixo, label: grupo.nome + sufixo, ops: opsGrupo, isGrupo: true });
     } else {
       usadas.add(op);
-      blocos.push({ id: op, label: op, ops: [op], isGrupo: false });
+      blocos.push({ id: op + sufixo, label: op + sufixo, ops: [op], isGrupo: false });
     }
   }
   return blocos;
 }
 
-function renderRelEmailBloco(operacoes) {
+function renderRelEmailBloco(operacoes, relTipo) {
   const bloco = document.getElementById('rel-email-bloco');
   if (!bloco) return;
   if (!operacoes.length) { bloco.innerHTML = ''; return; }
   const dica = '<div style="font-size:11px;color:var(--text3);margin-bottom:12px">💡 Configure grupos em <strong>📧 Grupos de E-mail</strong> para reusar toda semana!</div>';
-  const blocosSalvos = relgGetBlocosSalvos(operacoes);
-  const blocos = blocosSalvos || relGetBlocos(operacoes);
+  const blocosSalvos = relgGetBlocosSalvos(operacoes, relTipo);
+  const blocos = blocosSalvos || relGetBlocos(operacoes, relTipo);
   window._relBlocos = blocos;
 
   bloco.innerHTML = '<div class="chart-card">' +
@@ -7157,9 +7159,12 @@ function relgRender() {
 }
 
 // Integra grupos na renderRelEmailBloco
-function relgGetBlocosSalvos(operacoes) {
+function relgGetBlocosSalvos(operacoes, relTipo) {
   relgInit();
   if (!window._relGrupos.length) return null;
+
+  const tipoLabel = { '__pesada__': 'Pesada', '__leve__': 'Leve', '__maquinas__': 'Máquinas', '__tratores__': 'Tratores', '__maq_tra__': 'Máq+Tratores', '__empilhadeiras__': 'Empilhadeiras' };
+  const sufixo = relTipo && tipoLabel[relTipo] ? ' · ' + tipoLabel[relTipo] : '';
 
   // Normaliza: trim + underscore→espaço + espaços duplos + uppercase
   const norm = s => s.trim().replace(/_/g,' ').replace(/\s+/g,' ').toUpperCase();
@@ -7173,15 +7178,15 @@ function relgGetBlocosSalvos(operacoes) {
       const idx = operacoesNorm.indexOf(norm(savedOp));
       if (idx >= 0 && !usadas.has(operacoes[idx])) {
         usadas.add(operacoes[idx]);
-        opsGrupo.push(operacoes[idx]); // nome original da análise (chave de byOp)
+        opsGrupo.push(operacoes[idx]);
       }
     });
     if (!opsGrupo.length) continue;
-    blocos.push({ id: g.id, label: g.nome, ops: opsGrupo, emails: g.emails, isGrupo: true });
+    blocos.push({ id: g.id + sufixo, label: g.nome + sufixo, ops: opsGrupo, emails: g.emails, isGrupo: true });
   }
   // Operações não cobertas por nenhum grupo
   operacoes.filter(o => !usadas.has(o)).forEach(o => {
-    blocos.push({ id: o, label: o, ops: [o], emails: '', isGrupo: false });
+    blocos.push({ id: o + sufixo, label: o + sufixo, ops: [o], emails: '', isGrupo: false });
   });
   // Só retorna se pelo menos 1 grupo bateu; senão usa fallback
   return blocos.some(b => b.isGrupo) ? blocos : null;
