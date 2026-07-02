@@ -1064,6 +1064,18 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
           <input type="text" class="form-input" id="relg-emails" placeholder="gestor@empresa.com, supervisor@empresa.com">
         </div>
         <div class="form-group">
+          <label class="form-label">Tipo(s) de Frota deste Grupo</label>
+          <div style="display:flex;gap:6px;flex-wrap:wrap" id="relg-tipos-container">
+            <label style="display:flex;align-items:center;gap:5px;padding:5px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:12px"><input type="checkbox" class="relg-tipo-check" value="__pesada__" style="accent-color:var(--accent)"> 🚛 Pesada</label>
+            <label style="display:flex;align-items:center;gap:5px;padding:5px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:12px"><input type="checkbox" class="relg-tipo-check" value="__leve__" style="accent-color:var(--accent)"> 🚗 Leve</label>
+            <label style="display:flex;align-items:center;gap:5px;padding:5px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:12px"><input type="checkbox" class="relg-tipo-check" value="__maquinas__" style="accent-color:var(--accent)"> ⚙️ Máquinas</label>
+            <label style="display:flex;align-items:center;gap:5px;padding:5px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:12px"><input type="checkbox" class="relg-tipo-check" value="__tratores__" style="accent-color:var(--accent)"> 🚜 Tratores</label>
+            <label style="display:flex;align-items:center;gap:5px;padding:5px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:12px"><input type="checkbox" class="relg-tipo-check" value="__empilhadeiras__" style="accent-color:var(--accent)"> 🏭 Empilhadeiras</label>
+            <label style="display:flex;align-items:center;gap:5px;padding:5px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:12px"><input type="checkbox" class="relg-tipo-check" value="" style="accent-color:var(--accent)"> ⊞ Todos (sem filtro)</label>
+          </div>
+          <div style="font-size:11px;color:var(--text3);margin-top:5px">Selecione um ou mais tipos. "Todos" cobre qualquer seleção na análise.</div>
+        </div>
+        <div class="form-group">
           <label class="form-label">Operações deste grupo</label>
           <input type="text" class="form-input" id="relg-ops-busca" placeholder="🔍 Buscar operação..." oninput="relgFiltrarOps()" style="margin-bottom:8px;font-size:13px">
           <div id="relg-ops-container" style="background:var(--bg3);border:1px solid var(--border);border-radius:9px;padding:12px;max-height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:4px">
@@ -7075,15 +7087,17 @@ function relgSalvar() {
   const nome = document.getElementById('relg-nome').value.trim();
   const emails = document.getElementById('relg-emails').value.trim();
   const ops = [...document.querySelectorAll('.relg-op-check:checked')].map(c => c.value);
+  const tipos = [...document.querySelectorAll('.relg-tipo-check:checked')].map(c => c.value);
   if (!nome) { showToast('Digite um nome para o grupo', 'error'); return; }
   if (!emails) { showToast('Digite pelo menos um e-mail', 'error'); return; }
   if (!ops.length) { showToast('Selecione pelo menos uma operação', 'error'); return; }
+  if (!tipos.length) { showToast('Selecione pelo menos um tipo de frota', 'error'); return; }
   const editId = document.getElementById('relg-edit-id').value;
   if (editId) {
     const idx = window._relGrupos.findIndex(g => g.id === editId);
-    if (idx >= 0) window._relGrupos[idx] = { id: editId, nome, emails, ops };
+    if (idx >= 0) window._relGrupos[idx] = { id: editId, nome, emails, ops, tipos };
   } else {
-    window._relGrupos.push({ id: Date.now().toString(), nome, emails, ops });
+    window._relGrupos.push({ id: Date.now().toString(), nome, emails, ops, tipos });
   }
   localStorage.setItem('rel_grupos', JSON.stringify(window._relGrupos));
   relgLimpar();
@@ -7101,6 +7115,7 @@ function relgLimpar() {
   document.getElementById('relg-edit-id').value = '';
   const b = document.getElementById('relg-ops-busca'); if (b) b.value = '';
   document.querySelectorAll('.relg-op-check').forEach(c => c.checked = false);
+  document.querySelectorAll('.relg-tipo-check').forEach(c => c.checked = false);
 }
 
 function relgEditar(id) {
@@ -7110,6 +7125,10 @@ function relgEditar(id) {
   document.getElementById('relg-emails').value = g.emails;
   document.getElementById('relg-edit-id').value = id;
   relgPopularOps(g.ops);
+  // Restaura tipos
+  document.querySelectorAll('.relg-tipo-check').forEach(c => {
+    c.checked = g.tipos ? g.tipos.includes(c.value) : false;
+  });
   document.getElementById('relg-nome')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
@@ -7134,12 +7153,14 @@ function relgRender() {
   window._relGrupos.forEach(g => {
     const div = document.createElement('div');
     div.style.cssText = 'background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px 20px;margin-bottom:10px';
+    const tipoNomes = { '__pesada__': '🚛 Pesada', '__leve__': '🚗 Leve', '__maquinas__': '⚙️ Máquinas', '__tratores__': '🚜 Tratores', '__empilhadeiras__': '🏭 Empilhadeiras', '': '⊞ Todos' };
     div.innerHTML =
       '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">' +
       '<div>' +
       '<div style="font-size:15px;font-weight:700">' + g.nome + '</div>' +
       '<div style="font-size:12px;color:var(--text2);margin-top:3px">📧 ' + g.emails + '</div>' +
       '<div style="font-size:12px;color:var(--accent);margin-top:3px">' + g.ops.length + ' operação(ões): ' + g.ops.map(o => o.replace(/_/g,' ')).join(', ') + '</div>' +
+      (g.tipos?.length ? '<div style="font-size:11px;color:var(--text3);margin-top:3px">Frota: ' + g.tipos.map(t => tipoNomes[t]||t).join(' + ') + '</div>' : '') +
       '</div>' +
       '<div id="relg-btns-' + g.id + '" style="display:flex;gap:8px"></div>' +
       '</div>';
@@ -7166,13 +7187,24 @@ function relgGetBlocosSalvos(operacoes, relTipo) {
   const tipoLabel = { '__pesada__': 'Pesada', '__leve__': 'Leve', '__maquinas__': 'Máquinas', '__tratores__': 'Tratores', '__maq_tra__': 'Máq+Tratores', '__empilhadeiras__': 'Empilhadeiras' };
   const sufixo = relTipo && tipoLabel[relTipo] ? ' · ' + tipoLabel[relTipo] : '';
 
-  // Normaliza: trim + underscore→espaço + espaços duplos + uppercase
   const norm = s => s.trim().replace(/_/g,' ').replace(/\s+/g,' ').toUpperCase();
   const operacoesNorm = operacoes.map(norm);
 
+  // Filtra grupos compatíveis com o tipo atual:
+  // - grupo com tipos[] vazio/ausente = compatível com tudo
+  // - grupo com tipos[] = compatível se relTipo está na lista OU lista contém '' (todos)
+  const gruposBatendo = window._relGrupos.filter(g => {
+    if (!g.tipos || !g.tipos.length) return true; // legado sem tipos = compatível
+    if (g.tipos.includes('')) return true;          // marcou "Todos"
+    if (!relTipo) return g.tipos.includes('');      // análise em "Todos" só bate grupos "Todos"
+    return g.tipos.includes(relTipo);
+  });
+
+  if (!gruposBatendo.length) return null;
+
   const blocos = [];
   const usadas = new Set();
-  for (const g of window._relGrupos) {
+  for (const g of gruposBatendo) {
     const opsGrupo = [];
     g.ops.forEach(savedOp => {
       const idx = operacoesNorm.indexOf(norm(savedOp));
@@ -7188,7 +7220,6 @@ function relgGetBlocosSalvos(operacoes, relTipo) {
   operacoes.filter(o => !usadas.has(o)).forEach(o => {
     blocos.push({ id: o + sufixo, label: o + sufixo, ops: [o], emails: '', isGrupo: false });
   });
-  // Só retorna se pelo menos 1 grupo bateu; senão usa fallback
   return blocos.some(b => b.isGrupo) ? blocos : null;
 }
 
