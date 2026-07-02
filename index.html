@@ -1006,10 +1006,7 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
           <label class="form-label">Data Final</label>
           <input type="date" class="form-input" id="rel-data-fim">
         </div>
-        <div class="form-group">
-          <label class="form-label">Meta de Eficiência (%)</label>
-          <input type="number" class="form-input" id="rel-meta" value="98" min="1" max="100">
-        </div>
+        <input type="hidden" id="rel-meta" value="95">
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
         <button class="btn btn-secondary btn-sm" onclick="relSetRange(7)">Últimos 7 dias</button>
@@ -5259,7 +5256,10 @@ function renderRelEmailBloco(operacoes) {
         '</div>' +
         // Corpo expansível (fechado por padrão)
         '<div id="rel-email-body-' + idx + '" style="display:none;padding:10px 14px;background:var(--bg2)">' +
-          '<input type="text" class="form-input" style="width:100%;box-sizing:border-box" id="rel-email-bloco-' + encodeURIComponent(b.id) + '" placeholder="email1@empresa.com, email2@empresa.com" oninput="relEmailSalvarAuto(\'' + b.id.replace(/'/g,"\\'") + '\',this.value)">' +
+          '<label style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Destinatários</label>' +
+          '<input type="text" class="form-input" style="width:100%;box-sizing:border-box;margin-bottom:10px" id="rel-email-bloco-' + encodeURIComponent(b.id) + '" placeholder="email1@empresa.com, email2@empresa.com" oninput="relEmailSalvarAuto(\'' + b.id.replace(/'/g,"\\'") + '\',this.value)">' +
+          '<label style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Corpo do E-mail <span style="font-weight:400;text-transform:none">(opcional — aparece antes da tabela)</span></label>' +
+          '<textarea class="form-input" rows="4" style="width:100%;box-sizing:border-box;resize:vertical;font-size:13px;line-height:1.5" id="rel-email-corpo-' + encodeURIComponent(b.id) + '" placeholder="Bom dia,\n\nSegue o relatório de eficiência de frota referente ao período..." oninput="relEmailSalvarCorpoAuto(\'' + b.id.replace(/'/g,"\\'") + '\',this.value)"></textarea>' +
         '</div>' +
       '</div>'
     ).join('') +
@@ -5269,11 +5269,14 @@ function renderRelEmailBloco(operacoes) {
 
   // Preenche e-mails — prioridade: grupo salvo > backup auto > vazio
   const emailBackup = (() => { try { return JSON.parse(localStorage.getItem('ignis_email_backup')||'{}'); } catch(e) { return {}; } })();
+  const corpoBackup = (() => { try { return JSON.parse(localStorage.getItem('ignis_email_corpo_backup')||'{}'); } catch(e) { return {}; } })();
   blocos.forEach(b => {
     const input = document.getElementById('rel-email-bloco-' + encodeURIComponent(b.id));
     if (!input) return;
     if (b.emails) input.value = b.emails;
     else if (emailBackup[b.id]) input.value = emailBackup[b.id];
+    const textarea = document.getElementById('rel-email-corpo-' + encodeURIComponent(b.id));
+    if (textarea && corpoBackup[b.id]) textarea.value = corpoBackup[b.id];
   });
 }
 
@@ -5324,6 +5327,15 @@ function relEmailSalvarAuto(blocoId, valor) {
   } catch(e) {}
 }
 
+function relEmailSalvarCorpoAuto(blocoId, valor) {
+  try {
+    const backup = JSON.parse(localStorage.getItem('ignis_email_corpo_backup')||'{}');
+    if (valor.trim()) backup[blocoId] = valor.trim();
+    else delete backup[blocoId];
+    localStorage.setItem('ignis_email_corpo_backup', JSON.stringify(backup));
+  } catch(e) {}
+}
+
 function relEmailToggle(idx) {
   const body = document.getElementById('rel-email-body-' + idx);
   const icon = document.getElementById('rel-email-icon-' + idx);
@@ -5350,7 +5362,7 @@ function relEmailFiltrar() {
   });
 }
 
-function buildEmailHTML(blocoOps, byOp, labelPeriodo, limite, labelBloco) {
+function buildEmailHTML(blocoOps, byOp, labelPeriodo, limite, labelBloco, corpoTexto) {
   const corEfic = e => e < 90 ? '#dc2626' : e < 95 ? '#ea580c' : '#d97706';
   const bgEfic  = e => e < 90 ? '#fef2f2' : e < 95 ? '#fff7ed' : '#fffbeb';
   const isKmL = window._relDados?.isKmL || false;
@@ -5419,6 +5431,11 @@ function buildEmailHTML(blocoOps, byOp, labelPeriodo, limite, labelBloco) {
       '<span style="font-size:12px;color:#64748b">🔧 <strong style="color:#1e293b">' + totalPlacas + '</strong> placa' + (totalPlacas>1?'s':'') + ' abaixo da meta</span>' +
     '</td></tr>' +
 
+    // Corpo do e-mail (texto livre)
+    (corpoTexto ? '<tr><td style="padding:16px 24px 0 24px">' +
+      '<div style="font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#334155;line-height:1.7;white-space:pre-line">' + corpoTexto.replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</div>' +
+    '</td></tr>' : '') +
+
     '<tr><td>' +
       '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">' +
         '<thead><tr style="background:#f1f5f9">' +
@@ -5435,9 +5452,8 @@ function buildEmailHTML(blocoOps, byOp, labelPeriodo, limite, labelBloco) {
       '</table>' +
     '</td></tr>' +
 
-    '<tr><td style="background:#f8fafc;padding:16px 24px;border-top:1px solid #e2e8f0;text-align:center">' +
-      '<a href="https://" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 28px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:700">Abrir Ignis →</a>' +
-      '<div style="margin-top:10px;font-size:11px;color:#94a3b8">Gerado pelo Ignis · </div>' +
+    '<tr><td style="background:#f8fafc;padding:10px 24px;border-top:1px solid #e2e8f0;text-align:center">' +
+      '<span style="font-size:11px;color:#94a3b8">Gerado pelo Ignis</span>' +
     '</td></tr>' +
 
     '</table></div></body></html>';
@@ -5476,8 +5492,11 @@ async function enviarBloco(blocoId) {
   const destRaw = document.getElementById('rel-email-bloco-' + encodeURIComponent(blocoId))?.value?.trim();
   if (!destRaw) { showToast('Informe o e-mail para ' + bloco.label, 'error'); return; }
   const dests = destRaw.split(',').map(e => e.trim()).filter(Boolean).join(',');
-  const assunto = encodeURIComponent('Ignis — Alerta de Eficiência · ' + bloco.label);
-  const html = buildEmailHTML(bloco.ops, byOp, labelPeriodo, limite, bloco.label);
+  const corpoTexto = document.getElementById('rel-email-corpo-' + encodeURIComponent(blocoId))?.value?.trim() || '';
+  const { labelPeriodo: lp } = window._relDados;
+  const lpShort = lp ? lp.replace(/\/\d{4}/g, '') : '';
+  const assunto = encodeURIComponent('Alerta de Eficiência (Placas Ofensoras) · ' + bloco.label + (lpShort ? ' - ' + lpShort : ''));
+  const html = buildEmailHTML(bloco.ops, byOp, labelPeriodo, limite, bloco.label, corpoTexto);
   try {
     await navigator.clipboard.write([
       new ClipboardItem({ 'text/html': new Blob([html], { type: 'text/html' }) })
