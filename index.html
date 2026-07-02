@@ -5407,7 +5407,7 @@ function buildEmailHTML(blocoOps, byOp, labelPeriodo, limite, labelBloco, corpoT
           (reincSemanas ? ' <span style="font-size:10px;color:#b91c1c;font-weight:400">(' + reincSemanas + ')</span>' : '')
         : '';
       return '<tr style="background:' + bg + '">' +
-        '<td style="padding:10px 12px;font-size:12px;color:#334155;border-bottom:1px solid #e2e8f0;white-space:nowrap">' + op + '</td>' +
+        '<td align="center" style="padding:10px 12px;font-size:12px;color:#334155;border-bottom:1px solid #e2e8f0;white-space:nowrap;text-align:center">' + op + '</td>' +
         '<td style="padding:10px 12px;font-weight:700;font-family:monospace;font-size:13px;color:#1e293b;border-bottom:1px solid #e2e8f0;white-space:nowrap">' + m.placa + reincBadge + '</td>' +
         '<td style="padding:10px 12px;font-size:12px;color:#64748b;border-bottom:1px solid #e2e8f0">' + (m.modelo||'—') + '</td>' +
         '<td style="padding:10px 12px;text-align:center;font-family:monospace;font-size:12px;color:#334155;border-bottom:1px solid #e2e8f0">' + (m.kmHoras||0).toFixed(1) + (isKmL?' km':' h') + '</td>' +
@@ -5452,7 +5452,7 @@ function buildEmailHTML(blocoOps, byOp, labelPeriodo, limite, labelBloco, corpoT
     '<tr><td>' +
       '<table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse">' +
         '<thead><tr style="background:#f1f5f9">' +
-          '<th style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;border-bottom:2px solid #e2e8f0">Operação</th>' +
+          '<th align="center" style="padding:10px 12px;text-align:center;font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;border-bottom:2px solid #e2e8f0">Operação</th>' +
           '<th style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;border-bottom:2px solid #e2e8f0">Placa</th>' +
           '<th style="padding:10px 12px;text-align:left;font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;border-bottom:2px solid #e2e8f0">Modelo</th>' +
           '<th style="padding:10px 12px;text-align:center;font-size:10px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.5px;border-bottom:2px solid #e2e8f0">' + colKmHoras + '</th>' +
