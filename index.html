@@ -1086,6 +1086,10 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
             <div style="font-size:12px;color:var(--text3)">Importe um período primeiro para ver as operações disponíveis</div>
           </div>
         </div>
+        <div class="form-group">
+          <label class="form-label">Corpo do E-mail <span style="font-weight:400;text-transform:none;font-size:10px">(opcional — aparece antes da tabela)</span></label>
+          <textarea class="form-input" id="relg-corpo" rows="4" style="width:100%;box-sizing:border-box;resize:vertical;font-size:13px;line-height:1.5" placeholder="Bom dia,&#10;&#10;Segue o relatório de eficiência de frota referente ao período..."></textarea>
+        </div>
         <div style="display:flex;gap:10px">
           <button class="btn btn-primary" onclick="relgSalvar()">💾 Salvar Grupo</button>
           <button class="btn btn-secondary" onclick="relgLimpar()">✕ Cancelar</button>
@@ -5299,9 +5303,12 @@ function renderRelEmailBloco(operacoes, relTipo) {
         relChipAdd(idx, b.id, email);
       });
     }
-    // Corpo
+    // Corpo — prioridade: grupo salvo > backup manual
     const textarea = document.getElementById('rel-email-corpo-' + encodeURIComponent(b.id));
-    if (textarea && corpoBackup[b.id]) textarea.value = corpoBackup[b.id];
+    if (textarea) {
+      const grupoCorpo = b.corpo || '';
+      textarea.value = grupoCorpo || corpoBackup[b.id] || '';
+    }
   });
 }
 
@@ -7211,6 +7218,7 @@ function relgSalvar() {
   const nome = document.getElementById('relg-nome').value.trim();
   relgChipSyncHidden();
   const emails = document.getElementById('relg-emails').value.trim();
+  const corpo = document.getElementById('relg-corpo').value.trim();
   const ops = [...document.querySelectorAll('.relg-op-check:checked')].map(c => c.value);
   const tipos = [...document.querySelectorAll('.relg-tipo-check:checked')].map(c => c.value);
   if (!nome) { showToast('Digite um nome para o grupo', 'error'); return; }
@@ -7220,9 +7228,9 @@ function relgSalvar() {
   const editId = document.getElementById('relg-edit-id').value;
   if (editId) {
     const idx = window._relGrupos.findIndex(g => g.id === editId);
-    if (idx >= 0) window._relGrupos[idx] = { id: editId, nome, emails, ops, tipos };
+    if (idx >= 0) window._relGrupos[idx] = { id: editId, nome, emails, corpo, ops, tipos };
   } else {
-    window._relGrupos.push({ id: Date.now().toString(), nome, emails, ops, tipos });
+    window._relGrupos.push({ id: Date.now().toString(), nome, emails, corpo, ops, tipos });
   }
   localStorage.setItem('rel_grupos', JSON.stringify(window._relGrupos));
   relgLimpar();
@@ -7237,6 +7245,7 @@ function relgLimpar() {
   const b = document.getElementById('relg-ops-busca'); if (b) b.value = '';
   document.querySelectorAll('.relg-op-check').forEach(c => c.checked = false);
   document.querySelectorAll('.relg-tipo-check').forEach(c => c.checked = false);
+  const corpo = document.getElementById('relg-corpo'); if (corpo) corpo.value = '';
   relgChipClear();
 }
 
@@ -7245,6 +7254,7 @@ function relgEditar(id) {
   if (!g) return;
   document.getElementById('relg-nome').value = g.nome;
   document.getElementById('relg-edit-id').value = id;
+  const corpo = document.getElementById('relg-corpo'); if (corpo) corpo.value = g.corpo || '';
   relgChipLoad(g.emails);
   relgPopularOps(g.ops);
   document.querySelectorAll('.relg-tipo-check').forEach(c => {
@@ -7335,7 +7345,7 @@ function relgGetBlocosSalvos(operacoes, relTipo) {
       }
     });
     if (!opsGrupo.length) continue;
-    blocos.push({ id: g.id + sufixo, label: g.nome + sufixo, ops: opsGrupo, emails: g.emails, isGrupo: true });
+    blocos.push({ id: g.id + sufixo, label: g.nome + sufixo, ops: opsGrupo, emails: g.emails, corpo: g.corpo || '', isGrupo: true });
   }
   // Operações não cobertas por nenhum grupo
   operacoes.filter(o => !usadas.has(o)).forEach(o => {
