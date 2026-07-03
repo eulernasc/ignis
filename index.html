@@ -1038,7 +1038,7 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
           <button class="btn btn-secondary btn-sm rel-tipo-btn" data-tipo="__tratores__" onclick="relSetTipo(this,'__tratores__')">🚜 Tratores</button>
           <button class="btn btn-secondary btn-sm rel-tipo-btn" data-tipo="__pesada__" onclick="relSetTipo(this,'__pesada__')">🚛 Pesada</button>
           <button class="btn btn-secondary btn-sm rel-tipo-btn" data-tipo="__leve__" onclick="relSetTipo(this,'__leve__')">🚗 Leve</button>
-          <button class="btn btn-secondary btn-sm rel-tipo-btn" data-tipo="__empilhadeiras__" onclick="relSetTipo(this,'__empilhadeiras__')">🏗 Empilhadeiras</button>
+          
         </div>
       </div>
       <div style="margin-top:14px">
@@ -1074,7 +1074,7 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
             <label style="display:flex;align-items:center;gap:5px;padding:5px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:12px"><input type="checkbox" class="relg-tipo-check" value="__leve__" style="accent-color:var(--accent)"> 🚗 Leve</label>
             <label style="display:flex;align-items:center;gap:5px;padding:5px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:12px"><input type="checkbox" class="relg-tipo-check" value="__maquinas__" style="accent-color:var(--accent)"> ⚙️ Máquinas</label>
             <label style="display:flex;align-items:center;gap:5px;padding:5px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:12px"><input type="checkbox" class="relg-tipo-check" value="__tratores__" style="accent-color:var(--accent)"> 🚜 Tratores</label>
-            <label style="display:flex;align-items:center;gap:5px;padding:5px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:12px"><input type="checkbox" class="relg-tipo-check" value="__empilhadeiras__" style="accent-color:var(--accent)"> 🏭 Empilhadeiras</label>
+            
             <label style="display:flex;align-items:center;gap:5px;padding:5px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:12px"><input type="checkbox" class="relg-tipo-check" value="" style="accent-color:var(--accent)"> ⊞ Todos (sem filtro)</label>
           </div>
           <div style="font-size:11px;color:var(--text3);margin-top:5px">Selecione um ou mais tipos. "Todos" cobre qualquer seleção na análise.</div>
@@ -1130,7 +1130,7 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
             <button class="btn btn-secondary btn-sm exec-tipo-btn" data-tipo="__tratores__" onclick="execSetTipo(this,'__tratores__')">🚜 Tratores</button>
             <button class="btn btn-secondary btn-sm exec-tipo-btn" data-tipo="__pesada__" onclick="execSetTipo(this,'__pesada__')">🚛 Pesada</button>
             <button class="btn btn-secondary btn-sm exec-tipo-btn" data-tipo="__leve__" onclick="execSetTipo(this,'__leve__')">🚗 Leve</button>
-            <button class="btn btn-secondary btn-sm exec-tipo-btn" data-tipo="__empilhadeiras__" onclick="execSetTipo(this,'__empilhadeiras__')">🏗 Empilhadeiras</button>
+            
           </div>
         </div>
         <div class="form-group">
@@ -2693,7 +2693,7 @@ function updateFilters() {
       '<option value="__tratores__">🚜 TRATORES</option>' +
       '<option value="__pesada__">🚛 FROTA PESADA</option>' +
       '<option value="__leve__">🚗 FROTA LEVE</option>' +
-      '<option value="__empilhadeiras__">🏗 EMPILHADEIRAS</option>' +
+      
       '<option disabled style="color:var(--text3);font-size:11px">──────────────</option>' +
       state.maquinas.map(m=>`<option value="${m.placa}">${m.placa}</option>`).join('');
     sel.value=val;
@@ -5101,12 +5101,12 @@ function renderRelatorio() {
   // Filtra abastecimentos
   let registros = state.abastecimentos.filter(a => a.data >= ini && a.data <= fim);
   if (opsFiltro.length) registros = registros.filter(a => { const op = (getMaquina(a.placa)?.operacao || a.operacao || '').replace(/_/g,' '); return opsFiltro.includes(op); });
-  if (relTipo === '__maq_tra__')        registros = registros.filter(a => { const t=getTipoIgnis(a); return t==='maquina'||t==='trator'; });
+  else if (relTipo === '__maq_tra__')        registros = registros.filter(a => { const t=getTipoIgnis(a); return t==='maquina'||t==='trator'; });
   else if (relTipo === '__maquinas__')  registros = registros.filter(a => getTipoIgnis(a)==='maquina');
   else if (relTipo === '__tratores__')  registros = registros.filter(a => getTipoIgnis(a)==='trator');
   else if (relTipo === '__pesada__')    registros = registros.filter(a => getTipoIgnis(a)==='pesada');
   else if (relTipo === '__leve__')      registros = registros.filter(a => getTipoIgnis(a)==='leve');
-  else if (relTipo === '__empilhadeiras__') registros = registros.filter(a => getTipoIgnis(a)==='empilhadeira');
+  else registros = registros.filter(a => getTipoIgnis(a) !== 'empilhadeira'); // Todos: exclui empilhadeiras
 
   if (!registros.length) {
     c.innerHTML = '<div class="empty"><div class="empty-icon">🔍</div><div class="empty-text">Nenhum registro no período</div></div>';
