@@ -1060,8 +1060,12 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
           <input type="text" class="form-input" id="relg-nome" placeholder="Ex: Gestores CENIBRA">
         </div>
         <div class="form-group">
-          <label class="form-label">E-mail(s) — separe por vírgula</label>
-          <input type="text" class="form-input" id="relg-emails" placeholder="gestor@empresa.com, supervisor@empresa.com">
+          <label class="form-label">E-mail(s)</label>
+          <div id="relg-chips-wrap" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:6px 8px;background:var(--bg1);border:1px solid var(--border);border-radius:6px;min-height:38px;cursor:text" onclick="document.getElementById('relg-chips-input').focus()">
+            <input type="text" id="relg-chips-input" placeholder="email@empresa.com e pressione Enter" style="border:none;background:transparent;outline:none;font-size:12px;color:var(--text1);min-width:220px;flex:1;padding:2px 4px;font-family:inherit" onkeydown="relgChipKeydown(event,this)" onpaste="relgChipPaste(event,this)">
+          </div>
+          <div style="font-size:10px;color:var(--text3);margin-top:4px">Enter ou vírgula para adicionar · clique no × para remover</div>
+          <input type="hidden" id="relg-emails">
         </div>
         <div class="form-group">
           <label class="form-label">Tipo(s) de Frota deste Grupo</label>
@@ -7147,13 +7151,70 @@ function relgFiltrarOps() {
   relgPopularOps(currentChecked.length ? currentChecked : (g ? g.ops : []));
 }
 
+// ── CHIPS DE E-MAIL NO FORMULÁRIO DE GRUPOS ──────────────────
+function relgChipKeydown(e, input) {
+  if (e.key === 'Enter' || e.key === ',') {
+    e.preventDefault();
+    const val = input.value.replace(/,/g,'').trim();
+    if (val) relgChipAdd(val);
+    input.value = '';
+  } else if (e.key === 'Backspace' && !input.value) {
+    const chips = document.querySelectorAll('#relg-chips-wrap .relg-chip');
+    if (chips.length) { chips[chips.length-1].remove(); relgChipSyncHidden(); }
+  }
+}
+
+function relgChipPaste(e, input) {
+  e.preventDefault();
+  const text = (e.clipboardData || window.clipboardData).getData('text');
+  text.split(/[,;\n\s]+/).map(s => s.trim()).filter(s => s.includes('@')).forEach(email => relgChipAdd(email));
+  input.value = '';
+}
+
+function relgChipAdd(email) {
+  const wrap = document.getElementById('relg-chips-wrap');
+  if (!wrap) return;
+  const existing = [...wrap.querySelectorAll('.relg-chip')].map(c => c.dataset.email);
+  if (existing.includes(email)) return;
+  const chip = document.createElement('span');
+  chip.className = 'relg-chip';
+  chip.dataset.email = email;
+  chip.style.cssText = 'display:inline-flex;align-items:center;gap:5px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:3px 8px;font-size:11px;color:var(--text1);white-space:nowrap';
+  chip.innerHTML = '<span>' + email + '</span><button onclick="this.parentElement.remove();relgChipSyncHidden()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:13px;line-height:1;padding:0;margin-left:2px" title="Remover">×</button>';
+  const input = document.getElementById('relg-chips-input');
+  wrap.insertBefore(chip, input);
+  relgChipSyncHidden();
+}
+
+function relgChipSyncHidden() {
+  const emails = [...document.querySelectorAll('#relg-chips-wrap .relg-chip')].map(c => c.dataset.email).join(',');
+  const hidden = document.getElementById('relg-emails');
+  if (hidden) hidden.value = emails;
+}
+
+function relgChipClear() {
+  const wrap = document.getElementById('relg-chips-wrap');
+  if (wrap) wrap.querySelectorAll('.relg-chip').forEach(c => c.remove());
+  const hidden = document.getElementById('relg-emails');
+  if (hidden) hidden.value = '';
+  const input = document.getElementById('relg-chips-input');
+  if (input) input.value = '';
+}
+
+function relgChipLoad(emailsStr) {
+  relgChipClear();
+  if (!emailsStr) return;
+  emailsStr.split(',').map(e => e.trim()).filter(Boolean).forEach(email => relgChipAdd(email));
+}
+
 function relgSalvar() {
   const nome = document.getElementById('relg-nome').value.trim();
+  relgChipSyncHidden();
   const emails = document.getElementById('relg-emails').value.trim();
   const ops = [...document.querySelectorAll('.relg-op-check:checked')].map(c => c.value);
   const tipos = [...document.querySelectorAll('.relg-tipo-check:checked')].map(c => c.value);
   if (!nome) { showToast('Digite um nome para o grupo', 'error'); return; }
-  if (!emails) { showToast('Digite pelo menos um e-mail', 'error'); return; }
+  if (!emails) { showToast('Adicione pelo menos um e-mail', 'error'); return; }
   if (!ops.length) { showToast('Selecione pelo menos uma operação', 'error'); return; }
   if (!tipos.length) { showToast('Selecione pelo menos um tipo de frota', 'error'); return; }
   const editId = document.getElementById('relg-edit-id').value;
@@ -7167,29 +7228,25 @@ function relgSalvar() {
   relgLimpar();
   relgRender();
   showToast('✅ Grupo salvo!', 'success');
-  setTimeout(() => {
-    const lista = document.getElementById('relg-lista');
-    if (lista) lista.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }, 100);
+  setTimeout(() => { const lista = document.getElementById('relg-lista'); if (lista) lista.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 100);
 }
 
 function relgLimpar() {
   document.getElementById('relg-nome').value = '';
-  document.getElementById('relg-emails').value = '';
   document.getElementById('relg-edit-id').value = '';
   const b = document.getElementById('relg-ops-busca'); if (b) b.value = '';
   document.querySelectorAll('.relg-op-check').forEach(c => c.checked = false);
   document.querySelectorAll('.relg-tipo-check').forEach(c => c.checked = false);
+  relgChipClear();
 }
 
 function relgEditar(id) {
   const g = window._relGrupos.find(g => g.id === id);
   if (!g) return;
   document.getElementById('relg-nome').value = g.nome;
-  document.getElementById('relg-emails').value = g.emails;
   document.getElementById('relg-edit-id').value = id;
+  relgChipLoad(g.emails);
   relgPopularOps(g.ops);
-  // Restaura tipos
   document.querySelectorAll('.relg-tipo-check').forEach(c => {
     c.checked = g.tipos ? g.tipos.includes(c.value) : false;
   });
