@@ -5269,10 +5269,13 @@ function renderRelEmailBloco(operacoes, relTipo) {
           '<button class="btn btn-primary btn-sm" data-bloco-id="' + b.id.replace(/"/g,'&quot;') + '" onclick="event.stopPropagation();enviarBloco(this.dataset.blocoId)" style="padding:4px 12px">📧 Enviar</button>' +
         '</div>' +
         // Corpo expansível (fechado por padrão)
-        '<div id="rel-email-body-' + idx + '" style="display:none;padding:10px 14px;background:var(--bg2)">' +
-          '<label style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Destinatários</label>' +
-          '<input type="text" class="form-input" style="width:100%;box-sizing:border-box;margin-bottom:10px" id="rel-email-bloco-' + encodeURIComponent(b.id) + '" placeholder="email1@empresa.com, email2@empresa.com" oninput="relEmailSalvarAuto(\'' + b.id.replace(/'/g,"\\'") + '\',this.value)">' +
-          '<label style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:4px">Corpo do E-mail <span style="font-weight:400;text-transform:none">(opcional — aparece antes da tabela)</span></label>' +
+        '<div id="rel-email-body-' + idx + '" style="display:none;padding:12px 14px;background:var(--bg2);border-top:1px solid var(--border)">' +
+          '<label style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:6px">Destinatários</label>' +
+          '<div id="rel-chips-wrap-' + idx + '" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:6px 8px;background:var(--bg1);border:1px solid var(--border);border-radius:6px;min-height:38px;cursor:text" onclick="document.getElementById(\'rel-chips-input-' + idx + '\').focus()">' +
+            '<input type="text" id="rel-chips-input-' + idx + '" data-bloco-id="' + b.id.replace(/"/g,'&quot;') + '" data-idx="' + idx + '" placeholder="email@empresa.com e pressione Enter" style="border:none;background:transparent;outline:none;font-size:12px;color:var(--text1);min-width:200px;flex:1;padding:2px 4px;font-family:inherit" onkeydown="relChipKeydown(event,this)" onpaste="relChipPaste(event,this)">' +
+          '</div>' +
+          '<div style="font-size:10px;color:var(--text3);margin-top:4px;margin-bottom:12px">Enter ou vírgula para adicionar · clique no × para remover</div>' +
+          '<label style="font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.4px;display:block;margin-bottom:6px">Corpo do E-mail <span style="font-weight:400;text-transform:none;font-size:10px">(opcional — aparece antes da tabela)</span></label>' +
           '<textarea class="form-input" rows="4" style="width:100%;box-sizing:border-box;resize:vertical;font-size:13px;line-height:1.5" id="rel-email-corpo-' + encodeURIComponent(b.id) + '" placeholder="Bom dia,\n\nSegue o relatório de eficiência de frota referente ao período..." oninput="relEmailSalvarCorpoAuto(\'' + b.id.replace(/'/g,"\\'") + '\',this.value)"></textarea>' +
         '</div>' +
       '</div>'
@@ -5281,14 +5284,18 @@ function renderRelEmailBloco(operacoes, relTipo) {
     (blocos.length > 1 ? '<div style="margin-top:10px"><button class="btn btn-primary" onclick="enviarTodosEmails()">📧 Enviar Todos</button></div>' : '') +
   '</div>';
 
-  // Preenche e-mails — prioridade: grupo salvo > backup auto > vazio
+  // Preenche chips de e-mail e textarea de corpo
   const emailBackup = (() => { try { return JSON.parse(localStorage.getItem('ignis_email_backup')||'{}'); } catch(e) { return {}; } })();
   const corpoBackup = (() => { try { return JSON.parse(localStorage.getItem('ignis_email_corpo_backup')||'{}'); } catch(e) { return {}; } })();
-  blocos.forEach(b => {
-    const input = document.getElementById('rel-email-bloco-' + encodeURIComponent(b.id));
-    if (!input) return;
-    if (b.emails) input.value = b.emails;
-    else if (emailBackup[b.id]) input.value = emailBackup[b.id];
+  blocos.forEach((b, idx) => {
+    // Chips
+    const emailsStr = b.emails || emailBackup[b.id] || '';
+    if (emailsStr) {
+      emailsStr.split(',').map(e => e.trim()).filter(Boolean).forEach(email => {
+        relChipAdd(idx, b.id, email);
+      });
+    }
+    // Corpo
     const textarea = document.getElementById('rel-email-corpo-' + encodeURIComponent(b.id));
     if (textarea && corpoBackup[b.id]) textarea.value = corpoBackup[b.id];
   });
@@ -5332,6 +5339,63 @@ function relAnaliseFiltrar() {
 }
 
 // Auto-salva e-mails ao digitar no campo
+// ── CHIPS DE E-MAIL ──────────────────────────────────────────
+function relChipKeydown(e, input) {
+  if (e.key === 'Enter' || e.key === ',') {
+    e.preventDefault();
+    const val = input.value.replace(/,/g,'').trim();
+    if (val) relChipAdd(input.dataset.idx, input.dataset.blocoId, val);
+    input.value = '';
+  } else if (e.key === 'Backspace' && !input.value) {
+    const wrap = input.parentElement;
+    const chips = wrap.querySelectorAll('.rel-chip');
+    if (chips.length) chips[chips.length-1].remove();
+    relChipSalvar(input.dataset.idx, input.dataset.blocoId);
+  }
+}
+
+function relChipPaste(e, input) {
+  e.preventDefault();
+  const text = (e.clipboardData || window.clipboardData).getData('text');
+  text.split(/[,;\n\s]+/).map(s => s.trim()).filter(s => s.includes('@')).forEach(email => {
+    relChipAdd(input.dataset.idx, input.dataset.blocoId, email);
+  });
+  input.value = '';
+}
+
+function relChipAdd(idx, blocoId, email) {
+  const wrap = document.getElementById('rel-chips-wrap-' + idx);
+  if (!wrap) return;
+  // evita duplicata
+  const existing = [...wrap.querySelectorAll('.rel-chip')].map(c => c.dataset.email);
+  if (existing.includes(email)) return;
+  const chip = document.createElement('span');
+  chip.className = 'rel-chip';
+  chip.dataset.email = email;
+  chip.style.cssText = 'display:inline-flex;align-items:center;gap:5px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:3px 8px;font-size:11px;color:var(--text1);white-space:nowrap';
+  chip.innerHTML = '<span>' + email + '</span><button onclick="this.parentElement.remove();relChipSalvar(' + idx + ',\'' + blocoId.replace(/'/g,"\\'") + '\')" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:13px;line-height:1;padding:0;margin-left:2px" title="Remover">×</button>';
+  const input = document.getElementById('rel-chips-input-' + idx);
+  wrap.insertBefore(chip, input);
+  relChipSalvar(idx, blocoId);
+}
+
+function relChipSalvar(idx, blocoId) {
+  const wrap = document.getElementById('rel-chips-wrap-' + idx);
+  if (!wrap) return;
+  const emails = [...wrap.querySelectorAll('.rel-chip')].map(c => c.dataset.email).join(',');
+  try {
+    const backup = JSON.parse(localStorage.getItem('ignis_email_backup')||'{}');
+    if (emails) backup[blocoId] = emails; else delete backup[blocoId];
+    localStorage.setItem('ignis_email_backup', JSON.stringify(backup));
+  } catch(e) {}
+}
+
+function relChipGetEmails(idx) {
+  const wrap = document.getElementById('rel-chips-wrap-' + idx);
+  if (!wrap) return '';
+  return [...wrap.querySelectorAll('.rel-chip')].map(c => c.dataset.email).join(',');
+}
+
 function relEmailSalvarAuto(blocoId, valor) {
   try {
     const backup = JSON.parse(localStorage.getItem('ignis_email_backup')||'{}');
@@ -5502,9 +5566,10 @@ async function enviarBloco(blocoId) {
   });
   const bloco = window._relBlocos.find(b => b.id === blocoId);
   if (!bloco) return;
-  const destRaw = document.getElementById('rel-email-bloco-' + encodeURIComponent(blocoId))?.value?.trim();
-  if (!destRaw) { showToast('Informe o e-mail para ' + bloco.label, 'error'); return; }
-  const dests = destRaw.split(',').map(e => e.trim()).filter(Boolean).join(',');
+  // Encontra o idx do bloco para pegar os chips
+  const blocoIdx = window._relBlocos.findIndex(b => b.id === blocoId);
+  const dests = relChipGetEmails(blocoIdx);
+  if (!dests) { showToast('Informe o e-mail para ' + bloco.label, 'error'); return; }
   const corpoTexto = document.getElementById('rel-email-corpo-' + encodeURIComponent(blocoId))?.value?.trim() || '';
   const { labelPeriodo: lp } = window._relDados;
   const lpShort = lp ? lp.replace(/\/\d{4}/g, '') : '';
