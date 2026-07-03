@@ -6986,7 +6986,7 @@ function arlaRenderGrupos() {
       '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">' +
       '<div>' +
       '<div style="font-size:15px;font-weight:700">' + g.nome + '</div>' +
-      '<div style="font-size:12px;color:var(--text2);margin-top:3px">📧 ' + g.emails + '</div>' +
+      '<div style="font-size:12px;color:var(--text2);margin-top:3px;word-break:break-all">📧 ' + g.emails + '</div>' +
       '<div style="font-size:12px;color:var(--accent);margin-top:3px">' + g.ops.length + ' operação(ões): ' + g.ops.map(o => o.replace(/_/g,' ')).join(', ') + '</div>' +
       (g.obs ? '<div style="font-size:12px;color:var(--text3);margin-top:3px;font-style:italic">💬 ' + g.obs.substring(0,80) + (g.obs.length>80?'...':'') + '</div>' : '') +
       '</div>' +
@@ -7289,7 +7289,7 @@ function relgRender() {
       '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">' +
       '<div>' +
       '<div style="font-size:15px;font-weight:700">' + g.nome + '</div>' +
-      '<div style="font-size:12px;color:var(--text2);margin-top:3px">📧 ' + g.emails + '</div>' +
+      '<div style="font-size:12px;color:var(--text2);margin-top:3px;word-break:break-all">📧 ' + g.emails + '</div>' +
       '<div style="font-size:12px;color:var(--accent);margin-top:3px">' + g.ops.length + ' operação(ões): ' + g.ops.map(o => o.replace(/_/g,' ')).join(', ') + '</div>' +
       (g.tipos?.length ? '<div style="font-size:11px;color:var(--text3);margin-top:3px">Frota: ' + g.tipos.map(t => tipoNomes[t]||t).join(' + ') + '</div>' : '') +
       '</div>' +
