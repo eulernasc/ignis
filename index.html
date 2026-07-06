@@ -5226,7 +5226,7 @@ function relGetGrupoPorOp(op) {
 // Constrói lista de "blocos de envio": cada bloco = 1 e-mail
 function relGetBlocos(operacoes, relTipo) {
   // Sufixo legível para o tipo de frota (ex: " · Pesada")
-  const tipoLabel = { '__pesada__': 'Pesada', '__leve__': 'Leve', '__maquinas__': 'Máquinas', '__tratores__': 'Tratores', '__maq_tra__': 'Máq+Tratores', '__empilhadeiras__': 'Empilhadeiras' };
+  const tipoLabel = { '__pesada__': 'Frota Pesada', '__leve__': 'Frota Leve', '__maquinas__': 'Máquinas', '__tratores__': 'Tratores', '__maq_tra__': 'Máq+Tratores', '__empilhadeiras__': 'Empilhadeiras' };
   const sufixo = relTipo && tipoLabel[relTipo] ? ' · ' + tipoLabel[relTipo] : '';
   const blocos = [];
   const usadas = new Set();
@@ -5511,10 +5511,10 @@ function buildEmailHTML(blocoOps, byOp, labelPeriodo, limite, labelBloco, corpoT
       '<td align="center" style="padding:10px 12px;font-size:12px;color:#334155;border-bottom:1px solid #e2e8f0;white-space:nowrap;text-align:center">' + op + '</td>' +
       '<td style="padding:10px 12px;font-weight:700;font-family:monospace;font-size:13px;color:#1e293b;border-bottom:1px solid #e2e8f0;white-space:nowrap">' + m.placa + reincBadge + '</td>' +
       '<td style="padding:10px 12px;font-size:12px;color:#64748b;border-bottom:1px solid #e2e8f0">' + (m.modelo||'—') + '</td>' +
-      '<td style="padding:10px 12px;text-align:center;font-family:monospace;font-size:12px;color:#334155;border-bottom:1px solid #e2e8f0;white-space:nowrap">' + fmtBR(m.kmHoras||0, 0) + (isKmL?' km':' h') + '</td>' +
-      '<td style="padding:10px 12px;text-align:center;font-family:monospace;font-size:12px;color:#334155;border-bottom:1px solid #e2e8f0;white-space:nowrap">' + fmtBR(m.litros||0, 2) + ' L</td>' +
-      '<td style="padding:10px 12px;color:#2563eb;font-weight:600;text-align:center;font-size:13px;border-bottom:1px solid #e2e8f0;white-space:nowrap">' + (m.meta>0?m.meta.toFixed(2).replace('.',',')+' '+unidadeMedia:'—') + '</td>' +
-      '<td style="padding:10px 12px;font-weight:700;text-align:center;font-size:13px;color:' + cor + ';border-bottom:1px solid #e2e8f0;white-space:nowrap">' + m.mediaReal.toFixed(2).replace('.',',') + ' ' + unidadeMedia + '</td>' +
+      '<td style="padding:10px 12px;text-align:center;font-family:monospace;font-size:12px;color:#334155;border-bottom:1px solid #e2e8f0;white-space:nowrap">' + fmtBR(m.kmHoras||0, 0) + '</td>' +
+      '<td style="padding:10px 12px;text-align:center;font-family:monospace;font-size:12px;color:#334155;border-bottom:1px solid #e2e8f0;white-space:nowrap">' + fmtBR(m.litros||0, 2) + '</td>' +
+      '<td style="padding:10px 12px;color:#2563eb;font-weight:600;text-align:center;font-size:13px;border-bottom:1px solid #e2e8f0;white-space:nowrap">' + (m.meta>0?m.meta.toFixed(2).replace('.',','):'—') + '</td>' +
+      '<td style="padding:10px 12px;font-weight:700;text-align:center;font-size:13px;color:' + cor + ';border-bottom:1px solid #e2e8f0;white-space:nowrap">' + m.mediaReal.toFixed(2).replace('.',',') + '</td>' +
       '<td style="padding:10px 12px;text-align:center;border-bottom:1px solid #e2e8f0">' +
         '<span style="display:inline-block;background:' + bgEfic(m.eficiencia) + ';color:' + cor + ';border:1px solid ' + cor + ';padding:3px 10px;border-radius:99px;font-size:12px;font-weight:700">' + m.eficiencia.toFixed(1) + '%</span>' +
       '</td>' +
@@ -7344,7 +7344,7 @@ function relgGetBlocosSalvos(operacoes, relTipo) {
   relgInit();
   if (!window._relGrupos.length) return null;
 
-  const tipoLabel = { '__pesada__': 'Pesada', '__leve__': 'Leve', '__maquinas__': 'Máquinas', '__tratores__': 'Tratores', '__maq_tra__': 'Máq+Tratores', '__empilhadeiras__': 'Empilhadeiras' };
+  const tipoLabel = { '__pesada__': 'Frota Pesada', '__leve__': 'Frota Leve', '__maquinas__': 'Máquinas', '__tratores__': 'Tratores', '__maq_tra__': 'Máq+Tratores', '__empilhadeiras__': 'Empilhadeiras' };
   const sufixo = relTipo && tipoLabel[relTipo] ? ' · ' + tipoLabel[relTipo] : '';
 
   const norm = s => s.trim().replace(/_/g,' ').replace(/\s+/g,' ').toUpperCase();
