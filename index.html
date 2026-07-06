@@ -5461,9 +5461,9 @@ function buildEmailHTML(blocoOps, byOp, labelPeriodo, limite, labelBloco, corpoT
   // Formata número no padrão BR: 12.500,30
   const fmtBR = (num, dec) => {
     const fixed = num.toFixed(dec);
-    const [int, frac] = fixed.split('.');
-    const intFmt = int.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-    return intFmt + ',' + frac;
+    const parts = fixed.split('.');
+    const intFmt = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    return dec > 0 ? intFmt + ',' + parts[1] : intFmt;
   };
 
   // Coleta todas as máquinas de todas as operações do bloco
