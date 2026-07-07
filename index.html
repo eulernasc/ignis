@@ -925,82 +925,6 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
   </div>
 
   <!-- CONFIG -->
-  <div id="page-reconciliador" class="page">
-  <div class="page-header">
-    <div class="page-header-title">
-      <div class="page-title">🔍 Reconciliação O2P × Ticket Log</div>
-      <div class="page-sub">Compare abastecimentos entre os dois sistemas e identifique divergências</div>
-    </div>
-  </div>
-
-  <div class="chart-card" style="margin-bottom:16px">
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
-      <div>
-        <label class="form-label">📋 Arquivo O2P (Excel)</label>
-        <div style="margin-top:6px">
-          <input type="file" id="recon-o2p-file" accept=".xlsx,.xls" onchange="reconCarregarO2P(this)" style="display:none">
-          <button class="btn btn-secondary" onclick="document.getElementById('recon-o2p-file').click()">📂 Selecionar arquivo O2P</button>
-          <span id="recon-o2p-label" style="font-size:12px;color:var(--text2);margin-left:10px">Nenhum arquivo selecionado</span>
-        </div>
-        <div style="font-size:11px;color:var(--text3);margin-top:6px">Coluna B = Data · Coluna D = Placa</div>
-      </div>
-      <div>
-        <label class="form-label">🎫 Arquivo Ticket Log (Excel)</label>
-        <div style="margin-top:6px">
-          <input type="file" id="recon-ticket-file" accept=".xlsx,.xls" onchange="reconCarregarTicket(this)" style="display:none">
-          <button class="btn btn-secondary" onclick="document.getElementById('recon-ticket-file').click()">📂 Selecionar arquivo Ticket</button>
-          <span id="recon-ticket-label" style="font-size:12px;color:var(--text2);margin-left:10px">Nenhum arquivo selecionado</span>
-        </div>
-        <div style="font-size:11px;color:var(--text3);margin-top:6px">Coluna E = Data · Coluna F = Placa</div>
-      </div>
-    </div>
-    <div style="margin-top:20px">
-      <button class="btn btn-primary" id="recon-btn" onclick="reconComparar()" disabled>🔍 Comparar arquivos</button>
-    </div>
-  </div>
-
-  <div id="recon-resultado" style="display:none">
-    <!-- Resumo -->
-    <div class="kpi-grid" id="recon-kpis" style="margin-bottom:16px"></div>
-
-    <!-- Tabs -->
-    <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">
-      <button class="btn btn-primary btn-sm recon-tab-btn active" data-tab="so-o2p" onclick="reconTab(this,'so-o2p')">⚠️ Só no O2P <span id="recon-badge-o2p" class="badge badge-red" style="margin-left:4px">0</span></button>
-      <button class="btn btn-secondary btn-sm recon-tab-btn" data-tab="so-ticket" onclick="reconTab(this,'so-ticket')">⚠️ Só na Ticket <span id="recon-badge-ticket" class="badge badge-yellow" style="margin-left:4px">0</span></button>
-      <button class="btn btn-secondary btn-sm recon-tab-btn" data-tab="ambos" onclick="reconTab(this,'ambos')">✅ Em ambos <span id="recon-badge-ambos" class="badge badge-green" style="margin-left:4px">0</span></button>
-    </div>
-
-    <!-- Tabela -->
-    <div class="table-card">
-      <div class="table-toolbar">
-        <div class="table-toolbar-left">
-          <span id="recon-tab-title" style="font-size:14px;font-weight:600"></span>
-        </div>
-        <div style="display:flex;gap:8px">
-          <input type="text" class="form-input" id="recon-search" placeholder="🔍 Filtrar por placa..." oninput="reconFiltrar()" style="width:200px;padding:7px 12px">
-          <button class="btn btn-secondary btn-sm" onclick="reconExportar()">⬇️ Exportar Excel</button>
-        </div>
-      </div>
-      <div style="overflow-x:auto">
-        <table>
-          <thead>
-            <tr>
-              <th>Data</th>
-              <th>Placa</th>
-              <th>Origem</th>
-              <th>Operação</th>
-              <th>Litros</th>
-              <th>Valor Total</th>
-            </tr>
-          </thead>
-          <tbody id="recon-tbody"></tbody>
-        </table>
-      </div>
-      <div id="recon-empty" style="display:none;padding:40px;text-align:center;color:var(--text3)">Nenhum registro encontrado</div>
-    </div>
-  </div>
-</div>
-
   <div id="page-config" class="page">
     <div class="page-header">
       <div><div class="page-title">Configurações</div><div class="page-sub">Sincronização e preferências</div></div>
@@ -1468,7 +1392,7 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
 </style>
 
 <div id="page-kmcomp" class="page">
-  <div class="page-header">
+  <div class="page-header" style="margin-bottom:0">
     <div class="page-header-title">
       <div class="page-title">📏 KM Comparativo</div>
       <div class="page-sub">Cruza o KM produtivo do cliente com o KM do nosso sistema</div>
@@ -1480,6 +1404,15 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
       <button class="btn btn-secondary btn-sm" id="btn-km-email-comp" style="display:none" onclick="kmAbrirComparativoDuplo()" title="Gerar e-mail comparando dois períodos lado a lado">📧 Comparar 2 Períodos</button>
     </div>
   </div>
+
+  <!-- ABAS -->
+  <div style="display:flex;gap:8px;margin:16px 0;border-bottom:1px solid var(--border);padding-bottom:0">
+    <button id="kmcomp-tab-km" class="btn btn-primary btn-sm" style="border-radius:8px 8px 0 0;border-bottom:none;margin-bottom:-1px" onclick="kmcompSetTab('km',this)" class="btn btn-primary btn-sm kmcomp-tab-btn" style="border-radius:8px 8px 0 0;border-bottom:none;margin-bottom:-1px">📏 KM Comparativo</button>
+    <button id="kmcomp-tab-recon" class="btn btn-secondary btn-sm" style="border-radius:8px 8px 0 0;border-bottom:none;margin-bottom:-1px" onclick="kmcompSetTab('recon',this)" class="btn btn-secondary btn-sm kmcomp-tab-btn" style="border-radius:8px 8px 0 0;border-bottom:none;margin-bottom:-1px">🔍 O2P × Ticket</button>
+  </div>
+
+  <!-- ABA: KM COMPARATIVO -->
+  <div id="kmcomp-tab-content-km">
 
   <!-- Config de margem -->
   <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px 20px;margin-bottom:16px">
