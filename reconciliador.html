@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reconciliação O2P × Ticket Log — Ignis</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:#0e0c0b;color:#f0ebe4;font-family:'DM Sans',sans-serif;padding:32px;min-height:100vh;}
+h1{font-size:22px;font-weight:700;margin-bottom:4px;}
+.sub{font-size:13px;color:#9a8f85;margin-bottom:28px;}
+.card{background:#161210;border:1px solid rgba(220,80,30,.18);border-radius:14px;padding:22px;margin-bottom:16px;}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:20px;}
+label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:#9a8f85;display:block;margin-bottom:8px;}
+.hint{font-size:11px;color:#5e5550;margin-top:5px;}
+.btn{padding:9px 18px;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;border:none;font-family:inherit;display:inline-flex;align-items:center;gap:7px;}
+.btn-primary{background:#c0392b;color:#fff;}
+.btn-primary:hover{background:#d44235;}
+.btn-primary:disabled{opacity:.4;cursor:not-allowed;}
+.btn-secondary{background:#1e1916;border:1px solid rgba(220,80,30,.18);color:#f0ebe4;}
+.btn-secondary:hover{border-color:#c0392b;color:#c0392b;}
+.file-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.file-name{font-size:12px;color:#9a8f85;}
+.kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:16px;}
+.kpi{background:#161210;border:1px solid rgba(220,80,30,.18);border-radius:10px;padding:14px 16px;}
+.kpi-val{font-size:26px;font-weight:700;line-height:1;}
+.kpi-lbl{font-size:12px;color:#9a8f85;margin-top:5px;}
+.tabs{display:flex;gap:8px;margin-bottom:16px;}
+table{width:100%;border-collapse:collapse;}
+th{padding:10px 14px;text-align:left;font-size:11px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:#9a8f85;border-bottom:1px solid rgba(220,80,30,.18);background:#1e1916;}
+td{padding:11px 14px;font-size:13px;border-bottom:1px solid rgba(42,47,69,.4);}
+tr:hover td{background:rgba(192,57,43,.04);}
+.badge{display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;font-family:monospace;}
+.badge-red{background:rgba(192,57,43,.15);color:#c0392b;}
+.badge-yellow{background:rgba(245,158,11,.15);color:#e8941a;}
+.badge-green{background:rgba(42,157,106,.15);color:#2a9d6a;}
+.badge-blue{background:rgba(192,57,43,.15);color:#c0392b;}
+.placa{background:#1e1916;border:1px solid rgba(220,80,30,.18);border-radius:6px;padding:3px 8px;font-family:monospace;font-size:12px;font-weight:600;}
+.toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;flex-wrap:wrap;}
+input[type=text]{background:#1e1916;border:1px solid rgba(220,80,30,.18);color:#f0ebe4;padding:8px 12px;border-radius:8px;font-size:13px;font-family:inherit;outline:none;width:220px;}
+input[type=text]:focus{border-color:#c0392b;}
+#resultado{display:none;}
+.empty{padding:40px;text-align:center;color:#5e5550;}
+@media(max-width:700px){.grid2,.kpis{grid-template-columns:1fr;}.kpis{grid-template-columns:1fr 1fr;}}
+</style>
+</head>
+<body>
+
+<h1>🔍 Reconciliação O2P × Ticket Log</h1>
+<p class="sub">Compare abastecimentos entre os dois sistemas e identifique divergências</p>
+
+<div class="card">
+  <div class="grid2">
+    <div>
+      <label>📋 Arquivo O2P (Excel)</label>
+      <div class="file-row">
+        <input type="file" id="o2p-file" accept=".xlsx,.xls" style="display:none" onchange="carregarO2P(this)">
+        <button class="btn btn-secondary" onclick="document.getElementById('o2p-file').click()">📂 Selecionar O2P</button>
+        <span class="file-name" id="o2p-label">Nenhum arquivo</span>
+      </div>
+      <p class="hint">Coluna B = Data · Coluna D = Placa</p>
+    </div>
+    <div>
+      <label>🎫 Arquivo Ticket Log (Excel)</label>
+      <div class="file-row">
+        <input type="file" id="ticket-file" accept=".xlsx,.xls" style="display:none" onchange="carregarTicket(this)">
+        <button class="btn btn-secondary" onclick="document.getElementById('ticket-file').click()">📂 Selecionar Ticket</button>
+        <span class="file-name" id="ticket-label">Nenhum arquivo</span>
+      </div>
+      <p class="hint">Coluna E = Data · Coluna F = Placa</p>
+    </div>
+  </div>
+  <div style="margin-top:20px">
+    <button class="btn btn-primary" id="btn-comparar" onclick="comparar()" disabled>🔍 Comparar arquivos</button>
+  </div>
+</div>
+
+<div id="resultado">
+  <div class="kpis" id="kpis"></div>
+
+  <div class="tabs">
+    <button class="btn btn-primary" id="tab-o2p" onclick="setTab('so-o2p',this)">⚠️ Só no O2P <span id="badge-o2p" style="background:rgba(255,255,255,.2);border-radius:10px;padding:1px 7px;margin-left:4px">0</span></button>
+    <button class="btn btn-secondary" id="tab-ticket" onclick="setTab('so-ticket',this)">⚠️ Só na Ticket <span id="badge-ticket" style="background:rgba(255,255,255,.15);border-radius:10px;padding:1px 7px;margin-left:4px">0</span></button>
+    <button class="btn btn-secondary" id="tab-ambos" onclick="setTab('ambos',this)">✅ Em ambos <span id="badge-ambos" style="background:rgba(255,255,255,.15);border-radius:10px;padding:1px 7px;margin-left:4px">0</span></button>
+  </div>
+
+  <div class="card" style="padding:0;overflow:hidden">
+    <div class="toolbar" style="padding:14px 18px">
+      <span id="tab-titulo" style="font-size:14px;font-weight:600"></span>
+      <div style="display:flex;gap:8px">
+        <input type="text" id="busca" placeholder="🔍 Filtrar por placa..." oninput="filtrar()">
+        <button class="btn btn-secondary" onclick="exportar()">⬇️ Exportar Excel</button>
+      </div>
+    </div>
+    <div style="overflow-x:auto">
+      <table>
+        <thead>
+          <tr>
+            <th>Data/Hora</th><th>Placa</th><th>Origem</th><th>Operação</th><th>Litros</th><th>Valor</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+      <div id="empty" class="empty" style="display:none">Nenhum registro encontrado</div>
+    </div>
+  </div>
+</div>
+
+<script>
+let _o2p = null, _ticket = null, _dados = {soO2P:[],soTicket:[],ambos:[]}, _aba = 'so-o2p';
+
+function parseData(val) {
+  if (!val) return null;
+  if (val instanceof Date) {
+    const p = n => String(n).padStart(2,'0');
+    return `${p(val.getDate())}/${p(val.getMonth()+1)}/${val.getFullYear()} ${p(val.getHours())}:${p(val.getMinutes())}`;
+  }
+  if (typeof val === 'string') {
+    let m = val.match(/^(\d{2}\/\d{2}\/\d{4})\s+(\d{2}:\d{2})/);
+    if (m) return `${m[1]} ${m[2]}`;
+    m = val.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);
+    if (m) return `${m[3]}/${m[2]}/${m[1]} ${m[4]}:${m[5]}`;
+    m = val.match(/^(\d{2}\/\d{2}\/\d{4})/);
+    if (m) return m[1];
+  }
+  if (typeof val === 'number') {
+    const d = new Date(Math.round((val-25569)*86400*1000));
+    const p = n => String(n).padStart(2,'0');
+    return `${p(d.getUTCDate())}/${p(d.getUTCMonth()+1)}/${d.getUTCFullYear()} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}`;
+  }
+  return null;
+}
+
+async function carregarO2P(input) {
+  const file = input.files[0]; if (!file) return;
+  document.getElementById('o2p-label').textContent = file.name;
+  const buf = await file.arrayBuffer();
+  const wb = XLSX.read(buf, {type:'array', cellDates:true});
+  const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1, defval:''});
+  _o2p = rows.slice(1).filter(r => r[1]||r[3]).map(r => ({
+    data: parseData(r[1]), placa: String(r[3]||'').trim().toUpperCase(),
+    operacao: String(r[2]||'').trim().replace(/_/g,' '),
+    litros: parseFloat(r[8])||0, valor: parseFloat(r[9])||0
+  })).filter(r => r.data && r.placa);
+  alert('✅ O2P: ' + _o2p.length + ' registros carregados');
+  verificar();
+}
+
+async function carregarTicket(input) {
+  const file = input.files[0]; if (!file) return;
+  document.getElementById('ticket-label').textContent = file.name;
+  const buf = await file.arrayBuffer();
+  const wb = XLSX.read(buf, {type:'array', cellDates:true});
+  const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header:1, defval:''});
+  _ticket = rows.slice(1).filter(r => r[4]||r[5]).map(r => ({
+    data: parseData(r[4]), placa: String(r[5]||'').trim().toUpperCase()
+  })).filter(r => r.data && r.placa);
+  alert('✅ Ticket: ' + _ticket.length + ' registros carregados');
+  verificar();
+}
+
+function verificar() {
+  document.getElementById('btn-comparar').disabled = !(_o2p && _ticket);
+}
+
+function chave(data, placa) { return data + '|' + placa; }
+
+function comparar() {
+  const tSet = new Set(_ticket.map(r => chave(r.data, r.placa)));
+  const oSet = new Set(_o2p.map(r => chave(r.data, r.placa)));
+  _dados = {
+    soO2P:    _o2p.filter(r => !tSet.has(chave(r.data, r.placa))),
+    soTicket: _ticket.filter(r => !oSet.has(chave(r.data, r.placa))),
+    ambos:    _o2p.filter(r =>  tSet.has(chave(r.data, r.placa)))
+  };
+
+  document.getElementById('kpis').innerHTML = [
+    {v:_o2p.length,    l:'Registros O2P',   c:'#f0ebe4'},
+    {v:_ticket.length, l:'Registros Ticket', c:'#f0ebe4'},
+    {v:_dados.soO2P.length,    l:'Só no O2P',    c:'#c0392b'},
+    {v:_dados.soTicket.length, l:'Só na Ticket',  c:'#e8941a'},
+    {v:_dados.ambos.length,    l:'Em ambos',      c:'#2a9d6a'},
+  ].map(k => `<div class="kpi"><div class="kpi-val" style="color:${k.c}">${k.v.toLocaleString('pt-BR')}</div><div class="kpi-lbl">${k.l}</div></div>`).join('');
+
+  document.getElementById('badge-o2p').textContent    = _dados.soO2P.length;
+  document.getElementById('badge-ticket').textContent = _dados.soTicket.length;
+  document.getElementById('badge-ambos').textContent  = _dados.ambos.length;
+  document.getElementById('resultado').style.display  = '';
+  setTab('so-o2p', document.getElementById('tab-o2p'));
+}
+
+function setTab(tab, btn) {
+  _aba = tab;
+  ['tab-o2p','tab-ticket','tab-ambos'].forEach(id => {
+    const b = document.getElementById(id);
+    b.className = 'btn ' + (b === btn ? 'btn-primary' : 'btn-secondary');
+  });
+  const titulos = {'so-o2p':'Abastecimentos no O2P mas NÃO na Ticket','so-ticket':'Abastecimentos na Ticket mas NÃO no O2P','ambos':'Encontrados em ambos os sistemas'};
+  document.getElementById('tab-titulo').textContent = titulos[tab];
+  document.getElementById('busca').value = '';
+  renderTabela();
+}
+
+function renderTabela(filtro) {
+  let rows = _aba === 'so-o2p' ? _dados.soO2P : _aba === 'so-ticket' ? _dados.soTicket : _dados.ambos;
+  if (filtro) { const q = filtro.toUpperCase(); rows = rows.filter(r => r.placa.includes(q)); }
+  const tbody = document.getElementById('tbody');
+  if (!rows.length) { tbody.innerHTML = ''; document.getElementById('empty').style.display=''; return; }
+  document.getElementById('empty').style.display = 'none';
+  const isTk = _aba === 'so-ticket';
+  tbody.innerHTML = rows.map(r => `<tr>
+    <td>${r.data||'—'}</td>
+    <td><span class="placa">${r.placa}</span></td>
+    <td><span class="badge ${isTk?'badge-yellow':'badge-red'}">${isTk?'Ticket':'O2P'}</span></td>
+    <td style="font-size:12px;color:#9a8f85">${r.operacao||'—'}</td>
+    <td style="font-family:monospace">${r.litros?r.litros.toFixed(2)+' L':'—'}</td>
+    <td style="font-family:monospace">${r.valor?'R$ '+r.valor.toFixed(2):'—'}</td>
+  </tr>`).join('');
+}
+
+function filtrar() { renderTabela(document.getElementById('busca').value); }
+
+function exportar() {
+  const rows = _aba === 'so-o2p' ? _dados.soO2P : _aba === 'so-ticket' ? _dados.soTicket : _dados.ambos;
+  const labels = {'so-o2p':'So_no_O2P','so-ticket':'So_na_Ticket','ambos':'Em_Ambos'};
+  const data = [['Data','Placa','Origem','Operação','Litros','Valor Total']];
+  const isTk = _aba === 'so-ticket';
+  rows.forEach(r => data.push([r.data||'', r.placa||'', isTk?'Ticket':'O2P', r.operacao||'', r.litros||'', r.valor||'']));
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(data);
+  ws['!cols'] = [{wch:18},{wch:12},{wch:10},{wch:30},{wch:10},{wch:14}];
+  XLSX.utils.book_append_sheet(wb, ws, labels[_aba]);
+  XLSX.writeFile(wb, 'Reconciliacao_' + labels[_aba] + '_' + new Date().toLocaleDateString('pt-BR').replace(/\//g,'-') + '.xlsx');
+}
+</script>
+</body>
+</html>
