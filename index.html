@@ -172,7 +172,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 .logo-icon{width:38px;height:38px;background:var(--accent);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;}
 .logo-text{font-size:15px;font-weight:700;letter-spacing:-0.3px;}
 .logo-sub{font-size:11px;color:var(--text2);}
-.nav{padding:16px 12px;flex:1;overflow-y:auto;}
+.nav{padding:16px 12px;flex:1;}
 .nav-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;cursor:pointer;font-size:14px;font-weight:500;color:var(--text2);transition:all .2s;margin-bottom:4px;position:relative;}
 .nav-item:hover{background:var(--bg3);color:var(--text);}
 .nav-item.active{background:rgba(192,57,43,.15);color:var(--accent);border:1px solid rgba(192,57,43,.3);border-left:3px solid var(--accent);}
@@ -638,7 +638,6 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
     <div class="nav-item" id="nav-arla" onclick="showPage('arla',this)"><span class="icon-wrap" style="position:relative;display:inline-flex"><span class="icon">🧪</span><span id="arla-nav-badge" style="display:none" class="excl-badge nav-badge-abs">0</span><span id="arla-lembrete-badge" style="display:none;background:var(--yellow);color:#000;font-size:9px;font-weight:700;padding:2px 5px;border-radius:8px;position:absolute;top:-4px;right:-4px">⏰</span></span><span class="nav-label">Controle Arla</span></div>
     <div class="nav-item" id="nav-kmcomp" onclick="showPage('kmcomp',this)"><span class="icon-wrap" style="position:relative;display:inline-flex"><span class="icon">📏</span><span id="kmcomp-nav-badge" style="display:none" class="excl-badge nav-badge-abs">!</span></span><span class="nav-label">KM Comparativo</span></div>
     <div class="nav-item" id="nav-metarota" onclick="showPage('metarota',this)"><span class="icon">🎯</span><span class="nav-label">Meta por Rota</span></div>
-    <div class="nav-item" id="nav-reconciliador" onclick="showPage('reconciliador',this)"><span class="icon">🔍</span><span class="nav-label">O2P × Ticket</span></div>
     <div class="nav-item" onclick="showPage('config',this)"><span class="icon">⚙️</span><span class="nav-label">Configurações</span></div>
   </nav>
   <div class="sidebar-toggle" id="sidebar-toggle" onclick="toggleSidebarCollapse()" title="Recolher">&#8249;</div>
@@ -925,7 +924,7 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
   </div>
 
   <!-- CONFIG -->
-  <div id="page-config" class="page">
+    <div id="page-config" class="page">
     <div class="page-header">
       <div><div class="page-title">Configurações</div><div class="page-sub">Sincronização e preferências</div></div>
     </div>
@@ -1392,7 +1391,7 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
 </style>
 
 <div id="page-kmcomp" class="page">
-  <div class="page-header" style="margin-bottom:0">
+  <div class="page-header">
     <div class="page-header-title">
       <div class="page-title">📏 KM Comparativo</div>
       <div class="page-sub">Cruza o KM produtivo do cliente com o KM do nosso sistema</div>
@@ -1405,14 +1404,12 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
     </div>
   </div>
 
-  <!-- ABAS -->
-  <div style="display:flex;gap:8px;margin:16px 0;border-bottom:1px solid var(--border);padding-bottom:0">
-    <button id="kmcomp-tab-km" class="btn btn-primary btn-sm" style="border-radius:8px 8px 0 0;border-bottom:none;margin-bottom:-1px" onclick="kmcompSetTab('km',this)">📏 KM Comparativo</button>
-    <button id="kmcomp-tab-recon" class="btn btn-secondary btn-sm" style="border-radius:8px 8px 0 0;border-bottom:none;margin-bottom:-1px" onclick="kmcompSetTab('recon',this)">🔍 O2P × Ticket</button>
+  <div style="display:flex;gap:8px;margin:20px 0 0 0;border-bottom:1px solid rgba(220,80,30,.18);padding-bottom:0">
+    <button id="kmcomp-tab-km" onclick="kmcompTab('km')" style="padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid rgba(220,80,30,.18);border-bottom:none;background:rgba(192,57,43,.15);color:#c0392b;border-radius:8px 8px 0 0;font-family:inherit">📏 KM Comparativo</button>
+    <button id="kmcomp-tab-recon" onclick="kmcompTab('recon')" style="padding:8px 16px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid transparent;border-bottom:none;background:transparent;color:#9a8f85;border-radius:8px 8px 0 0;font-family:inherit">🔍 O2P × Ticket</button>
   </div>
 
-  <!-- ABA: KM COMPARATIVO -->
-  <div id="kmcomp-tab-content-km">
+  <div id="kmcomp-content-km">
 
   <!-- Config de margem -->
   <div style="background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px 20px;margin-bottom:16px">
@@ -1508,11 +1505,9 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
 
   <!-- Resultado -->
   <div id="km-resultado" style="display:none"></div>
-  </div><!-- /kmcomp-tab-content-km -->
-
-  <!-- ABA: O2P × TICKET -->
-  <div id="kmcomp-tab-content-recon" style="display:none;margin-top:16px">
-<div class="page-header">
+  </div><!-- /kmcomp-content-km -->
+  <div id="kmcomp-content-recon" style="display:none;padding-top:20px">
+  <div class="page-header">
     <div class="page-header-title">
       <div class="page-title">🔍 Reconciliação O2P × Ticket Log</div>
       <div class="page-sub">Compare abastecimentos entre os dois sistemas e identifique divergências</div>
@@ -1585,8 +1580,7 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
       <div id="recon-empty" style="display:none;padding:40px;text-align:center;color:var(--text3)">Nenhum registro encontrado</div>
     </div>
   </div>
-  </div><!-- /kmcomp-tab-content-recon -->
-
+  </div><!-- /kmcomp-content-recon -->
 </div>
 
 <!-- META POR ROTA PAGE -->
@@ -2657,6 +2651,23 @@ function showBarTooltip(el, raw) {
 function hideBarTooltip() {
   const t = document.getElementById('bar-tooltip');
   if (t) t.style.display = 'none';
+}
+
+
+function kmcompTab(tab) {
+  const km = document.getElementById('kmcomp-content-km');
+  const re = document.getElementById('kmcomp-content-recon');
+  const bkm = document.getElementById('kmcomp-tab-km');
+  const bre = document.getElementById('kmcomp-tab-recon');
+  if (tab === 'km') {
+    km.style.display = ''; re.style.display = 'none';
+    bkm.style.background = 'rgba(192,57,43,.15)'; bkm.style.color = '#c0392b'; bkm.style.border = '1px solid rgba(220,80,30,.18)'; bkm.style.borderBottom = 'none';
+    bre.style.background = 'transparent'; bre.style.color = '#9a8f85'; bre.style.border = '1px solid transparent'; bre.style.borderBottom = 'none';
+  } else {
+    km.style.display = 'none'; re.style.display = '';
+    bre.style.background = 'rgba(192,57,43,.15)'; bre.style.color = '#c0392b'; bre.style.border = '1px solid rgba(220,80,30,.18)'; bre.style.borderBottom = 'none';
+    bkm.style.background = 'transparent'; bkm.style.color = '#9a8f85'; bkm.style.border = '1px solid transparent'; bkm.style.borderBottom = 'none';
+  }
 }
 
 function showPage(page,el) {
