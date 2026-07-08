@@ -1506,7 +1506,7 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
 <div id="page-recon" class="page">
   <div class="page-header">
     <div class="page-header-title">
-      <div class="page-title">🔍 O2P × Ticket Log</div>
+      <div class="page-title">🔍 O2P × Ticket Log — Reconciliação</div>
       <div class="page-sub">Compare abastecimentos e identifique divergências entre os sistemas</div>
     </div>
   </div>
@@ -2366,7 +2366,7 @@ function rcFiltrar() { rcRender(document.getElementById('rc-busca').value); }
 
 function rcExportar() {
   const labels = {o2p:'So_no_O2P', ticket:'So_na_Ticket', ambos:'Em_Ambos'};
-  const fname = 'Reconciliacao_v2_'+labels[_rcAba]+'_'+new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')+'.xlsx';
+  const fname = 'Reconciliacao_v3_'+labels[_rcAba]+'_'+new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')+'.xlsx';
 
   if (_rcAba === 'ambos') {
     const rows = _rcDados.ambos;
