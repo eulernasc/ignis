@@ -5474,21 +5474,12 @@ async function reconCarregarO2P(input) {
   if (!file) return;
   document.getElementById('recon-o2p-label').textContent = file.name;
   const buf = await file.arrayBuffer();
-
-  // Guarda buffer e sheet originais intactos para exportação
-  const wbOrig = XLSX.read(buf.slice(0), {type:'array', cellDates:false, raw:true});
-  window._reconO2PWbOrig = wbOrig;
-
-  // Leitura com datas para comparação
+  // Uma única leitura com cellDates:true para tudo
   const wb = XLSX.read(buf, {type:'array', cellDates:true});
   const ws = wb.Sheets[wb.SheetNames[0]];
   const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
-
-  // Guarda índice linha → chave para exportação depois
-  window._reconO2PLinhas = rows.slice(1).map(r => ({
-    chave: reconParseData(r[1]) + '|' + String(r[3]||'').trim().toUpperCase()
-  }));
-
+  window._reconO2PHeader = rows[0] || [];
+  window._reconO2PAllRows = rows; // guarda todas as linhas para exportação
   window._reconO2P = rows.slice(1).map(r => ({
     data:     reconParseData(r[1]),
     placa:    String(r[3]||'').trim().toUpperCase(),
@@ -5496,7 +5487,6 @@ async function reconCarregarO2P(input) {
     litros:   parseFloat(r[8])||0,
     valor:    parseFloat(r[9])||0
   })).filter(r => r.data && r.placa);
-
   showToast('✅ O2P: ' + window._reconO2P.length + ' registros carregados', 'success');
   reconVerificarPronto();
 }
@@ -5506,23 +5496,15 @@ async function reconCarregarTicket(input) {
   if (!file) return;
   document.getElementById('recon-ticket-label').textContent = file.name;
   const buf = await file.arrayBuffer();
-
-  const wbOrig = XLSX.read(buf.slice(0), {type:'array', cellDates:false, raw:true});
-  window._reconTicketWbOrig = wbOrig;
-
   const wb = XLSX.read(buf, {type:'array', cellDates:true});
   const ws = wb.Sheets[wb.SheetNames[0]];
   const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
-
-  window._reconTicketLinhas = rows.slice(1).map(r => ({
-    chave: reconParseData(r[4]) + '|' + String(r[5]||'').trim().toUpperCase()
-  }));
-
+  window._reconTicketHeader = rows[0] || [];
+  window._reconTicketAllRows = rows;
   window._reconTicket = rows.slice(1).map(r => ({
     data:  reconParseData(r[4]),
     placa: String(r[5]||'').trim().toUpperCase()
   })).filter(r => r.data && r.placa);
-
   showToast('✅ Ticket: ' + window._reconTicket.length + ' registros carregados', 'success');
   reconVerificarPronto();
 }
@@ -5531,36 +5513,30 @@ function reconVerificarPronto() {
   document.getElementById('recon-btn').disabled = !(window._reconO2P && window._reconTicket);
 }
 
-function reconChave(data, placa) {
-  return data + '|' + placa;
-}
+function reconChave(data, placa) { return data + '|' + placa; }
 
 function reconComparar() {
   const o2p    = window._reconO2P;
   const ticket = window._reconTicket;
-
   const ticketSet = new Set(ticket.map(r => reconChave(r.data, r.placa)));
   const o2pSet    = new Set(o2p.map(r => reconChave(r.data, r.placa)));
-
-  const soO2P    = o2p.filter(r => !ticketSet.has(reconChave(r.data, r.placa)));
-  const soTicket = ticket.filter(r => !o2pSet.has(reconChave(r.data, r.placa)));
-  const ambos    = o2p.filter(r =>  ticketSet.has(reconChave(r.data, r.placa)));
-
-  window._reconDados = { soO2P, soTicket, ambos };
-
+  window._reconDados = {
+    soO2P:    o2p.filter(r => !ticketSet.has(reconChave(r.data, r.placa))),
+    soTicket: ticket.filter(r => !o2pSet.has(reconChave(r.data, r.placa))),
+    ambos:    o2p.filter(r => ticketSet.has(reconChave(r.data, r.placa)))
+  };
+  const d = window._reconDados;
   document.getElementById('recon-kpis').innerHTML = [
-    { val: o2p.length,       label: 'Registros O2P',   cor: 'var(--text)' },
-    { val: ticket.length,    label: 'Registros Ticket', cor: 'var(--text)' },
-    { val: soO2P.length,     label: 'Só no O2P',        cor: 'var(--red,#c0392b)' },
-    { val: soTicket.length,  label: 'Só na Ticket',     cor: 'var(--yellow,#e8941a)' },
-    { val: ambos.length,     label: 'Em ambos',         cor: 'var(--green,#2a9d6a)' },
-  ].map(k => '<div class="kpi-card"><div style="font-size:28px;font-weight:700;color:' + k.cor + '">' + k.val.toLocaleString('pt-BR') + '</div><div class="kpi-delta" style="color:var(--text2);font-size:12px">' + k.label + '</div></div>').join('');
-
-  document.getElementById('recon-badge-o2p').textContent    = soO2P.length;
-  document.getElementById('recon-badge-ticket').textContent = soTicket.length;
-  document.getElementById('recon-badge-ambos').textContent  = ambos.length;
-
-  document.getElementById('recon-resultado').style.display = '';
+    {val:o2p.length,      lbl:'Registros O2P',   cor:'var(--text)'},
+    {val:ticket.length,   lbl:'Registros Ticket', cor:'var(--text)'},
+    {val:d.soO2P.length,  lbl:'Só no O2P',        cor:'var(--red,#c0392b)'},
+    {val:d.soTicket.length,lbl:'Só na Ticket',    cor:'var(--yellow,#e8941a)'},
+    {val:d.ambos.length,  lbl:'Em ambos',          cor:'var(--green,#2a9d6a)'},
+  ].map(k => '<div class="kpi-card"><div style="font-size:28px;font-weight:700;color:'+k.cor+'">'+k.val.toLocaleString('pt-BR')+'</div><div class="kpi-delta" style="font-size:12px;color:var(--text2)">'+k.lbl+'</div></div>').join('');
+  document.getElementById('recon-badge-o2p').textContent    = d.soO2P.length;
+  document.getElementById('recon-badge-ticket').textContent = d.soTicket.length;
+  document.getElementById('recon-badge-ambos').textContent  = d.ambos.length;
+  document.getElementById('recon-resultado').style.display  = '';
   reconTab(document.querySelector('.recon-tab-btn.active'), 'so-o2p');
 }
 
@@ -5584,87 +5560,64 @@ function reconTab(btn, tab) {
 
 function reconRenderTabela(filtro) {
   const tab = window._reconAtual;
-  const dados = window._reconDados;
-  let rows = tab === 'so-o2p' ? dados.soO2P : tab === 'so-ticket' ? dados.soTicket : dados.ambos;
-
-  if (filtro) {
-    const q = filtro.toUpperCase();
-    rows = rows.filter(r => r.placa.includes(q));
-  }
-
+  let rows = tab==='so-o2p' ? window._reconDados.soO2P : tab==='so-ticket' ? window._reconDados.soTicket : window._reconDados.ambos;
+  if (filtro) { const q=filtro.toUpperCase(); rows=rows.filter(r=>r.placa.includes(q)); }
   const tbody = document.getElementById('recon-tbody');
-  if (!rows.length) {
-    tbody.innerHTML = '';
-    document.getElementById('recon-empty').style.display = '';
-    return;
-  }
-  document.getElementById('recon-empty').style.display = 'none';
-
-  const isTicket = tab === 'so-ticket';
+  if (!rows.length) { tbody.innerHTML=''; document.getElementById('recon-empty').style.display=''; return; }
+  document.getElementById('recon-empty').style.display='none';
+  const isTk = tab==='so-ticket';
   tbody.innerHTML = rows.map(r =>
-    '<tr>' +
-    '<td>' + (r.data||'—') + '</td>' +
-    '<td><span class="placa-tag">' + r.placa + '</span></td>' +
-    '<td><span class="badge ' + (isTicket?'badge-yellow':'badge-blue') + '">' + (isTicket?'Ticket':'O2P') + '</span></td>' +
-    '<td style="font-size:12px;color:var(--text2)">' + (r.operacao||'—') + '</td>' +
-    '<td style="font-family:monospace">' + (r.litros?r.litros.toFixed(2)+'L':'—') + '</td>' +
-    '<td style="font-family:monospace">' + (r.valor?'R$ '+r.valor.toFixed(2):'—') + '</td>' +
-    '</tr>'
+    '<tr><td>'+(r.data||'—')+'</td><td><span class="placa-tag">'+r.placa+'</span></td>' +
+    '<td><span class="badge '+(isTk?'badge-yellow':'badge-blue')+'">'+(isTk?'Ticket':'O2P')+'</span></td>' +
+    '<td style="font-size:12px;color:var(--text2)">'+(r.operacao||'—')+'</td>' +
+    '<td style="font-family:monospace">'+(r.litros?r.litros.toFixed(2)+'L':'—')+'</td>' +
+    '<td style="font-family:monospace">'+(r.valor?'R$ '+r.valor.toFixed(2):'—')+'</td></tr>'
   ).join('');
 }
 
-function reconFiltrar() {
-  reconRenderTabela(document.getElementById('recon-search').value);
-}
+function reconFiltrar() { reconRenderTabela(document.getElementById('recon-search').value); }
 
 function reconExportar() {
-  const tab   = window._reconAtual;
-  const dados = window._reconDados;
-  const labels = { 'so-o2p':'So_no_O2P', 'so-ticket':'So_na_Ticket', 'ambos':'Em_Ambos' };
-  const rows  = tab === 'so-o2p' ? dados.soO2P : tab === 'so-ticket' ? dados.soTicket : dados.ambos;
-  const fname = 'Reconciliacao_' + labels[tab] + '_' + new Date().toLocaleDateString('pt-BR').replace(/\/g,'-').replace(/\//g,'-') + '.xlsx';
+  const tab    = window._reconAtual;
+  const dados  = window._reconDados;
+  const labels = {'so-o2p':'So_no_O2P','so-ticket':'So_na_Ticket','ambos':'Em_Ambos'};
+  const rows   = tab==='so-o2p' ? dados.soO2P : tab==='so-ticket' ? dados.soTicket : dados.ambos;
+  const fname  = 'Reconciliacao_'+labels[tab]+'_'+new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')+'.xlsx';
 
-  if (tab === 'ambos') {
+  if (tab==='ambos') {
     const wsData = [['Data','Placa','Origem','Operação','Litros','Valor Total']];
-    rows.forEach(r => wsData.push([r.data||'', r.placa||'', 'Ambos', r.operacao||'', r.litros||'', r.valor||'']));
-    const wbOut = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wbOut, XLSX.utils.aoa_to_sheet(wsData), labels[tab]);
-    XLSX.writeFile(wbOut, fname);
-    showToast('✅ Excel exportado!', 'success');
+    rows.forEach(r => wsData.push([r.data||'',r.placa||'','Ambos',r.operacao||'',r.litros||'',r.valor||'']));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(wsData), labels[tab]);
+    XLSX.writeFile(wb, fname);
+    showToast('✅ Excel exportado!','success');
     return;
   }
 
-  // Para O2P e Ticket: usar worksheet original e filtrar só as linhas que interessam
-  const isO2P  = tab === 'so-o2p';
-  const wbOrig = isO2P ? window._reconO2PWbOrig : window._reconTicketWbOrig;
-  const linhas = isO2P ? window._reconO2PLinhas  : window._reconTicketLinhas;
+  // Para O2P e Ticket: usar allRows que tem MESMA leitura da comparação
+  const isO2P    = tab==='so-o2p';
+  const allRows  = isO2P ? window._reconO2PAllRows  : window._reconTicketAllRows;
+  const header   = isO2P ? window._reconO2PHeader   : window._reconTicketHeader;
+  const dIdx     = isO2P ? 1 : 4; // col B ou E
+  const pIdx     = isO2P ? 3 : 5; // col D ou F
 
-  if (!wbOrig || !linhas) {
-    showToast('Recarregue os arquivos e compare novamente.', 'error');
-    return;
-  }
+  if (!allRows) { showToast('Recarregue os arquivos.','error'); return; }
 
-  // Chaves que devem ir para o Excel
+  // Conjunto de chaves que devem ir para exportação
   const chaveSet = new Set(rows.map(r => reconChave(r.data, r.placa)));
 
-  // Pegar sheet original como array de arrays
-  const wsOrig = wbOrig.Sheets[wbOrig.SheetNames[0]];
-  const allRows = XLSX.utils.sheet_to_json(wsOrig, {header:1, defval:''});
-  const header  = allRows[0] || [];
-
-  // Filtrar linhas cujas chaves estão no conjunto
-  const filtered = [];
-  linhas.forEach((l, i) => {
-    if (chaveSet.has(l.chave)) {
-      filtered.push(allRows[i + 1] || []);
-    }
+  // Filtrar as linhas originais usando a MESMA função reconParseData
+  const filtered = allRows.slice(1).filter(row => {
+    const data  = reconParseData(row[dIdx]);
+    const placa = String(row[pIdx]||'').trim().toUpperCase();
+    return chaveSet.has(reconChave(data, placa));
   });
 
-  const wbOut = XLSX.utils.book_new();
-  const wsOut = XLSX.utils.aoa_to_sheet([header, ...filtered]);
-  XLSX.utils.book_append_sheet(wbOut, wsOut, labels[tab]);
-  XLSX.writeFile(wbOut, fname);
-  showToast('✅ Excel exportado! ' + filtered.length + ' registros.', 'success');
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet([header, ...filtered]);
+  XLSX.utils.book_append_sheet(wb, ws, labels[tab]);
+  XLSX.writeFile(wb, fname);
+  showToast('✅ Excel exportado! '+filtered.length+' registros.','success');
 }
 function relChipKeydown(e, input) {
   if (e.key === 'Enter' || e.key === ',') {
