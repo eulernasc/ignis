@@ -5474,20 +5474,29 @@ async function reconCarregarO2P(input) {
   if (!file) return;
   document.getElementById('recon-o2p-label').textContent = file.name;
   const buf = await file.arrayBuffer();
-  // Salva buffer original para exportação fiel depois
-  window._reconO2PBuf = buf.slice(0);
-  // Leitura para parsing/comparação
+
+  // Guarda buffer e sheet originais intactos para exportação
+  const wbOrig = XLSX.read(buf.slice(0), {type:'array', cellDates:false, raw:true});
+  window._reconO2PWbOrig = wbOrig;
+
+  // Leitura com datas para comparação
   const wb = XLSX.read(buf, {type:'array', cellDates:true});
   const ws = wb.Sheets[wb.SheetNames[0]];
   const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+
+  // Guarda índice linha → chave para exportação depois
+  window._reconO2PLinhas = rows.slice(1).map(r => ({
+    chave: reconParseData(r[1]) + '|' + String(r[3]||'').trim().toUpperCase()
+  }));
+
   window._reconO2P = rows.slice(1).map(r => ({
-    data:      reconParseData(r[1]),
-    placa:     String(r[3]||'').trim().toUpperCase(),
-    operacao:  String(r[2]||'').trim().replace(/_/g,' '),
-    litros:    parseFloat(r[8])||0,
-    valor:     parseFloat(r[9])||0,
-    chave:     reconParseData(r[1]) + '|' + String(r[3]||'').trim().toUpperCase()
+    data:     reconParseData(r[1]),
+    placa:    String(r[3]||'').trim().toUpperCase(),
+    operacao: String(r[2]||'').trim().replace(/_/g,' '),
+    litros:   parseFloat(r[8])||0,
+    valor:    parseFloat(r[9])||0
   })).filter(r => r.data && r.placa);
+
   showToast('✅ O2P: ' + window._reconO2P.length + ' registros carregados', 'success');
   reconVerificarPronto();
 }
@@ -5497,15 +5506,23 @@ async function reconCarregarTicket(input) {
   if (!file) return;
   document.getElementById('recon-ticket-label').textContent = file.name;
   const buf = await file.arrayBuffer();
-  window._reconTicketBuf = buf.slice(0);
+
+  const wbOrig = XLSX.read(buf.slice(0), {type:'array', cellDates:false, raw:true});
+  window._reconTicketWbOrig = wbOrig;
+
   const wb = XLSX.read(buf, {type:'array', cellDates:true});
   const ws = wb.Sheets[wb.SheetNames[0]];
   const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+
+  window._reconTicketLinhas = rows.slice(1).map(r => ({
+    chave: reconParseData(r[4]) + '|' + String(r[5]||'').trim().toUpperCase()
+  }));
+
   window._reconTicket = rows.slice(1).map(r => ({
     data:  reconParseData(r[4]),
-    placa: String(r[5]||'').trim().toUpperCase(),
-    chave: reconParseData(r[4]) + '|' + String(r[5]||'').trim().toUpperCase()
+    placa: String(r[5]||'').trim().toUpperCase()
   })).filter(r => r.data && r.placa);
+
   showToast('✅ Ticket: ' + window._reconTicket.length + ' registros carregados', 'success');
   reconVerificarPronto();
 }
@@ -5515,7 +5532,7 @@ function reconVerificarPronto() {
 }
 
 function reconChave(data, placa) {
-  return `${data}|${placa}`;
+  return data + '|' + placa;
 }
 
 function reconComparar() {
@@ -5531,18 +5548,13 @@ function reconComparar() {
 
   window._reconDados = { soO2P, soTicket, ambos };
 
-  // KPIs
   document.getElementById('recon-kpis').innerHTML = [
-    { val: o2p.length,    label: 'Registros O2P',       cor: 'var(--text)' },
-    { val: ticket.length, label: 'Registros Ticket',     cor: 'var(--text)' },
-    { val: soO2P.length,  label: 'Só no O2P',            cor: 'var(--red)' },
-    { val: soTicket.length,label:'Só na Ticket',         cor: 'var(--yellow)' },
-    { val: ambos.length,  label: 'Em ambos',             cor: 'var(--green)' },
-  ].map(k => `
-    <div class="kpi-card">
-      <div style="font-size:28px;font-weight:700;color:${k.cor}">${k.val.toLocaleString('pt-BR')}</div>
-      <div class="kpi-delta" style="color:var(--text2);font-size:12px">${k.label}</div>
-    </div>`).join('');
+    { val: o2p.length,       label: 'Registros O2P',   cor: 'var(--text)' },
+    { val: ticket.length,    label: 'Registros Ticket', cor: 'var(--text)' },
+    { val: soO2P.length,     label: 'Só no O2P',        cor: 'var(--red,#c0392b)' },
+    { val: soTicket.length,  label: 'Só na Ticket',     cor: 'var(--yellow,#e8941a)' },
+    { val: ambos.length,     label: 'Em ambos',         cor: 'var(--green,#2a9d6a)' },
+  ].map(k => '<div class="kpi-card"><div style="font-size:28px;font-weight:700;color:' + k.cor + '">' + k.val.toLocaleString('pt-BR') + '</div><div class="kpi-delta" style="color:var(--text2);font-size:12px">' + k.label + '</div></div>').join('');
 
   document.getElementById('recon-badge-o2p').textContent    = soO2P.length;
   document.getElementById('recon-badge-ticket').textContent = soTicket.length;
@@ -5560,7 +5572,11 @@ function reconTab(btn, tab) {
     b.classList.remove('active');
   });
   btn.classList.add('active');
-  const titles = { 'so-o2p':'Abastecimentos que estão no O2P mas NÃO estão na Ticket', 'so-ticket':'Abastecimentos que estão na Ticket mas NÃO estão no O2P', 'ambos':'Abastecimentos encontrados em ambos os sistemas' };
+  const titles = {
+    'so-o2p':    'Abastecimentos que estão no O2P mas NÃO estão na Ticket',
+    'so-ticket': 'Abastecimentos que estão na Ticket mas NÃO estão no O2P',
+    'ambos':     'Abastecimentos encontrados em ambos os sistemas'
+  };
   document.getElementById('recon-tab-title').textContent = titles[tab];
   document.getElementById('recon-search').value = '';
   reconRenderTabela();
@@ -5585,15 +5601,16 @@ function reconRenderTabela(filtro) {
   document.getElementById('recon-empty').style.display = 'none';
 
   const isTicket = tab === 'so-ticket';
-  tbody.innerHTML = rows.map(r => `
-    <tr>
-      <td>${r.data||'—'}</td>
-      <td><span class="placa-tag">${r.placa}</span></td>
-      <td><span class="badge ${isTicket?'badge-yellow':'badge-blue'}">${isTicket?'Ticket':'O2P'}</span></td>
-      <td style="font-size:12px;color:var(--text2)">${r.operacao||'—'}</td>
-      <td style="font-family:monospace">${r.litros?r.litros.toFixed(2)+'L':'—'}</td>
-      <td style="font-family:monospace">${r.valor?'R$ '+r.valor.toFixed(2):'—'}</td>
-    </tr>`).join('');
+  tbody.innerHTML = rows.map(r =>
+    '<tr>' +
+    '<td>' + (r.data||'—') + '</td>' +
+    '<td><span class="placa-tag">' + r.placa + '</span></td>' +
+    '<td><span class="badge ' + (isTicket?'badge-yellow':'badge-blue') + '">' + (isTicket?'Ticket':'O2P') + '</span></td>' +
+    '<td style="font-size:12px;color:var(--text2)">' + (r.operacao||'—') + '</td>' +
+    '<td style="font-family:monospace">' + (r.litros?r.litros.toFixed(2)+'L':'—') + '</td>' +
+    '<td style="font-family:monospace">' + (r.valor?'R$ '+r.valor.toFixed(2):'—') + '</td>' +
+    '</tr>'
+  ).join('');
 }
 
 function reconFiltrar() {
@@ -5601,60 +5618,52 @@ function reconFiltrar() {
 }
 
 function reconExportar() {
-  const tab = window._reconAtual;
+  const tab   = window._reconAtual;
   const dados = window._reconDados;
   const labels = { 'so-o2p':'So_no_O2P', 'so-ticket':'So_na_Ticket', 'ambos':'Em_Ambos' };
-  const rows = tab === 'so-o2p' ? dados.soO2P : tab === 'so-ticket' ? dados.soTicket : dados.ambos;
+  const rows  = tab === 'so-o2p' ? dados.soO2P : tab === 'so-ticket' ? dados.soTicket : dados.ambos;
+  const fname = 'Reconciliacao_' + labels[tab] + '_' + new Date().toLocaleDateString('pt-BR').replace(/\/g,'-').replace(/\//g,'-') + '.xlsx';
 
   if (tab === 'ambos') {
-    // Em ambos: resumido
     const wsData = [['Data','Placa','Origem','Operação','Litros','Valor Total']];
-    rows.forEach(r => wsData.push([r.data||'', r.placa||'', 'O2P', r.operacao||'', r.litros||'', r.valor||'']));
-    const wb2 = XLSX.utils.book_new();
-    const ws2 = XLSX.utils.aoa_to_sheet(wsData);
-    XLSX.utils.book_append_sheet(wb2, ws2, labels[tab]);
-    XLSX.writeFile(wb2, 'Reconciliacao_' + labels[tab] + '_' + new Date().toLocaleDateString('pt-BR').replace(/\//g,'-') + '.xlsx');
+    rows.forEach(r => wsData.push([r.data||'', r.placa||'', 'Ambos', r.operacao||'', r.litros||'', r.valor||'']));
+    const wbOut = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wbOut, XLSX.utils.aoa_to_sheet(wsData), labels[tab]);
+    XLSX.writeFile(wbOut, fname);
     showToast('✅ Excel exportado!', 'success');
     return;
   }
 
-  // Pega o buffer original guardado em memória
-  const buf = tab === 'so-o2p' ? window._reconO2PBuf : window._reconTicketBuf;
-  if (!buf) { showToast('Buffer não disponível. Recarregue o arquivo.', 'error'); return; }
+  // Para O2P e Ticket: usar worksheet original e filtrar só as linhas que interessam
+  const isO2P  = tab === 'so-o2p';
+  const wbOrig = isO2P ? window._reconO2PWbOrig : window._reconTicketWbOrig;
+  const linhas = isO2P ? window._reconO2PLinhas  : window._reconTicketLinhas;
 
-  // Lê o arquivo original completo sem transformação
-  const wbOrig = XLSX.read(buf, {type:'array', cellDates:false, raw:false});
+  if (!wbOrig || !linhas) {
+    showToast('Recarregue os arquivos e compare novamente.', 'error');
+    return;
+  }
+
+  // Chaves que devem ir para o Excel
+  const chaveSet = new Set(rows.map(r => reconChave(r.data, r.placa)));
+
+  // Pegar sheet original como array de arrays
   const wsOrig = wbOrig.Sheets[wbOrig.SheetNames[0]];
   const allRows = XLSX.utils.sheet_to_json(wsOrig, {header:1, defval:''});
-  const header = allRows[0] || [];
-  const dataRows = allRows.slice(1);
+  const header  = allRows[0] || [];
 
-  // Monta conjunto de chaves que devem aparecer no export
-  const chaveSet = new Set(rows.map(r => r.chave));
-
-  // Filtra as linhas originais que têm a chave correspondente
-  // Para O2P: chave = data(col B) + placa(col D) = índices 1 e 3
-  // Para Ticket: chave = data(col E) + placa(col F) = índices 4 e 5
-  const [dIdx, pIdx] = tab === 'so-o2p' ? [1, 3] : [4, 5];
-
-  // Precisa parsear a data das linhas originais para montar a chave
-  // Faz uma segunda leitura com cellDates para ter as datas corretas
-  const wbDates = XLSX.read(buf, {type:'array', cellDates:true});
-  const wsDates = wbDates.Sheets[wbDates.SheetNames[0]];
-  const dateRows = XLSX.utils.sheet_to_json(wsDates, {header:1, defval:''});
-
+  // Filtrar linhas cujas chaves estão no conjunto
   const filtered = [];
-  dataRows.forEach((rawRow, i) => {
-    const dateRow = dateRows[i+1] || [];
-    const chave = reconParseData(dateRow[dIdx]) + '|' + String(dateRow[pIdx]||'').trim().toUpperCase();
-    if (chaveSet.has(chave)) filtered.push(rawRow);
+  linhas.forEach((l, i) => {
+    if (chaveSet.has(l.chave)) {
+      filtered.push(allRows[i + 1] || []);
+    }
   });
 
-  const wsData = [header, ...filtered];
   const wbOut = XLSX.utils.book_new();
-  const wsOut = XLSX.utils.aoa_to_sheet(wsData);
+  const wsOut = XLSX.utils.aoa_to_sheet([header, ...filtered]);
   XLSX.utils.book_append_sheet(wbOut, wsOut, labels[tab]);
-  XLSX.writeFile(wbOut, 'Reconciliacao_' + labels[tab] + '_' + new Date().toLocaleDateString('pt-BR').replace(/\//g,'-') + '.xlsx');
+  XLSX.writeFile(wbOut, fname);
   showToast('✅ Excel exportado! ' + filtered.length + ' registros.', 'success');
 }
 function relChipKeydown(e, input) {
