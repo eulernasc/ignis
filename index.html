@@ -2199,6 +2199,88 @@ function rcParseData(val) {
   return null;
 }
 
+function updateFilters() {
+  const ops=getOperacoes();
+
+  // Filtra operações conforme o filtro de máquina selecionado no dashboard
+  const maqFiltro = document.getElementById('dash-maq-filter')?.value || '';
+  const opsFiltradas = filtrarOpsPorTipo(maqFiltro, ops);
+
+  // Multi-select operações do dashboard
+  const cb=document.getElementById('op-checkboxes');
+  if(cb){
+    const selected=getSelectedOps(); // null = todas, Set = específicas
+    cb.innerHTML=opsFiltradas.map(o=>`
+      <label style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:13px">
+        <input type="checkbox" class="op-check" value="${o}" ${selected===null||selected.has(o)?'checked':''} onchange="onOpCheckChange()">
+        ${o.replace(/_/g,' ')}
+      </label>`).join('');
+    // Sincroniza o "Todas" checkbox
+    const allCheck=document.getElementById('op-all-check');
+    if(allCheck){
+      const checks=document.querySelectorAll('.op-check');
+      const checked=document.querySelectorAll('.op-check:checked');
+      allCheck.checked=checks.length===checked.length;
+      allCheck.indeterminate=checked.length>0&&checked.length<checks.length;
+    }
+  }
+  // Filtro operação único nos outros lugares
+  ['abast-op-filter','maq-op-filter'].forEach(id=>{
+    const sel=document.getElementById(id); if(!sel) return;
+    const val=sel.value;
+    sel.innerHTML='<option value="">Todas as Operações</option>'+ops.map(o=>`<option value="${o}">${o.replace(/_/g,' ')}</option>`).join('');
+    sel.value=val;
+  });
+  // Popular multi-select do Comparativo (também filtrado pelo tipo selecionado)
+  const compMaqFiltro = document.getElementById('comp-maq-filter')?.value || '';
+  const compOpsFiltradas = filtrarOpsPorTipo(compMaqFiltro, ops);
+  const compCb=document.getElementById('comp-op-checkboxes');
+  if(compCb){
+    const existingOps=new Set([...document.querySelectorAll('.comp-op-check')].map(c=>c.value));
+    const hasExisting=existingOps.size>0;
+    const currentChecked=new Set([...document.querySelectorAll('.comp-op-check:checked')].map(c=>c.value));
+    compCb.innerHTML=compOpsFiltradas.map(o=>`
+      <label style="display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:6px;cursor:pointer;font-size:13px">
+        <input type="checkbox" class="comp-op-check" value="${o}" ${!hasExisting||currentChecked.has(o)||!existingOps.has(o)?'checked':''} onchange="onCompOpCheckChange()">
+        ${o.replace(/_/g,' ')}
+      </label>`).join('');
+    const allCheck=document.getElementById('comp-op-all-check');
+    if(allCheck){
+      const nChecked=hasExisting?[...document.querySelectorAll('.comp-op-check:checked')].length:compOpsFiltradas.length;
+      allCheck.checked=nChecked===compOpsFiltradas.length;
+      allCheck.indeterminate=nChecked>0&&nChecked<compOpsFiltradas.length;
+    }
+  }
+  ['dash-maq-filter'].forEach(id=>{
+    const sel=document.getElementById(id); if(!sel) return;
+    const val=sel.value;
+    sel.innerHTML='<option value="">Selecione o tipo...</option>' +
+      '<option value="__maquinas__">⚙️ MÁQUINAS</option>' +
+      '<option value="__tratores__">🚜 TRATORES</option>' +
+      '<option value="__pesada__">🚛 FROTA PESADA</option>' +
+      '<option value="__leve__">🚗 FROTA LEVE</option>' +
+      
+      '<option disabled style="color:var(--text3);font-size:11px">──────────────</option>' +
+      state.maquinas.map(m=>`<option value="${m.placa}">${m.placa}</option>`).join('');
+    sel.value=val;
+  });
+  // Popular filtro de períodos em Abastecimentos
+  const periodoSel = document.getElementById('abast-periodo-filter');
+  if (periodoSel) {
+    const valP = periodoSel.value;
+    const periodos = Object.entries(state.semanas)
+      .sort((a,b) => (b[1].dataIni||b[0]).localeCompare(a[1].dataIni||a[0]));
+    periodoSel.innerHTML = '<option value="">Todos os Períodos</option>' +
+      periodos.map(([id,p]) => {
+        const ref = p.dataIni ? ` · ${new Date(p.dataIni+'T00:00:00').toLocaleDateString('pt-BR')}${p.dataFim?' a '+new Date(p.dataFim+'T00:00:00').toLocaleDateString('pt-BR'):''}` : '';
+        return `<option value="${id}">${p.label||id}${ref}</option>`;
+      }).join('');
+    periodoSel.value = valP;
+  }
+  const sel=document.getElementById('abast-placa');
+  if(sel) sel.innerHTML='<option value="">Selecione a máquina</option>'+state.maquinas.map(m=>`<option value="${m.placa}">${m.placa}</option>`).join('');
+}
+
 async function rcCarregarO2P(input) {
   const file = input.files[0]; if (!file) return;
   document.getElementById('rc-o2p-label').textContent = file.name;
