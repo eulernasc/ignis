@@ -5483,13 +5483,13 @@ async function reconCarregarO2P(input) {
   const wsRaw = wbRaw.Sheets[wbRaw.SheetNames[0]];
   const rowsRaw = XLSX.utils.sheet_to_json(wsRaw, {header:1, defval:''});
   window._reconO2PHeader = rowsRaw[0] || [];
-  window._reconO2P = rowsDates.slice(1).filter(r => r[1] || r[3]).map((r, i) => ({
+  window._reconO2P = rowsDates.slice(1).map((r, i) => ({
     data:      reconParseData(r[1]),
     placa:     String(r[3]||'').trim().toUpperCase(),
     operacao:  String(r[2]||'').trim().replace(/_/g,' '),
     litros:    parseFloat(r[8])||0,
     valor:     parseFloat(r[9])||0,
-    raw: rowsRaw[i+1] || r
+    raw: rowsRaw[i+1] || []
   })).filter(r => r.data && r.placa);
   showToast(`✅ O2P: ${window._reconO2P.length} registros carregados`, 'success');
   reconVerificarPronto();
@@ -5509,10 +5509,10 @@ async function reconCarregarTicket(input) {
   const wsRaw = wbRaw.Sheets[wbRaw.SheetNames[0]];
   const rowsRaw = XLSX.utils.sheet_to_json(wsRaw, {header:1, defval:''});
   window._reconTicketHeader = rowsRaw[0] || [];
-  window._reconTicket = rowsDates.slice(1).filter(r => r[4] || r[5]).map((r, i) => ({
+  window._reconTicket = rowsDates.slice(1).map((r, i) => ({
     data:  reconParseData(r[4]),
     placa: String(r[5]||'').trim().toUpperCase(),
-    raw: rowsRaw[i+1] || r
+    raw: rowsRaw[i+1] || []
   })).filter(r => r.data && r.placa);
   showToast(`✅ Ticket: ${window._reconTicket.length} registros carregados`, 'success');
   reconVerificarPronto();
