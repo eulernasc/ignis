@@ -2199,6 +2199,22 @@ function rcParseData(val) {
   return null;
 }
 
+function getOperacoes() {
+  return [...new Set([...state.maquinas.map(m=>m.operacao),...state.abastecimentos.map(a=>getMaquina(a.placa)?.operacao||a.operacao||'')])].filter(Boolean).sort();
+}
+
+function filtrarOpsPorTipo(tipoFiltro, opsBase) {
+  if (!tipoFiltro) return opsBase;
+  if (tipoFiltro === '__maquinas__' || tipoFiltro === '__tratores__' || tipoFiltro === '__pesada__' || tipoFiltro === '__leve__' || tipoFiltro === '__empilhadeiras__') {
+    const tipoAlvo = tipoFiltro === '__maquinas__' ? 'maquina' : tipoFiltro === '__tratores__' ? 'trator' : tipoFiltro === '__pesada__' ? 'pesada' : tipoFiltro === '__leve__' ? 'leve' : 'empilhadeira';
+    const opsDoTipo = new Set(state.abastecimentos.filter(a => getTipoIgnis(a) === tipoAlvo).map(a => getMaquina(a.placa)?.operacao || a.operacao || '').filter(Boolean));
+    const filtradas = opsBase.filter(o => opsDoTipo.has(o));
+    return filtradas.length > 0 ? filtradas : opsBase;
+  }
+  const maq = getMaquina(tipoFiltro);
+  return maq?.operacao ? [maq.operacao] : opsBase;
+}
+
 function updateFilters() {
   const ops=getOperacoes();
 
