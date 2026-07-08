@@ -5474,24 +5474,21 @@ async function reconCarregarO2P(input) {
   if (!file) return;
   document.getElementById('recon-o2p-label').textContent = file.name;
   const buf = await file.arrayBuffer();
-  // Leitura com datas para parsing
-  const wbDates = XLSX.read(buf, {type:'array', cellDates:true});
-  const wsDates = wbDates.Sheets[wbDates.SheetNames[0]];
-  const rowsDates = XLSX.utils.sheet_to_json(wsDates, {header:1, defval:''});
-  // Leitura raw (texto puro) para exportação fiel
-  const wbRaw = XLSX.read(buf, {type:'array', cellDates:false, raw:false});
-  const wsRaw = wbRaw.Sheets[wbRaw.SheetNames[0]];
-  const rowsRaw = XLSX.utils.sheet_to_json(wsRaw, {header:1, defval:''});
-  window._reconO2PHeader = rowsRaw[0] || [];
-  window._reconO2P = rowsDates.slice(1).map((r, i) => ({
+  // Salva buffer original para exportação fiel depois
+  window._reconO2PBuf = buf.slice(0);
+  // Leitura para parsing/comparação
+  const wb = XLSX.read(buf, {type:'array', cellDates:true});
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+  window._reconO2P = rows.slice(1).map(r => ({
     data:      reconParseData(r[1]),
     placa:     String(r[3]||'').trim().toUpperCase(),
     operacao:  String(r[2]||'').trim().replace(/_/g,' '),
     litros:    parseFloat(r[8])||0,
     valor:     parseFloat(r[9])||0,
-    raw: rowsRaw[i+1] || []
+    chave:     reconParseData(r[1]) + '|' + String(r[3]||'').trim().toUpperCase()
   })).filter(r => r.data && r.placa);
-  showToast(`✅ O2P: ${window._reconO2P.length} registros carregados`, 'success');
+  showToast('✅ O2P: ' + window._reconO2P.length + ' registros carregados', 'success');
   reconVerificarPronto();
 }
 
@@ -5500,21 +5497,16 @@ async function reconCarregarTicket(input) {
   if (!file) return;
   document.getElementById('recon-ticket-label').textContent = file.name;
   const buf = await file.arrayBuffer();
-  // Leitura com datas para parsing
-  const wbDates = XLSX.read(buf, {type:'array', cellDates:true});
-  const wsDates = wbDates.Sheets[wbDates.SheetNames[0]];
-  const rowsDates = XLSX.utils.sheet_to_json(wsDates, {header:1, defval:''});
-  // Leitura raw para exportação fiel
-  const wbRaw = XLSX.read(buf, {type:'array', cellDates:false, raw:false});
-  const wsRaw = wbRaw.Sheets[wbRaw.SheetNames[0]];
-  const rowsRaw = XLSX.utils.sheet_to_json(wsRaw, {header:1, defval:''});
-  window._reconTicketHeader = rowsRaw[0] || [];
-  window._reconTicket = rowsDates.slice(1).map((r, i) => ({
+  window._reconTicketBuf = buf.slice(0);
+  const wb = XLSX.read(buf, {type:'array', cellDates:true});
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+  window._reconTicket = rows.slice(1).map(r => ({
     data:  reconParseData(r[4]),
     placa: String(r[5]||'').trim().toUpperCase(),
-    raw: rowsRaw[i+1] || []
+    chave: reconParseData(r[4]) + '|' + String(r[5]||'').trim().toUpperCase()
   })).filter(r => r.data && r.placa);
-  showToast(`✅ Ticket: ${window._reconTicket.length} registros carregados`, 'success');
+  showToast('✅ Ticket: ' + window._reconTicket.length + ' registros carregados', 'success');
   reconVerificarPronto();
 }
 
@@ -5611,32 +5603,59 @@ function reconFiltrar() {
 function reconExportar() {
   const tab = window._reconAtual;
   const dados = window._reconDados;
-  const rows = tab === 'so-o2p' ? dados.soO2P : tab === 'so-ticket' ? dados.soTicket : dados.ambos;
   const labels = { 'so-o2p':'So_no_O2P', 'so-ticket':'So_na_Ticket', 'ambos':'Em_Ambos' };
+  const rows = tab === 'so-o2p' ? dados.soO2P : tab === 'so-ticket' ? dados.soTicket : dados.ambos;
 
-  let wsData;
-  if (tab === 'so-o2p') {
-    // Todas as colunas originais do O2P
-    const header = window._reconO2PHeader || ['Data','Placa','Operação','Litros','Valor'];
-    wsData = [header, ...rows.map(r => r.raw)];
-  } else if (tab === 'so-ticket') {
-    // Todas as colunas originais da Ticket
-    const header = window._reconTicketHeader || ['Data','Placa'];
-    wsData = [header, ...rows.map(r => r.raw)];
-  } else {
-    // Em ambos — mantém resumido
-    wsData = [['Data','Placa','Origem','Operação','Litros','Valor Total']];
-    rows.forEach(r => wsData.push([
-      r.data||'', r.placa||'', 'O2P',
-      r.operacao||'', r.litros||'', r.valor||''
-    ]));
+  if (tab === 'ambos') {
+    // Em ambos: resumido
+    const wsData = [['Data','Placa','Origem','Operação','Litros','Valor Total']];
+    rows.forEach(r => wsData.push([r.data||'', r.placa||'', 'O2P', r.operacao||'', r.litros||'', r.valor||'']));
+    const wb2 = XLSX.utils.book_new();
+    const ws2 = XLSX.utils.aoa_to_sheet(wsData);
+    XLSX.utils.book_append_sheet(wb2, ws2, labels[tab]);
+    XLSX.writeFile(wb2, 'Reconciliacao_' + labels[tab] + '_' + new Date().toLocaleDateString('pt-BR').replace(/\//g,'-') + '.xlsx');
+    showToast('✅ Excel exportado!', 'success');
+    return;
   }
 
-  const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.aoa_to_sheet(wsData);
-  XLSX.utils.book_append_sheet(wb, ws, labels[tab]);
-  XLSX.writeFile(wb, `Reconciliacao_${labels[tab]}_${new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')}.xlsx`);
-  showToast('✅ Excel exportado!', 'success');
+  // Pega o buffer original guardado em memória
+  const buf = tab === 'so-o2p' ? window._reconO2PBuf : window._reconTicketBuf;
+  if (!buf) { showToast('Buffer não disponível. Recarregue o arquivo.', 'error'); return; }
+
+  // Lê o arquivo original completo sem transformação
+  const wbOrig = XLSX.read(buf, {type:'array', cellDates:false, raw:false});
+  const wsOrig = wbOrig.Sheets[wbOrig.SheetNames[0]];
+  const allRows = XLSX.utils.sheet_to_json(wsOrig, {header:1, defval:''});
+  const header = allRows[0] || [];
+  const dataRows = allRows.slice(1);
+
+  // Monta conjunto de chaves que devem aparecer no export
+  const chaveSet = new Set(rows.map(r => r.chave));
+
+  // Filtra as linhas originais que têm a chave correspondente
+  // Para O2P: chave = data(col B) + placa(col D) = índices 1 e 3
+  // Para Ticket: chave = data(col E) + placa(col F) = índices 4 e 5
+  const [dIdx, pIdx] = tab === 'so-o2p' ? [1, 3] : [4, 5];
+
+  // Precisa parsear a data das linhas originais para montar a chave
+  // Faz uma segunda leitura com cellDates para ter as datas corretas
+  const wbDates = XLSX.read(buf, {type:'array', cellDates:true});
+  const wsDates = wbDates.Sheets[wbDates.SheetNames[0]];
+  const dateRows = XLSX.utils.sheet_to_json(wsDates, {header:1, defval:''});
+
+  const filtered = [];
+  dataRows.forEach((rawRow, i) => {
+    const dateRow = dateRows[i+1] || [];
+    const chave = reconParseData(dateRow[dIdx]) + '|' + String(dateRow[pIdx]||'').trim().toUpperCase();
+    if (chaveSet.has(chave)) filtered.push(rawRow);
+  });
+
+  const wsData = [header, ...filtered];
+  const wbOut = XLSX.utils.book_new();
+  const wsOut = XLSX.utils.aoa_to_sheet(wsData);
+  XLSX.utils.book_append_sheet(wbOut, wsOut, labels[tab]);
+  XLSX.writeFile(wbOut, 'Reconciliacao_' + labels[tab] + '_' + new Date().toLocaleDateString('pt-BR').replace(/\//g,'-') + '.xlsx');
+  showToast('✅ Excel exportado! ' + filtered.length + ' registros.', 'success');
 }
 function relChipKeydown(e, input) {
   if (e.key === 'Enter' || e.key === ',') {
