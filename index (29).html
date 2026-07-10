@@ -1,0 +1,875 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ignis — Transforme dados de abastecimento em economia real</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔥</text></svg>">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --fire: #c0392b;
+  --fire2: #e05a1a;
+  --fire3: #f0891a;
+  --bg: #09080a;
+  --bg2: #110f12;
+  --bg3: #1a171c;
+  --bg4: #221f25;
+  --text: #f0ece8;
+  --text2: #9a9098;
+  --text3: #5a5258;
+  --border: rgba(192,57,43,.15);
+  --border2: rgba(240,236,232,.07);
+  --radius: 16px;
+  --glow: 0 0 60px rgba(192,57,43,.12);
+}
+
+*{margin:0;padding:0;box-sizing:border-box;}
+html{scroll-behavior:smooth;}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:'DM Sans',sans-serif;
+  font-weight:400;
+  overflow-x:hidden;
+  line-height:1.6;
+}
+
+/* NOISE */
+body::after{
+  content:'';
+  position:fixed;inset:0;
+  background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.035'/%3E%3C/svg%3E");
+  pointer-events:none;z-index:9999;opacity:.5;
+}
+
+/* NAV */
+nav{
+  position:fixed;top:0;left:0;right:0;z-index:100;
+  padding:18px 60px;
+  display:flex;align-items:center;justify-content:space-between;
+  background:rgba(9,8,10,.85);
+  backdrop-filter:blur(20px);
+  border-bottom:1px solid var(--border2);
+}
+.nav-logo{display:flex;align-items:center;gap:10px;}
+.nav-logo-icon{
+  width:34px;height:34px;
+  background:linear-gradient(135deg,var(--fire),var(--fire2));
+  border-radius:9px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:16px;
+  box-shadow:0 0 16px rgba(192,57,43,.4);
+}
+.nav-logo-text{font-size:15px;font-weight:600;letter-spacing:-.3px;}
+.nav-links{display:flex;gap:32px;list-style:none;}
+.nav-links a{font-size:13px;color:var(--text2);text-decoration:none;transition:.2s;}
+.nav-links a:hover{color:var(--text);}
+.nav-cta{
+  font-size:13px;font-weight:600;
+  background:linear-gradient(135deg,var(--fire),var(--fire2));
+  color:#fff;padding:9px 22px;border-radius:9px;text-decoration:none;
+  box-shadow:0 2px 14px rgba(192,57,43,.35);
+  transition:all .2s;
+}
+.nav-cta:hover{transform:translateY(-1px);box-shadow:0 4px 20px rgba(192,57,43,.5);}
+
+/* ── HERO ── */
+.hero{
+  min-height:100vh;
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  text-align:center;
+  padding:140px 40px 100px;
+  position:relative;
+  overflow:hidden;
+}
+.hero-glow{
+  position:absolute;
+  top:20%;left:50%;transform:translateX(-50%);
+  width:800px;height:500px;
+  background:radial-gradient(ellipse, rgba(192,57,43,.12) 0%, transparent 70%);
+  pointer-events:none;
+}
+.hero-grid{
+  position:absolute;inset:0;
+  background-image:
+    linear-gradient(var(--border2) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border2) 1px, transparent 1px);
+  background-size:60px 60px;
+  mask-image:radial-gradient(ellipse 80% 60% at 50% 0%, black 0%, transparent 100%);
+}
+.hero-badge{
+  display:inline-flex;align-items:center;gap:8px;
+  background:rgba(192,57,43,.1);
+  border:1px solid rgba(192,57,43,.25);
+  border-radius:99px;
+  padding:6px 16px;
+  font-size:12px;font-weight:500;color:var(--fire2);
+  margin-bottom:28px;
+  animation:fadeUp .6s ease both;
+}
+.hero-badge::before{content:'⬡';font-size:10px;}
+h1{
+  font-family:'Instrument Serif',serif;
+  font-size:clamp(44px,6vw,80px);
+  font-weight:400;
+  line-height:1.05;
+  letter-spacing:-.03em;
+  max-width:800px;
+  margin-bottom:12px;
+  animation:fadeUp .6s .1s ease both;
+}
+h1 em{
+  font-style:italic;
+  background:linear-gradient(135deg,var(--fire),var(--fire3));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+}
+.hero-sub{
+  font-size:clamp(16px,2vw,20px);
+  color:var(--text2);
+  max-width:600px;
+  line-height:1.7;
+  margin-bottom:44px;
+  animation:fadeUp .6s .2s ease both;
+}
+.hero-actions{
+  display:flex;gap:14px;align-items:center;flex-wrap:wrap;justify-content:center;
+  animation:fadeUp .6s .3s ease both;
+}
+.btn-hero{
+  font-size:15px;font-weight:600;
+  background:linear-gradient(135deg,var(--fire),var(--fire2));
+  color:#fff;padding:14px 32px;border-radius:11px;text-decoration:none;
+  box-shadow:0 4px 24px rgba(192,57,43,.4);
+  transition:all .2s;display:flex;align-items:center;gap:8px;
+}
+.btn-hero:hover{transform:translateY(-2px) scale(1.02);box-shadow:0 8px 32px rgba(192,57,43,.55);}
+.btn-ghost{
+  font-size:14px;color:var(--text2);text-decoration:none;
+  display:flex;align-items:center;gap:6px;
+  transition:.2s;padding:14px 20px;
+}
+.btn-ghost:hover{color:var(--text);}
+
+/* ── NUMBERS ── */
+.numbers{
+  padding:80px 60px;
+  display:grid;grid-template-columns:repeat(4,1fr);gap:1px;
+  background:var(--border2);
+  border-top:1px solid var(--border2);
+  border-bottom:1px solid var(--border2);
+}
+.number-item{
+  background:var(--bg);
+  padding:40px 32px;
+  text-align:center;
+  position:relative;overflow:hidden;
+  transition:.3s;
+}
+.number-item::before{
+  content:'';position:absolute;top:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent,var(--fire),transparent);
+  opacity:0;transition:.3s;
+}
+.number-item:hover::before{opacity:1;}
+.number-item:hover{background:var(--bg2);}
+.number-val{
+  font-family:'Instrument Serif',serif;
+  font-size:54px;font-weight:400;
+  background:linear-gradient(135deg,var(--text),var(--fire2));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  line-height:1;margin-bottom:10px;
+}
+.number-label{font-size:14px;color:var(--text2);line-height:1.5;}
+
+/* ── SECTIONS ── */
+.section{padding:100px 60px;max-width:1200px;margin:0 auto;}
+.section-tag{
+  font-size:11px;font-weight:600;letter-spacing:.15em;text-transform:uppercase;
+  color:var(--fire2);margin-bottom:16px;
+  display:flex;align-items:center;gap:10px;
+}
+.section-tag::before{content:'';display:block;width:24px;height:1px;background:var(--fire2);}
+h2{
+  font-family:'Instrument Serif',serif;
+  font-size:clamp(32px,4vw,52px);
+  font-weight:400;line-height:1.1;
+  letter-spacing:-.02em;
+  margin-bottom:16px;
+}
+h2 em{font-style:italic;color:var(--fire2);}
+.section-sub{font-size:16px;color:var(--text2);max-width:540px;line-height:1.7;margin-bottom:56px;}
+
+/* ── HOW IT WORKS ── */
+.steps{display:flex;gap:0;position:relative;}
+.steps::before{
+  content:'';
+  position:absolute;top:28px;left:28px;right:28px;height:1px;
+  background:linear-gradient(90deg,var(--border2),var(--fire),var(--border2));
+  z-index:0;
+}
+.step{
+  flex:1;text-align:center;padding:0 20px;position:relative;z-index:1;
+}
+.step-num{
+  width:56px;height:56px;border-radius:50%;
+  background:var(--bg2);border:1px solid var(--border);
+  display:flex;align-items:center;justify-content:center;
+  margin:0 auto 20px;
+  font-family:'Instrument Serif',serif;font-size:22px;
+  color:var(--fire2);
+  transition:.3s;
+  position:relative;
+}
+.step:hover .step-num{
+  background:rgba(192,57,43,.15);
+  border-color:var(--fire);
+  box-shadow:0 0 24px rgba(192,57,43,.25);
+}
+.step-icon{font-size:22px;margin-bottom:14px;display:block;}
+.step-title{font-size:14px;font-weight:600;margin-bottom:8px;}
+.step-desc{font-size:12px;color:var(--text2);line-height:1.6;}
+.step-arrow{
+  position:absolute;right:-16px;top:18px;
+  color:var(--fire);font-size:16px;z-index:2;
+}
+
+/* ── BENEFITS ── */
+.benefits-grid{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:1px;
+  background:var(--border2);
+  border:1px solid var(--border2);
+  border-radius:var(--radius);
+  overflow:hidden;
+}
+.benefit-card{
+  background:var(--bg2);
+  padding:36px 32px;
+  transition:.3s;
+  position:relative;overflow:hidden;
+}
+.benefit-card::after{
+  content:'';position:absolute;
+  bottom:0;left:0;right:0;height:2px;
+  background:linear-gradient(90deg,var(--fire),var(--fire2));
+  transform:scaleX(0);transition:.3s;transform-origin:left;
+}
+.benefit-card:hover{background:var(--bg3);}
+.benefit-card:hover::after{transform:scaleX(1);}
+.benefit-icon{
+  width:44px;height:44px;
+  background:rgba(192,57,43,.12);border:1px solid rgba(192,57,43,.2);
+  border-radius:11px;display:flex;align-items:center;justify-content:center;
+  font-size:20px;margin-bottom:20px;
+}
+.benefit-title{font-size:16px;font-weight:600;margin-bottom:10px;}
+.benefit-desc{font-size:13px;color:var(--text2);line-height:1.7;}
+
+/* ── SIMULATOR ── */
+.sim-wrap{
+  background:var(--bg2);
+  border:1px solid var(--border2);
+  border-radius:20px;
+  overflow:hidden;
+  display:grid;grid-template-columns:1fr 1fr;
+}
+.sim-left{padding:48px 48px;border-right:1px solid var(--border2);}
+.sim-right{
+  padding:48px 48px;
+  background:linear-gradient(135deg,rgba(192,57,43,.08) 0%,transparent 60%);
+  display:flex;flex-direction:column;justify-content:center;
+}
+.sim-group{margin-bottom:24px;}
+.sim-label{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.1em;color:var(--text2);margin-bottom:8px;}
+.sim-input{
+  width:100%;background:var(--bg3);border:1px solid var(--border);
+  color:var(--text);padding:12px 16px;border-radius:10px;
+  font-size:16px;font-family:'DM Sans',sans-serif;outline:none;
+  transition:.2s;
+}
+.sim-input:focus{border-color:var(--fire);}
+.sim-result-label{font-size:13px;color:var(--text2);margin-bottom:8px;}
+.sim-result-val{
+  font-family:'Instrument Serif',serif;
+  font-size:52px;font-weight:400;
+  background:linear-gradient(135deg,var(--fire2),var(--fire3));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  line-height:1;margin-bottom:8px;
+}
+.sim-result-sub{font-size:13px;color:var(--text2);line-height:1.6;}
+.sim-disclaimer{font-size:11px;color:var(--text3);margin-top:20px;line-height:1.5;}
+.sim-scenarios{display:flex;flex-direction:column;gap:10px;margin-top:24px;}
+.sim-scenario{
+  background:rgba(192,57,43,.06);
+  border:1px solid rgba(192,57,43,.12);
+  border-radius:10px;padding:12px 16px;
+  display:flex;justify-content:space-between;align-items:center;
+}
+.sim-scenario-label{font-size:12px;color:var(--text2);}
+.sim-scenario-val{font-size:14px;font-weight:600;color:var(--fire2);}
+
+/* ── SCREENSHOTS ── */
+.screens-section{
+  padding:100px 0;
+  background:linear-gradient(180deg,var(--bg) 0%,var(--bg2) 50%,var(--bg) 100%);
+}
+.screens-inner{max-width:1200px;margin:0 auto;padding:0 60px;}
+.screen-tabs{display:flex;gap:8px;margin-bottom:32px;flex-wrap:wrap;}
+.screen-tab{
+  padding:8px 18px;border-radius:8px;font-size:13px;font-weight:500;
+  cursor:pointer;border:1px solid var(--border2);color:var(--text2);
+  background:transparent;transition:.2s;font-family:'DM Sans',sans-serif;
+}
+.screen-tab.active{background:rgba(192,57,43,.15);border-color:rgba(192,57,43,.3);color:var(--fire2);}
+.screen-display{
+  background:var(--bg2);border:1px solid var(--border2);
+  border-radius:20px;overflow:hidden;
+  box-shadow:0 40px 100px rgba(0,0,0,.6);
+  position:relative;
+}
+.screen-bar{
+  background:var(--bg3);padding:12px 20px;
+  display:flex;align-items:center;gap:8px;
+  border-bottom:1px solid var(--border2);
+}
+.screen-dots{display:flex;gap:6px;}
+.screen-dot{width:10px;height:10px;border-radius:50%;}
+.screen-url{
+  flex:1;margin:0 20px;background:var(--bg);border-radius:6px;
+  padding:5px 12px;font-size:11px;color:var(--text3);
+  border:1px solid var(--border2);
+}
+.screen-content{
+  padding:32px;min-height:400px;
+  display:flex;flex-direction:column;gap:16px;
+}
+/* Mock dashboard visual */
+.mock-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
+.mock-kpi{
+  background:var(--bg3);border:1px solid var(--border);border-radius:12px;
+  padding:16px;
+}
+.mock-kpi-val{font-size:24px;font-weight:700;margin-bottom:4px;}
+.mock-kpi-lbl{font-size:11px;color:var(--text2);}
+.mock-chart{
+  background:var(--bg3);border:1px solid var(--border);border-radius:12px;
+  padding:20px;height:180px;display:flex;align-items:flex-end;gap:8px;
+  overflow:hidden;
+}
+.mock-bar{
+  flex:1;border-radius:4px 4px 0 0;
+  background:linear-gradient(to top,var(--fire),var(--fire2));
+  opacity:.7;transition:.3s;min-width:0;
+}
+.mock-bar:hover{opacity:1;}
+.mock-table{
+  background:var(--bg3);border:1px solid var(--border);border-radius:12px;
+  overflow:hidden;
+}
+.mock-th{display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr;padding:10px 16px;border-bottom:1px solid var(--border);background:var(--bg4);}
+.mock-th span{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;font-weight:600;}
+.mock-tr{display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr;padding:10px 16px;border-bottom:1px solid rgba(255,255,255,.03);}
+.mock-tr span{font-size:12px;color:var(--text2);}
+.mock-tr .placa{font-family:monospace;font-weight:700;color:var(--text);}
+.mock-badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;}
+.mock-badge.red{background:rgba(192,57,43,.2);color:#e06060;}
+.mock-badge.yellow{background:rgba(240,137,26,.2);color:#f0891a;}
+.mock-badge.green{background:rgba(42,157,106,.2);color:#4ade80;}
+
+/* ── CASE ── */
+.case-card{
+  background:var(--bg2);border:1px solid var(--border2);
+  border-radius:20px;padding:48px;
+  display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:center;
+  position:relative;overflow:hidden;
+}
+.case-card::before{
+  content:'';position:absolute;top:0;left:0;width:4px;height:100%;
+  background:linear-gradient(to bottom,var(--fire),var(--fire2));
+}
+.case-tag{
+  font-size:11px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--fire2);margin-bottom:12px;
+}
+.case-title{
+  font-family:'Instrument Serif',serif;font-size:28px;
+  line-height:1.2;margin-bottom:20px;
+}
+.case-desc{font-size:14px;color:var(--text2);line-height:1.8;}
+.case-stats{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+.case-stat{
+  background:var(--bg3);border-radius:12px;padding:20px;
+  border:1px solid var(--border);
+}
+.case-stat-val{
+  font-family:'Instrument Serif',serif;font-size:38px;
+  color:var(--fire2);line-height:1;margin-bottom:6px;
+}
+.case-stat-label{font-size:12px;color:var(--text2);line-height:1.5;}
+
+/* ── AUTHORITY ── */
+.authority{
+  padding:100px 60px;
+  max-width:1200px;margin:0 auto;
+  display:grid;grid-template-columns:1fr 1fr;gap:80px;align-items:center;
+}
+.auth-quote{
+  font-family:'Instrument Serif',serif;
+  font-size:26px;font-style:italic;
+  line-height:1.5;color:var(--text);
+  position:relative;padding-left:28px;
+}
+.auth-quote::before{
+  content:'"';position:absolute;left:0;top:-10px;
+  font-size:60px;color:var(--fire);opacity:.4;line-height:1;
+}
+.auth-tags{display:flex;flex-wrap:wrap;gap:8px;margin-top:28px;}
+.auth-tag{
+  background:var(--bg3);border:1px solid var(--border2);
+  border-radius:6px;padding:5px 12px;font-size:12px;color:var(--text2);
+  font-family:monospace;
+}
+.auth-right h3{
+  font-family:'Instrument Serif',serif;font-size:28px;margin-bottom:16px;
+}
+.auth-right p{font-size:14px;color:var(--text2);line-height:1.8;margin-bottom:12px;}
+
+/* ── CTA ── */
+.cta-section{
+  padding:120px 60px;text-align:center;
+  position:relative;overflow:hidden;
+}
+.cta-glow{
+  position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+  width:600px;height:400px;
+  background:radial-gradient(ellipse,rgba(192,57,43,.15),transparent 70%);
+  pointer-events:none;
+}
+.cta-section h2{max-width:600px;margin:0 auto 20px;}
+.cta-section p{font-size:16px;color:var(--text2);max-width:480px;margin:0 auto 44px;line-height:1.7;}
+
+/* ── FOOTER ── */
+footer{
+  border-top:1px solid var(--border2);
+  padding:32px 60px;
+  display:flex;align-items:center;justify-content:space-between;
+  flex-wrap:wrap;gap:16px;
+}
+.footer-logo{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;}
+.footer-copy{font-size:12px;color:var(--text3);}
+.footer-link{font-size:13px;color:var(--text2);text-decoration:none;transition:.2s;}
+.footer-link:hover{color:var(--fire2);}
+
+/* ANIMATIONS */
+@keyframes fadeUp{
+  from{opacity:0;transform:translateY(24px);}
+  to{opacity:1;transform:translateY(0);}
+}
+.reveal{opacity:0;transform:translateY(32px);transition:opacity .6s ease,transform .6s ease;}
+.reveal.visible{opacity:1;transform:translateY(0);}
+
+/* MOBILE */
+@media(max-width:768px){
+  nav{padding:14px 20px;}
+  .nav-links{display:none;}
+  .hero{padding:120px 24px 80px;}
+  .numbers{grid-template-columns:1fr 1fr;padding:0;}
+  .number-item{padding:28px 20px;}
+  .number-val{font-size:38px;}
+  .section{padding:70px 24px;}
+  .steps{flex-direction:column;gap:24px;}
+  .steps::before{display:none;}
+  .step-arrow{display:none;}
+  .benefits-grid{grid-template-columns:1fr;}
+  .sim-wrap{grid-template-columns:1fr;}
+  .sim-left,.sim-right{padding:28px 24px;}
+  .sim-left{border-right:none;border-bottom:1px solid var(--border2);}
+  .screens-inner{padding:0 20px;}
+  .mock-kpis{grid-template-columns:1fr 1fr;}
+  .case-card{grid-template-columns:1fr;padding:28px 24px;}
+  .authority{grid-template-columns:1fr;gap:40px;padding:60px 24px;}
+  .cta-section{padding:80px 24px;}
+  footer{padding:24px 20px;flex-direction:column;text-align:center;}
+}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-logo">
+    <div class="nav-logo-icon">🔥</div>
+    <span class="nav-logo-text">Ignis</span>
+  </div>
+  <ul class="nav-links">
+    <li><a href="#como-funciona">Como funciona</a></li>
+    <li><a href="#beneficios">Benefícios</a></li>
+    <li><a href="#simulador">Simulador</a></li>
+    <li><a href="#case">Case</a></li>
+  </ul>
+  <a href="sistema.html" class="nav-cta">Acessar sistema →</a>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-glow"></div>
+  <div class="hero-grid"></div>
+  <div class="hero-badge">Gestão inteligente de frota</div>
+  <h1>Transforme dados de<br>abastecimento em<br><em>economia real</em></h1>
+  <p class="hero-sub">O Ignis identifica automaticamente quais veículos estão desperdiçando combustível, aponta desvios por operação e entrega aos gestores tudo que precisam para agir — antes que o desperdício vire prejuízo.</p>
+  <div class="hero-actions">
+    <a href="sistema.html" class="btn-hero">Acessar o sistema <span>→</span></a>
+    <a href="#simulador" class="btn-ghost">Ver quanto posso economizar ↓</a>
+  </div>
+</section>
+
+<!-- NUMBERS -->
+<div class="numbers">
+  <div class="number-item reveal">
+    <div class="number-val">200+</div>
+    <div class="number-label">Veículos monitorados<br>simultaneamente</div>
+  </div>
+  <div class="number-item reveal">
+    <div class="number-val">∞</div>
+    <div class="number-label">Abastecimentos importados<br>sem limite de registros</div>
+  </div>
+  <div class="number-item reveal">
+    <div class="number-val">&lt;30s</div>
+    <div class="number-label">Para gerar e enviar<br>relatório completo</div>
+  </div>
+  <div class="number-item reveal">
+    <div class="number-val">100%</div>
+    <div class="number-label">Web — sem instalação,<br>acesso de qualquer lugar</div>
+  </div>
+</div>
+
+<!-- COMO FUNCIONA -->
+<section class="section" id="como-funciona">
+  <div class="section-tag">Processo</div>
+  <h2>Do dado bruto ao<br><em>gestor bem informado</em></h2>
+  <p class="section-sub">Seis passos. Nenhum técnico necessário. O Ignis transforma planilhas de abastecimento em inteligência operacional.</p>
+  <div class="steps reveal">
+    <div class="step">
+      <div class="step-num">1</div>
+      <span class="step-icon">📥</span>
+      <div class="step-title">Importe a planilha</div>
+      <div class="step-desc">Suba o Excel de abastecimentos. Qualquer formato da Ticket Log, CareTrack ou sistema interno.</div>
+      <span class="step-arrow">›</span>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <span class="step-icon">⚙️</span>
+      <div class="step-title">Processamento automático</div>
+      <div class="step-desc">O Ignis lê, classifica e consolida os dados por placa, operação e tipo de frota.</div>
+      <span class="step-arrow">›</span>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <span class="step-icon">📊</span>
+      <div class="step-title">Cálculo de eficiência</div>
+      <div class="step-desc">km/L para frota leve e pesada. L/h para máquinas e tratores. Cada veículo comparado com sua meta individual.</div>
+      <span class="step-arrow">›</span>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <span class="step-icon">🎯</span>
+      <div class="step-title">Detecção de desvios</div>
+      <div class="step-desc">Placas abaixo da meta são identificadas. Reincidentes recebem destaque especial no relatório.</div>
+      <span class="step-arrow">›</span>
+    </div>
+    <div class="step">
+      <div class="step-num">5</div>
+      <span class="step-icon">📧</span>
+      <div class="step-title">Envio automático</div>
+      <div class="step-desc">E-mail formatado profissionalmente para cada grupo de gestores — por operação e tipo de frota.</div>
+      <span class="step-arrow">›</span>
+    </div>
+    <div class="step">
+      <div class="step-num">6</div>
+      <span class="step-icon">✅</span>
+      <div class="step-title">Gestor age</div>
+      <div class="step-desc">Chega tudo pronto: quais placas, qual desvio, qual operação. Sem precisar abrir o sistema.</div>
+    </div>
+  </div>
+</section>
+
+<!-- BENEFÍCIOS -->
+<section style="padding:0 60px 100px;max-width:1200px;margin:0 auto;" id="beneficios">
+  <div class="section-tag reveal">Benefícios</div>
+  <h2 class="reveal">Não compramos <em>software.</em><br>Compramos resultado.</h2>
+  <p class="section-sub reveal">O que o Ignis realmente entrega para sua operação.</p>
+  <div class="benefits-grid reveal">
+    <div class="benefit-card">
+      <div class="benefit-icon">💰</div>
+      <div class="benefit-title">Descubra quanto está sendo desperdiçado hoje</div>
+      <div class="benefit-desc">Em uma frota de 200 veículos, eficiência 5% abaixo da meta representa R$80.000 a R$150.000 a mais por mês em diesel. O Ignis mostra exatamente de onde vem esse custo.</div>
+    </div>
+    <div class="benefit-card">
+      <div class="benefit-icon">🎯</div>
+      <div class="benefit-title">Cobre responsáveis com dados, não com achismo</div>
+      <div class="benefit-desc">Cada gestor recebe automaticamente um relatório com as placas da sua operação que estão fora da meta. Ninguém pode alegar que não sabia.</div>
+    </div>
+    <div class="benefit-card">
+      <div class="benefit-icon">🔁</div>
+      <div class="benefit-title">Identifique reincidentes antes que virem hábito</div>
+      <div class="benefit-desc">O Ignis cruza dados entre períodos e marca automaticamente os veículos que aparecem abaixo da meta pela segunda vez ou mais — com histórico completo.</div>
+    </div>
+    <div class="benefit-card">
+      <div class="benefit-icon">📤</div>
+      <div class="benefit-title">Relatório pronto sem depender de analista</div>
+      <div class="benefit-desc">Em menos de 30 segundos, selecione o período e envie o alerta de eficiência para todos os grupos de gestores de uma vez. Sem planilha manual, sem copiar e colar.</div>
+    </div>
+    <div class="benefit-card">
+      <div class="benefit-icon">🚛</div>
+      <div class="benefit-title">Frota pesada, leve e máquinas — cada uma com sua métrica</div>
+      <div class="benefit-desc">km/L para carretas e veículos leves. L/h para máquinas e tratores. Metas individuais por placa. O sistema entende como cada tipo de equipamento funciona.</div>
+    </div>
+    <div class="benefit-card">
+      <div class="benefit-icon">📱</div>
+      <div class="benefit-title">Acesse de qualquer lugar, sem instalar nada</div>
+      <div class="benefit-desc">100% web. Funciona no celular, tablet ou computador. Dados sincronizados em tempo real via Firebase. Múltiplos usuários simultâneos sem conflito.</div>
+    </div>
+  </div>
+</section>
+
+<!-- SCREENSHOTS -->
+<section class="screens-section" id="sistema">
+  <div class="screens-inner">
+    <div class="section-tag reveal">O sistema</div>
+    <h2 class="reveal">Veja como o Ignis<br><em>funciona na prática</em></h2>
+    <div class="screen-tabs reveal" id="screen-tabs">
+      <button class="screen-tab active" onclick="showScreen('dashboard')">Dashboard</button>
+      <button class="screen-tab" onclick="showScreen('ranking')">Ranking de Eficiência</button>
+      <button class="screen-tab" onclick="showScreen('relatorio')">Relatório de E-mail</button>
+    </div>
+    <div class="screen-display reveal">
+      <div class="screen-bar">
+        <div class="screen-dots">
+          <div class="screen-dot" style="background:#ff5f57"></div>
+          <div class="screen-dot" style="background:#ffbd2e"></div>
+          <div class="screen-dot" style="background:#28c840"></div>
+        </div>
+        <div class="screen-url">eulernasc.github.io/ignis</div>
+      </div>
+      <div class="screen-content" id="screen-content">
+        <!-- Injetado por JS -->
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SIMULADOR -->
+<section class="section" id="simulador">
+  <div class="section-tag reveal">Calculadora</div>
+  <h2 class="reveal">Quanto sua empresa<br>pode <em>economizar?</em></h2>
+  <p class="section-sub reveal">Simule o impacto financeiro de melhorar a eficiência da sua frota. Mesmo 1% faz diferença.</p>
+  <div class="sim-wrap reveal">
+    <div class="sim-left">
+      <div class="sim-group">
+        <div class="sim-label">Quantidade de veículos</div>
+        <input type="number" class="sim-input" id="sim-veiculos" value="100" min="1" oninput="calcSim()">
+      </div>
+      <div class="sim-group">
+        <div class="sim-label">Consumo médio atual (km/L)</div>
+        <input type="number" class="sim-input" id="sim-consumo" value="3.5" step="0.1" min="0.1" oninput="calcSim()">
+      </div>
+      <div class="sim-group">
+        <div class="sim-label">KM rodado por veículo / mês</div>
+        <input type="number" class="sim-input" id="sim-km" value="5000" min="100" oninput="calcSim()">
+      </div>
+      <div class="sim-group">
+        <div class="sim-label">Preço do diesel (R$/litro)</div>
+        <input type="number" class="sim-input" id="sim-preco" value="6.40" step="0.01" min="1" oninput="calcSim()">
+      </div>
+    </div>
+    <div class="sim-right">
+      <div class="sim-result-label">Se a eficiência melhorar apenas 5%</div>
+      <div class="sim-result-val" id="sim-result">R$ 0</div>
+      <div class="sim-result-sub">economia estimada por ano</div>
+      <div class="sim-scenarios" id="sim-scenarios"></div>
+      <div class="sim-disclaimer">* Estimativa baseada em melhoria de eficiência por redução de desperdício. Valores reais dependem do perfil operacional de cada frota.</div>
+    </div>
+  </div>
+</section>
+
+<!-- CASE -->
+<section class="section" id="case">
+  <div class="section-tag reveal">Resultado real</div>
+  <h2 class="reveal">O que acontece quando<br>gestores <em>recebem os dados certos</em></h2>
+  <div class="case-card reveal">
+    <div>
+      <div class="case-tag">Operação de distribuição — frota pesada</div>
+      <div class="case-title">17 veículos identificados fora da meta em uma única semana</div>
+      <div class="case-desc">Após implantação do Ignis, a operação começou a receber alertas semanais automáticos por e-mail com as placas ofensoras. Na primeira semana, foram identificados 17 veículos com eficiência abaixo da meta estipulada. Gestores regionais acionaram motoristas e supervisores com os dados em mãos.<br><br>No período seguinte, o número de reincidentes caiu significativamente — não porque os veículos mudaram, mas porque os responsáveis passaram a ser cobrados com informação precisa e recorrente.</div>
+    </div>
+    <div class="case-stats">
+      <div class="case-stat">
+        <div class="case-stat-val">17</div>
+        <div class="case-stat-label">Placas identificadas<br>abaixo da meta</div>
+      </div>
+      <div class="case-stat">
+        <div class="case-stat-val">-8%</div>
+        <div class="case-stat-label">Redução no consumo<br>no período seguinte</div>
+      </div>
+      <div class="case-stat">
+        <div class="case-stat-val">&lt;1h</div>
+        <div class="case-stat-label">Para processar e enviar<br>relatório completo</div>
+      </div>
+      <div class="case-stat">
+        <div class="case-stat-val">0</div>
+        <div class="case-stat-label">Planilhas manuais<br>necessárias</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- AUTHORITY -->
+<div class="authority">
+  <div>
+    <div class="auth-quote reveal">
+      "Desenvolvido por um profissional que atua diariamente com gestão operacional de frotas e conhece os desafios reais da análise de consumo e eficiência."
+    </div>
+    <div class="auth-tags reveal">
+      <span class="auth-tag">km/L</span>
+      <span class="auth-tag">L/h</span>
+      <span class="auth-tag">horímetro</span>
+      <span class="auth-tag">Ticket Log</span>
+      <span class="auth-tag">CareTrack</span>
+      <span class="auth-tag">abastecimentos</span>
+      <span class="auth-tag">reincidências</span>
+      <span class="auth-tag">Arla</span>
+      <span class="auth-tag">operações</span>
+      <span class="auth-tag">frota leve</span>
+      <span class="auth-tag">frota pesada</span>
+      <span class="auth-tag">máquinas</span>
+    </div>
+  </div>
+  <div class="auth-right reveal">
+    <h3>O diferencial não é<br>o código. É o contexto.</h3>
+    <p>Qualquer desenvolvedor consegue fazer um dashboard. Pouquíssimos entendem a diferença entre km/L e L/h, sabem o que é horímetro, conhecem as particularidades de uma operação Cenibra versus uma rota AMBEV.</p>
+    <p>O Ignis foi construído por alguém que usa e entende o sistema que desenvolveu — e isso aparece em cada detalhe da ferramenta.</p>
+  </div>
+</div>
+
+<!-- CTA -->
+<section class="cta-section">
+  <div class="cta-glow"></div>
+  <div class="section-tag" style="justify-content:center">Comece agora</div>
+  <h2 class="reveal">Pronto para transformar<br>desperdício em <em>economia?</em></h2>
+  <p class="reveal">Acesse o Ignis agora mesmo. Sem instalação, sem contrato, sem complicação.</p>
+  <a href="sistema.html" class="btn-hero reveal" style="display:inline-flex">Acessar o Ignis →</a>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-logo">
+    <div class="nav-logo-icon" style="width:28px;height:28px;font-size:13px">🔥</div>
+    Ignis — Gestão Inteligente de Frotas
+  </div>
+  <span class="footer-copy">© 2026 · Desenvolvido por Euler Nascimento</span>
+  <a href="sistema.html" class="footer-link">Acessar sistema →</a>
+</footer>
+
+<script>
+// ── REVEAL on scroll ──
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => { if(e.isIntersecting) { e.target.classList.add('visible'); observer.unobserve(e.target); } });
+}, { threshold: 0.1 });
+document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+// ── SIMULADOR ──
+function fmtBRL(v) {
+  return 'R$ ' + Math.round(v).toLocaleString('pt-BR');
+}
+
+function calcSim() {
+  const veiculos = parseFloat(document.getElementById('sim-veiculos').value) || 0;
+  const consumo  = parseFloat(document.getElementById('sim-consumo').value) || 0;
+  const km       = parseFloat(document.getElementById('sim-km').value) || 0;
+  const preco    = parseFloat(document.getElementById('sim-preco').value) || 0;
+
+  if (!veiculos || !consumo || !km || !preco) return;
+
+  // Litros totais por mês
+  const litrosMes = (veiculos * km) / consumo;
+  const custoMes = litrosMes * preco;
+
+  // Economia por cenário (% melhoria)
+  const eco = pct => {
+    const novoConsumo = consumo * (1 + pct/100);
+    const novosLitros = (veiculos * km) / novoConsumo;
+    return (litrosMes - novosLitros) * preco;
+  };
+
+  document.getElementById('sim-result').textContent = fmtBRL(eco(5) * 12);
+
+  const scenarios = [
+    { label: 'Melhoria de 1% na eficiência', eco: eco(1) },
+    { label: 'Melhoria de 3% na eficiência', eco: eco(3) },
+    { label: 'Melhoria de 5% na eficiência', eco: eco(5) },
+    { label: 'Melhoria de 10% na eficiência', eco: eco(10) },
+  ];
+
+  document.getElementById('sim-scenarios').innerHTML = scenarios.map(s =>
+    `<div class="sim-scenario">
+      <span class="sim-scenario-label">${s.label}</span>
+      <span class="sim-scenario-val">${fmtBRL(s.eco)}/mês</span>
+    </div>`
+  ).join('');
+}
+calcSim();
+
+// ── SCREENSHOTS ──
+const heights = ['42%','68%','55%','78%','50%','62%','45%','70%','58%','35%','65%','72%'];
+const barColors = ['#c0392b','#d44235','#e05a1a','#f0891a','#c0392b','#d44235'];
+
+const screens = {
+  dashboard: `
+    <div class="mock-kpis">
+      <div class="mock-kpi"><div class="mock-kpi-val" style="color:#f0891a">3,42</div><div class="mock-kpi-lbl">km/L média geral</div></div>
+      <div class="mock-kpi"><div class="mock-kpi-val" style="color:#c0392b">23</div><div class="mock-kpi-lbl">Placas abaixo da meta</div></div>
+      <div class="mock-kpi"><div class="mock-kpi-val" style="color:#4ade80">187</div><div class="mock-kpi-lbl">Abastecimentos no período</div></div>
+      <div class="mock-kpi"><div class="mock-kpi-val" style="color:#f5f5f5">94,2%</div><div class="mock-kpi-lbl">Eficiência média da frota</div></div>
+    </div>
+    <div class="mock-chart">
+      ${heights.map((h,i) => `<div class="mock-bar" style="height:${h};background:linear-gradient(to top,${barColors[i%6]},${barColors[(i+1)%6]})"></div>`).join('')}
+    </div>`,
+  ranking: `
+    <div class="mock-table">
+      <div class="mock-th"><span>Placa</span><span>Operação</span><span>Meta</span><span>Real</span><span>EFC</span></div>
+      <div class="mock-tr"><span class="placa">DKU8D27</span><span>AUTOMOTIVO PNEUS</span><span>3,45</span><span>1,28</span><span><span class="mock-badge red">46.7%</span></span></div>
+      <div class="mock-tr"><span class="placa">EZT6G11</span><span>AUTOMOTIVO PNEUS</span><span>3,45</span><span>2,17</span><span><span class="mock-badge yellow">79.1%</span></span></div>
+      <div class="mock-tr"><span class="placa">FVX0J97</span><span>CENIBRA COCAIS</span><span>4,20</span><span>3,89</span><span><span class="mock-badge yellow">92.6%</span></span></div>
+      <div class="mock-tr"><span class="placa">GAT7I65</span><span>CENIBRA COCAIS</span><span>3,75</span><span>3,52</span><span><span class="mock-badge yellow">93.9%</span></span></div>
+      <div class="mock-tr"><span class="placa">FSG1D79</span><span>AMBEV ROTA SALTO</span><span>4,20</span><span>4,15</span><span><span class="mock-badge green">98.8%</span></span></div>
+    </div>`,
+  relatorio: `
+    <div style="background:var(--bg3);border-radius:12px;padding:20px;font-size:12px;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <div style="width:28px;height:28px;background:var(--fire);border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:13px">⛽</div>
+        <div><div style="font-weight:700;font-size:13px">Ignis</div><div style="color:var(--text2);font-size:11px">Relatório de Eficiência — CENIBRA COCAIS · Pesada</div></div>
+      </div>
+      <div style="background:rgba(192,57,43,.08);border-radius:8px;padding:10px 14px;margin-bottom:10px;display:flex;justify-content:space-between">
+        <span style="color:var(--text2)">📅 Período: 01/07 a 05/07/2026</span>
+        <span style="color:var(--fire2)">🎯 Meta: 95%</span>
+      </div>
+      <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:0;border:1px solid var(--border);border-radius:8px;overflow:hidden">
+        <div style="padding:8px 10px;background:var(--bg4);font-size:10px;color:var(--text3);text-transform:uppercase;font-weight:600">Placa</div>
+        <div style="padding:8px 10px;background:var(--bg4);font-size:10px;color:var(--text3);text-transform:uppercase;font-weight:600">Meta</div>
+        <div style="padding:8px 10px;background:var(--bg4);font-size:10px;color:var(--text3);text-transform:uppercase;font-weight:600">Real</div>
+        <div style="padding:8px 10px;background:var(--bg4);font-size:10px;color:var(--text3);text-transform:uppercase;font-weight:600">EFC</div>
+        <div style="padding:8px 10px;font-family:monospace;font-weight:700">FZA7I32</div><div style="padding:8px 10px;color:#60a5fa">3,85</div><div style="padding:8px 10px;color:#f87171;font-weight:700">3,24</div><div style="padding:8px 10px"><span class="mock-badge red">84.2%</span></div>
+        <div style="padding:8px 10px;font-family:monospace;font-weight:700;background:rgba(255,255,255,.02)">GJV3C99</div><div style="padding:8px 10px;color:#60a5fa;background:rgba(255,255,255,.02)">4,20</div><div style="padding:8px 10px;color:#fbbf24;font-weight:700;background:rgba(255,255,255,.02)">3,61</div><div style="padding:8px 10px;background:rgba(255,255,255,.02)"><span class="mock-badge yellow">85.9%</span></div>
+      </div>
+    </div>`
+};
+
+function showScreen(id) {
+  document.getElementById('screen-content').innerHTML = screens[id];
+  document.querySelectorAll('.screen-tab').forEach(t => t.classList.toggle('active', t.textContent.toLowerCase().includes(id==='dashboard'?'dash':id==='ranking'?'rank':'relat')));
+}
+showScreen('dashboard');
+</script>
+</body>
+</html>
