@@ -2636,6 +2636,9 @@ function showPage(page,el) {
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.getElementById('page-'+page).classList.add('active');
   if(el) el.classList.add('active');
+  const mainEl = document.querySelector('.main');
+  if (mainEl) mainEl.scrollTop = 0;
+  window.scrollTo(0,0);
   const renders = {dashboard:renderDashboard,comparativo:renderComparativo,abastecimentos:renderAbastecimentos,maquinas:renderMaquinas};
   if(renders[page]) renders[page]();
   if(page==='relatorio') { relPopularOps(); relgInit(); relChecarReincidencia(); }
@@ -4691,12 +4694,6 @@ function importarRelatorioDiario(input) {
       let curInicio = new Date(minData);
       while (curInicio <= maxData) {
         const curFim = proximoDomingo(curInicio);
-        // Se o fim desta semana está além dos dados E não é a única semana → absorve no bloco anterior
-        if (curFim > maxData && blocos.length > 0) {
-          blocos[blocos.length-1].fim = new Date(maxData); // estende fim do último bloco
-          blocos[blocos.length-1].fim.setHours(23,59,59,999);
-          break;
-        }
         const fimBloco = new Date(curFim <= maxData ? curFim : maxData);
         fimBloco.setHours(23,59,59,999);
         blocos.push({ inicio: new Date(curInicio), fim: fimBloco, porPlaca: {} });
