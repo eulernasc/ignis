@@ -4671,23 +4671,37 @@ function importarRelatorioDiario(input) {
         input.value=''; return;
       }
 
-      // 2ª passada: separa em blocos de 7 dias exatos (dias do fuso horário local, não UTC)
-      // Dias sobrando no final (< 7 dias) são absorvidos pela última semana em vez de criar uma semana incompleta
+      // 2ª passada: separa em semanas Seg→Dom (ISO week: segunda = início, domingo = fim)
+      // Se o arquivo começa numa quarta, a primeira semana vai de quarta até domingo.
+      // Dias sobrando no final (< 7 dias) são absorvidos pela última semana completa.
       const minData = new Date(linhas[0].data.getFullYear(), linhas[0].data.getMonth(), linhas[0].data.getDate());
-      const maxData = linhas[linhas.length-1].data;
-      const totalDias = Math.round((new Date(maxData.getFullYear(), maxData.getMonth(), maxData.getDate()) - minData) / 86400000) + 1;
-      const nSemanas = Math.ceil(totalDias / 7);
+      const maxData = new Date(linhas[linhas.length-1].data.getFullYear(), linhas[linhas.length-1].data.getMonth(), linhas[linhas.length-1].data.getDate());
+
+      // Achar o domingo que fecha a semana do primeiro dia
+      function proximoDomingo(d) {
+        const r = new Date(d);
+        const dow = r.getDay(); // 0=dom, 1=seg... 6=sab
+        const diasAteDom = dow === 0 ? 0 : 7 - dow; // 0 se já é domingo
+        r.setDate(r.getDate() + diasAteDom);
+        return r;
+      }
+
       const blocos = [];
-      for (let i = 0; i < nSemanas; i++) {
-        const inicio = new Date(minData); inicio.setDate(inicio.getDate() + i * 7);
-        const fim = new Date(inicio);
-        if (i === nSemanas - 1) {
-          // Última semana: vai até o final real dos dados (absorve sobras)
-          fim.setTime(maxData.getTime()); fim.setHours(23,59,59,999);
-        } else {
-          fim.setDate(fim.getDate() + 6); fim.setHours(23,59,59,999);
+      let curInicio = new Date(minData);
+      while (curInicio <= maxData) {
+        const curFim = proximoDomingo(curInicio);
+        // Se o fim desta semana está além dos dados E não é a única semana → absorve no bloco anterior
+        if (curFim > maxData && blocos.length > 0) {
+          blocos[blocos.length-1].fim = new Date(maxData); // estende fim do último bloco
+          blocos[blocos.length-1].fim.setHours(23,59,59,999);
+          break;
         }
-        blocos.push({ inicio, fim, porPlaca: {} });
+        const fimBloco = new Date(curFim <= maxData ? curFim : maxData);
+        fimBloco.setHours(23,59,59,999);
+        blocos.push({ inicio: new Date(curInicio), fim: fimBloco, porPlaca: {} });
+        // Próxima semana começa na segunda seguinte
+        curInicio = new Date(curFim);
+        curInicio.setDate(curInicio.getDate() + 1); // segunda-feira
       }
 
       // 3ª passada: distribui cada linha no bloco certo e consolida por placa
@@ -4704,16 +4718,7 @@ function importarRelatorioDiario(input) {
         if (l.valorLitro > 0) { p._somaPreco = (p._somaPreco||0) + l.valorLitro; p._countPreco = (p._countPreco||0) + 1; }
       });
 
-      // Se o último bloco tem menos de 7 dias, mescla com o anterior
-      // (dias 29-30 de junho ficam dentro da "Semana 4" em vez de criar "Semana 5 incompleta")
-      if (blocos.length >= 2) {
-        const ultimo  = blocos[blocos.length - 1];
-        const diasUlt = Math.round((new Date(ultimo.fim.getFullYear(), ultimo.fim.getMonth(), ultimo.fim.getDate()) - new Date(ultimo.inicio.getFullYear(), ultimo.inicio.getMonth(), ultimo.inicio.getDate())) / 86400000) + 1;
-        if (diasUlt < 7) {
-          blocos[blocos.length - 2].fim = ultimo.fim; // estende fim do penúltimo
-          blocos.pop();                               // remove o fragmento
-        }
-      }
+
       const conflitos = [];
       blocos.forEach(b => {
         const dIni = dataParaISO(b.inicio), dFim = dataParaISO(b.fim);
@@ -5412,217 +5417,7 @@ function relAnaliseFiltrar() {
 }
 
 // Auto-salva e-mails ao digitar no campo
-// ══════════════════════════════════════════════════════
-// RECONCILIADOR O2P × TICKET LOG
-// ══════════════════════════════════════════════════════
-window._reconO2P    = null; // [{data, placa, operacao, litros, valor, raw}]
-window._reconTicket = null; // [{data, placa, raw}]
-window._reconAtual  = 'so-o2p';
-window._reconDados  = { soO2P:[], soTicket:[], ambos:[] };
 
-function reconParseData(val) {
-  if (!val) return null;
-  // datetime do Excel (objeto Date ou similar)
-  if (val instanceof Date) {
-    const dd = String(val.getDate()).padStart(2,'0');
-    const mm = String(val.getMonth()+1).padStart(2,'0');
-    const yyyy = val.getFullYear();
-    const hh = String(val.getHours()).padStart(2,'0');
-    const mi = String(val.getMinutes()).padStart(2,'0');
-    return `${dd}/${mm}/${yyyy} ${hh}:${mi}`;
-  }
-  if (typeof val === 'string') {
-    // "19/03/2026 01:40:04" → "19/03/2026 01:40"
-    const m = val.match(/^(\d{2}\/\d{2}\/\d{4})\s+(\d{2}:\d{2})/);
-    if (m) return `${m[1]} ${m[2]}`;
-    // "2026-03-19 01:40:04"
-    const m2 = val.match(/^(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2})/);
-    if (m2) return `${m2[3]}/${m2[2]}/${m2[1]} ${m2[4]}:${m2[5]}`;
-    // só data "19/03/2026"
-    const m3 = val.match(/^(\d{2}\/\d{2}\/\d{4})/);
-    if (m3) return m3[1];
-  }
-  if (typeof val === 'number') {
-    const d = new Date(Math.round((val - 25569)*86400*1000));
-    const dd = String(d.getUTCDate()).padStart(2,'0');
-    const mm = String(d.getUTCMonth()+1).padStart(2,'0');
-    const yyyy = d.getUTCFullYear();
-    const hh = String(d.getUTCHours()).padStart(2,'0');
-    const mi = String(d.getUTCMinutes()).padStart(2,'0');
-    return `${dd}/${mm}/${yyyy} ${hh}:${mi}`;
-  }
-  return null;
-}
-
-async function reconCarregarO2P(input) {
-  const file = input.files[0];
-  if (!file) return;
-  document.getElementById('recon-o2p-label').textContent = file.name;
-  const buf = await file.arrayBuffer();
-  // Leitura com datas para parsing
-  const wbDates = XLSX.read(buf, {type:'array', cellDates:true});
-  const wsDates = wbDates.Sheets[wbDates.SheetNames[0]];
-  const rowsDates = XLSX.utils.sheet_to_json(wsDates, {header:1, defval:''});
-  // Leitura raw (texto puro) para exportação fiel
-  const wbRaw = XLSX.read(buf, {type:'array', cellDates:false, raw:false});
-  const wsRaw = wbRaw.Sheets[wbRaw.SheetNames[0]];
-  const rowsRaw = XLSX.utils.sheet_to_json(wsRaw, {header:1, defval:''});
-  window._reconO2PHeader = rowsRaw[0] || [];
-  window._reconO2P = rowsDates.slice(1).map((r, i) => ({
-    data:      reconParseData(r[1]),
-    placa:     String(r[3]||'').trim().toUpperCase(),
-    operacao:  String(r[2]||'').trim().replace(/_/g,' '),
-    litros:    parseFloat(r[8])||0,
-    valor:     parseFloat(r[9])||0,
-    raw: rowsRaw[i+1] || []
-  })).filter(r => r.data && r.placa);
-  showToast(`✅ O2P: ${window._reconO2P.length} registros carregados`, 'success');
-  reconVerificarPronto();
-}
-
-async function reconCarregarTicket(input) {
-  const file = input.files[0];
-  if (!file) return;
-  document.getElementById('recon-ticket-label').textContent = file.name;
-  const buf = await file.arrayBuffer();
-  // Leitura com datas para parsing
-  const wbDates = XLSX.read(buf, {type:'array', cellDates:true});
-  const wsDates = wbDates.Sheets[wbDates.SheetNames[0]];
-  const rowsDates = XLSX.utils.sheet_to_json(wsDates, {header:1, defval:''});
-  // Leitura raw para exportação fiel
-  const wbRaw = XLSX.read(buf, {type:'array', cellDates:false, raw:false});
-  const wsRaw = wbRaw.Sheets[wbRaw.SheetNames[0]];
-  const rowsRaw = XLSX.utils.sheet_to_json(wsRaw, {header:1, defval:''});
-  window._reconTicketHeader = rowsRaw[0] || [];
-  window._reconTicket = rowsDates.slice(1).map((r, i) => ({
-    data:  reconParseData(r[4]),
-    placa: String(r[5]||'').trim().toUpperCase(),
-    raw: rowsRaw[i+1] || []
-  })).filter(r => r.data && r.placa);
-  showToast(`✅ Ticket: ${window._reconTicket.length} registros carregados`, 'success');
-  reconVerificarPronto();
-}
-
-function reconVerificarPronto() {
-  document.getElementById('recon-btn').disabled = !(window._reconO2P && window._reconTicket);
-}
-
-function reconChave(data, placa) {
-  return `${data}|${placa}`;
-}
-
-function reconComparar() {
-  const o2p    = window._reconO2P;
-  const ticket = window._reconTicket;
-
-  const ticketSet = new Set(ticket.map(r => reconChave(r.data, r.placa)));
-  const o2pSet    = new Set(o2p.map(r => reconChave(r.data, r.placa)));
-
-  const soO2P    = o2p.filter(r => !ticketSet.has(reconChave(r.data, r.placa)));
-  const soTicket = ticket.filter(r => !o2pSet.has(reconChave(r.data, r.placa)));
-  const ambos    = o2p.filter(r =>  ticketSet.has(reconChave(r.data, r.placa)));
-
-  window._reconDados = { soO2P, soTicket, ambos };
-
-  // KPIs
-  document.getElementById('recon-kpis').innerHTML = [
-    { val: o2p.length,    label: 'Registros O2P',       cor: 'var(--text)' },
-    { val: ticket.length, label: 'Registros Ticket',     cor: 'var(--text)' },
-    { val: soO2P.length,  label: 'Só no O2P',            cor: 'var(--red)' },
-    { val: soTicket.length,label:'Só na Ticket',         cor: 'var(--yellow)' },
-    { val: ambos.length,  label: 'Em ambos',             cor: 'var(--green)' },
-  ].map(k => `
-    <div class="kpi-card">
-      <div style="font-size:28px;font-weight:700;color:${k.cor}">${k.val.toLocaleString('pt-BR')}</div>
-      <div class="kpi-delta" style="color:var(--text2);font-size:12px">${k.label}</div>
-    </div>`).join('');
-
-  document.getElementById('recon-badge-o2p').textContent    = soO2P.length;
-  document.getElementById('recon-badge-ticket').textContent = soTicket.length;
-  document.getElementById('recon-badge-ambos').textContent  = ambos.length;
-
-  document.getElementById('recon-resultado').style.display = '';
-  reconTab(document.querySelector('.recon-tab-btn.active'), 'so-o2p');
-}
-
-function reconTab(btn, tab) {
-  window._reconAtual = tab;
-  document.querySelectorAll('.recon-tab-btn').forEach(b => {
-    b.classList.toggle('btn-primary', b === btn);
-    b.classList.toggle('btn-secondary', b !== btn);
-    b.classList.remove('active');
-  });
-  btn.classList.add('active');
-  const titles = { 'so-o2p':'Abastecimentos que estão no O2P mas NÃO estão na Ticket', 'so-ticket':'Abastecimentos que estão na Ticket mas NÃO estão no O2P', 'ambos':'Abastecimentos encontrados em ambos os sistemas' };
-  document.getElementById('recon-tab-title').textContent = titles[tab];
-  document.getElementById('recon-search').value = '';
-  reconRenderTabela();
-}
-
-function reconRenderTabela(filtro) {
-  const tab = window._reconAtual;
-  const dados = window._reconDados;
-  let rows = tab === 'so-o2p' ? dados.soO2P : tab === 'so-ticket' ? dados.soTicket : dados.ambos;
-
-  if (filtro) {
-    const q = filtro.toUpperCase();
-    rows = rows.filter(r => r.placa.includes(q));
-  }
-
-  const tbody = document.getElementById('recon-tbody');
-  if (!rows.length) {
-    tbody.innerHTML = '';
-    document.getElementById('recon-empty').style.display = '';
-    return;
-  }
-  document.getElementById('recon-empty').style.display = 'none';
-
-  const isTicket = tab === 'so-ticket';
-  tbody.innerHTML = rows.map(r => `
-    <tr>
-      <td>${r.data||'—'}</td>
-      <td><span class="placa-tag">${r.placa}</span></td>
-      <td><span class="badge ${isTicket?'badge-yellow':'badge-blue'}">${isTicket?'Ticket':'O2P'}</span></td>
-      <td style="font-size:12px;color:var(--text2)">${r.operacao||'—'}</td>
-      <td style="font-family:monospace">${r.litros?r.litros.toFixed(2)+'L':'—'}</td>
-      <td style="font-family:monospace">${r.valor?'R$ '+r.valor.toFixed(2):'—'}</td>
-    </tr>`).join('');
-}
-
-function reconFiltrar() {
-  reconRenderTabela(document.getElementById('recon-search').value);
-}
-
-function reconExportar() {
-  const tab = window._reconAtual;
-  const dados = window._reconDados;
-  const rows = tab === 'so-o2p' ? dados.soO2P : tab === 'so-ticket' ? dados.soTicket : dados.ambos;
-  const labels = { 'so-o2p':'So_no_O2P', 'so-ticket':'So_na_Ticket', 'ambos':'Em_Ambos' };
-
-  let wsData;
-  if (tab === 'so-o2p') {
-    // Todas as colunas originais do O2P
-    const header = window._reconO2PHeader || ['Data','Placa','Operação','Litros','Valor'];
-    wsData = [header, ...rows.map(r => r.raw)];
-  } else if (tab === 'so-ticket') {
-    // Todas as colunas originais da Ticket
-    const header = window._reconTicketHeader || ['Data','Placa'];
-    wsData = [header, ...rows.map(r => r.raw)];
-  } else {
-    // Em ambos — mantém resumido
-    wsData = [['Data','Placa','Origem','Operação','Litros','Valor Total']];
-    rows.forEach(r => wsData.push([
-      r.data||'', r.placa||'', 'O2P',
-      r.operacao||'', r.litros||'', r.valor||''
-    ]));
-  }
-
-  const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.aoa_to_sheet(wsData);
-  XLSX.utils.book_append_sheet(wb, ws, labels[tab]);
-  XLSX.writeFile(wb, `Reconciliacao_${labels[tab]}_${new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')}.xlsx`);
-  showToast('✅ Excel exportado!', 'success');
-}
 function relChipKeydown(e, input) {
   if (e.key === 'Enter' || e.key === ',') {
     e.preventDefault();
