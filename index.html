@@ -6074,7 +6074,8 @@ function limparExcluir() {
   localStorage.removeItem('excluir_dados');
   document.getElementById('excluir-resumo').style.display='none';
   document.getElementById('btn-limpar-excluir').style.display='none';
-  document.getElementById('excluir-nav-badge').style.display='none';
+  const excluirBadgeEl = document.getElementById('excluir-nav-badge');
+  if (excluirBadgeEl) excluirBadgeEl.style.display='none';
   const emptyEl = document.getElementById('excluir-empty');
   if (emptyEl) emptyEl.style.display='';
   const b=document.getElementById('excluir-busca'); if(b) b.value='';
@@ -7453,7 +7454,8 @@ function relChecarReincidencia() {
   const limite = 98;
   const periodos = Object.entries(state.semanas).sort((a,b) => (a[1].dataIni||a[1].label||a[0]).localeCompare(b[1].dataIni||b[1].label||b[0]));
   if (periodos.length < 2) {
-    document.getElementById('rel-reincidencia-badge').style.display = 'none';
+    const badgeEl = document.getElementById('rel-reincidencia-badge');
+    if (badgeEl) badgeEl.style.display = 'none';
     const banner = document.getElementById('rel-reincidencia-banner');
     if (banner) banner.style.display = 'none';
     return;
