@@ -1072,12 +1072,12 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
         <div class="form-group">
           <label class="form-label">Tipo(s) de Frota deste Grupo</label>
           <div style="display:flex;gap:6px;flex-wrap:wrap" id="relg-tipos-container">
-            <label style="display:flex;align-items:center;gap:5px;padding:5px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:12px"><input type="checkbox" class="relg-tipo-check" value="__pesada__" style="accent-color:var(--accent)"> 🚛 Pesada</label>
-            <label style="display:flex;align-items:center;gap:5px;padding:5px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:12px"><input type="checkbox" class="relg-tipo-check" value="__leve__" style="accent-color:var(--accent)"> 🚗 Leve</label>
-            <label style="display:flex;align-items:center;gap:5px;padding:5px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:12px"><input type="checkbox" class="relg-tipo-check" value="__maquinas__" style="accent-color:var(--accent)"> ⚙️ Máquinas</label>
-            <label style="display:flex;align-items:center;gap:5px;padding:5px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:12px"><input type="checkbox" class="relg-tipo-check" value="__tratores__" style="accent-color:var(--accent)"> 🚜 Tratores</label>
+            <label style="display:flex;align-items:center;gap:5px;padding:5px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:12px"><input type="checkbox" class="relg-tipo-check" onchange="relgFiltrarOps()" value="__pesada__" style="accent-color:var(--accent)"> 🚛 Pesada</label>
+            <label style="display:flex;align-items:center;gap:5px;padding:5px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:12px"><input type="checkbox" class="relg-tipo-check" onchange="relgFiltrarOps()" value="__leve__" style="accent-color:var(--accent)"> 🚗 Leve</label>
+            <label style="display:flex;align-items:center;gap:5px;padding:5px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:12px"><input type="checkbox" class="relg-tipo-check" onchange="relgFiltrarOps()" value="__maquinas__" style="accent-color:var(--accent)"> ⚙️ Máquinas</label>
+            <label style="display:flex;align-items:center;gap:5px;padding:5px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:12px"><input type="checkbox" class="relg-tipo-check" onchange="relgFiltrarOps()" value="__tratores__" style="accent-color:var(--accent)"> 🚜 Tratores</label>
             
-            <label style="display:flex;align-items:center;gap:5px;padding:5px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:12px"><input type="checkbox" class="relg-tipo-check" value="" style="accent-color:var(--accent)"> ⊞ Todos (sem filtro)</label>
+            <label style="display:flex;align-items:center;gap:5px;padding:5px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:12px"><input type="checkbox" class="relg-tipo-check" onchange="relgFiltrarOps()" value="" style="accent-color:var(--accent)"> ⊞ Todos (sem filtro)</label>
           </div>
           <div style="font-size:11px;color:var(--text3);margin-top:5px">Selecione um ou mais tipos. "Todos" cobre qualquer seleção na análise.</div>
         </div>
@@ -7231,15 +7231,46 @@ function relgGetOpsDisponiveis() {
   return [...opSet].filter(Boolean).sort();
 }
 
+function relgOpsUsadasPorTipo(excluirGroupId) {
+  // Monta um mapa: tipo -> Set de operações já usadas em OUTROS grupos salvos
+  const mapa = {};
+  window._relGrupos.forEach(g => {
+    if (excluirGroupId && g.id === excluirGroupId) return; // ignora o próprio grupo em edição
+    (g.tipos || []).forEach(tipo => {
+      if (!mapa[tipo]) mapa[tipo] = new Set();
+      (g.ops || []).forEach(op => mapa[tipo].add(op));
+    });
+  });
+  return mapa;
+}
+
 function relgPopularOps(opsChecked) {
   const container = document.getElementById('relg-ops-container');
   if (!container) return;
   const ops = relgGetOpsDisponiveis();
   if (!ops.length) { container.innerHTML = '<div style="font-size:12px;color:var(--text3)">Importe um período para ver operações</div>'; return; }
   const busca = (document.getElementById('relg-ops-busca')?.value || '').toLowerCase();
-  const filtradas = busca ? ops.filter(o => o.toLowerCase().includes(busca)) : ops;
+  const editId = document.getElementById('relg-edit-id')?.value || null;
+  const tiposMarcados = [...document.querySelectorAll('.relg-tipo-check:checked')].map(c => c.value);
+  const opsUsadasPorTipo = relgOpsUsadasPorTipo(editId);
+  const jaChecadas = new Set(opsChecked || []);
+
+  // Uma operação fica oculta se: já está em uso em OUTRO grupo, para pelo menos um dos tipos
+  // atualmente marcados no formulário — a não ser que já esteja marcada NESTE grupo (edição).
+  const visiveis = ops.filter(op => {
+    if (jaChecadas.has(op)) return true; // nunca esconde o que já está marcado neste grupo
+    if (!tiposMarcados.length) return true; // nenhum tipo marcado ainda: mostra tudo
+    const bloqueadaPorAlgumTipo = tiposMarcados.some(tipo => opsUsadasPorTipo[tipo]?.has(op));
+    return !bloqueadaPorAlgumTipo;
+  });
+
+  const filtradas = busca ? visiveis.filter(o => o.toLowerCase().includes(busca)) : visiveis;
+  if (!filtradas.length) {
+    container.innerHTML = '<div style="font-size:12px;color:var(--text3)">Nenhuma operação disponível para o(s) tipo(s) selecionado(s) — todas já estão em outros grupos.</div>';
+    return;
+  }
   container.innerHTML = filtradas.map(op => {
-    const checked = opsChecked ? opsChecked.includes(op) : false;
+    const checked = jaChecadas.has(op);
     return '<label style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:var(--bg2);border-radius:6px;cursor:pointer;font-size:12px">' +
       '<input type="checkbox" class="relg-op-check" value="' + op + '" ' + (checked ? 'checked' : '') + ' style="accent-color:var(--accent)">' +
       op.replace(/_/g,' ') + '</label>';
@@ -7351,10 +7382,10 @@ function relgEditar(id) {
   document.getElementById('relg-edit-id').value = id;
   const corpo = document.getElementById('relg-corpo'); if (corpo) corpo.value = g.corpo || '';
   relgChipLoad(g.emails);
-  relgPopularOps(g.ops);
   document.querySelectorAll('.relg-tipo-check').forEach(c => {
     c.checked = g.tipos ? g.tipos.includes(c.value) : false;
   });
+  relgPopularOps(g.ops);
   document.getElementById('relg-nome')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
