@@ -2028,6 +2028,8 @@ async function loadState() {
   }
   // Checar reincidência com dados locais imediatamente (sem esperar Firebase)
   relChecarReincidencia();
+  // Migração de grupos de e-mail (rel_grupos): roda sempre no boot, não só ao abrir a aba Relatório
+  try { relgInit(); } catch(e) { console.warn('relgInit no boot falhou:', e); }
   // Tentar carregar do Firebase
   if (window.firebaseReady) {
     await syncFromFirebase();
