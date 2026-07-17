@@ -2111,6 +2111,15 @@ async function syncFromFirebase() {
         }
       }
 
+      // ── Re-inicializa Grupos de E-mail (Relatório) com dados do Firebase ──
+      try {
+        relgInit();
+        const pRelatorio = document.getElementById('page-relatorio');
+        if (pRelatorio && pRelatorio.classList.contains('active') && typeof relgRender === 'function') {
+          relgRender();
+        }
+      } catch(e) { console.warn('relgInit sync error:', e); }
+
       updateSyncStatus('connected');
       if (!temDadosLocal) showToast('Dados carregados! ☁️', 'success');
       else showToast('Dados sincronizados! ☁️', 'success');
@@ -7211,13 +7220,31 @@ function relSetTab(tab, el) {
 window._relGrupos = [];
 
 function relgInit() {
-  // Sempre recarrega do localStorage para garantir dados atualizados
-  try {
-    const saved = localStorage.getItem('rel_grupos');
-    window._relGrupos = saved ? JSON.parse(saved) : [];
-  } catch(e) {
-    window._relGrupos = [];
+  // Fonte de verdade agora é state.relGrupos (sincronizado com Firebase, igual o resto do sistema)
+  if (!Array.isArray(state.relGrupos)) state.relGrupos = [];
+  window._relGrupos = state.relGrupos;
+
+  // Migração única: se state.relGrupos está vazio mas existe dado antigo só-local, importa e envia pro Firebase
+  if (!window._relGrupos.length) {
+    try {
+      const legacy = localStorage.getItem('rel_grupos');
+      if (legacy) {
+        const parsed = JSON.parse(legacy);
+        if (Array.isArray(parsed) && parsed.length) {
+          state.relGrupos = parsed;
+          window._relGrupos = state.relGrupos;
+          saveState();
+          showToast('☁️ ' + parsed.length + ' grupo(s) de e-mail migrado(s) para a nuvem', 'success');
+        }
+      }
+    } catch(e) { console.warn('Migração rel_grupos falhou:', e); }
   }
+}
+
+// Persiste alterações nos grupos: sincroniza state.relGrupos com window._relGrupos e salva no Firebase
+function relgPersist() {
+  state.relGrupos = window._relGrupos;
+  saveState();
 }
 
 function relgGetOpsDisponiveis() {
@@ -7358,7 +7385,8 @@ function relgSalvar() {
   } else {
     window._relGrupos.push({ id: Date.now().toString(), nome, emails, corpo, ops, tipos });
   }
-  localStorage.setItem('rel_grupos', JSON.stringify(window._relGrupos));
+  localStorage.setItem('rel_grupos', JSON.stringify(window._relGrupos)); // mantém backup local também
+  relgPersist();
   relgLimpar();
   relgRender();
   showToast('✅ Grupo salvo!', 'success');
@@ -7392,7 +7420,8 @@ function relgEditar(id) {
 function relgExcluir(id) {
   if (!confirm('Excluir este grupo?')) return;
   window._relGrupos = window._relGrupos.filter(g => g.id !== id);
-  localStorage.setItem('rel_grupos', JSON.stringify(window._relGrupos));
+  localStorage.setItem('rel_grupos', JSON.stringify(window._relGrupos)); // backup local também
+  relgPersist();
   relgRender();
   showToast('Grupo excluído', 'success');
 }
