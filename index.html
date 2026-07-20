@@ -918,6 +918,7 @@ table tbody tr:hover td{background:rgba(192,57,43,.07);}
       <div class="header-actions">
         <input type="text" class="filter-input" id="maq-busca" placeholder="🔍 Buscar placa ou modelo..." oninput="renderMaquinas()" style="min-width:180px">
         <select class="filter-select" id="maq-op-filter" onchange="renderMaquinas()"><option value="">Todas as Operações</option></select>
+        <button class="btn btn-ghost" onclick="corrigirOperacoesDesatualizadas()" title="Atualiza a operação de cada placa usando o abastecimento mais recente já importado, sem precisar reimportar nada">🔄 Corrigir Operações</button>
         <button class="btn btn-primary" onclick="verificarSenha(openNovaMaquina)">+ Nova Máquina</button>
       </div>
     </div>
@@ -4209,6 +4210,44 @@ function editarAbast(idx) {
 }
 
 // ── MÁQUINAS ──────────────────────────────────────────────────────────────────
+// Corrige a operação de cada placa usando o abastecimento mais recente JÁ IMPORTADO,
+// sem precisar reimportar nenhum arquivo — varre tudo que já está em state.abastecimentos.
+function corrigirOperacoesDesatualizadas() {
+  if (!state.abastecimentos || !state.abastecimentos.length) {
+    showToast('Nenhum abastecimento importado ainda para basear a correção.', 'error');
+    return;
+  }
+  // Acha o registro mais recente (maior data) de cada placa
+  const maisRecentePorPlaca = {};
+  state.abastecimentos.forEach(a => {
+    if (!a.placa || !a.data || !a.operacao) return;
+    const atual = maisRecentePorPlaca[a.placa];
+    if (!atual || a.data > atual.data) maisRecentePorPlaca[a.placa] = a;
+  });
+
+  let corrigidas = 0;
+  const detalhes = [];
+  state.maquinas.forEach(m => {
+    const recente = maisRecentePorPlaca[m.placa];
+    if (recente && recente.operacao && m.operacao !== recente.operacao) {
+      detalhes.push(`${m.placa}: "${m.operacao||'(vazio)'}" → "${recente.operacao}"`);
+      m.operacao = recente.operacao;
+      corrigidas++;
+    }
+  });
+
+  if (!corrigidas) {
+    showToast('Tudo já está atualizado — nenhuma correção necessária.', 'success');
+    return;
+  }
+
+  saveState();
+  renderMaquinas();
+  const resumo = corrigidas <= 8 ? detalhes.join('\n') : detalhes.slice(0,8).join('\n') + `\n... e mais ${corrigidas-8}`;
+  alert(`✅ ${corrigidas} placa(s) corrigida(s) com base no abastecimento mais recente já importado:\n\n${resumo}`);
+  showToast(`${corrigidas} operação(ões) corrigida(s)`, 'success');
+}
+
 function renderMaquinas() {
   updateFilters();
   const opF=document.getElementById('maq-op-filter')?.value||'';
@@ -4540,8 +4579,9 @@ function importarRelatorio(input) {
           state.maquinas.push({placa, modelo, tipo, tipoIgnis, operacao, status:'Ativa', meta:mediaIdeal||0});
           novaMaq++;
         } else {
-          // Atualiza tipoIgnis se mudou
+          // Atualiza tipoIgnis e operação sempre para a versão mais recente do import
           maqExistente.tipoIgnis = tipoIgnis;
+          if (operacao && maqExistente.operacao !== operacao) maqExistente.operacao = operacao;
           if(mediaIdeal>0 && maqExistente.meta!==mediaIdeal) {
             maqExistente.meta = mediaIdeal;
             metaAtualizada++;
@@ -4787,6 +4827,7 @@ function importarRelatorioDiario(input) {
             novaMaq++;
           } else {
             maqExistente.tipoIgnis = tipoIgnis;
+            if (p.operacao && maqExistente.operacao !== p.operacao) maqExistente.operacao = p.operacao;
             if (p.mediaIdeal>0) maqExistente.meta = p.mediaIdeal;
           }
 
