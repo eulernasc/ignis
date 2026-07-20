@@ -4749,12 +4749,24 @@ function importarRelatorioDiario(input) {
       let novaMaq=0, semanasNovas=0, registrosTotais=0;
       const precosPorOp = {};
 
+      // Conta quantas semanas já existem no sistema por mês/ano, pra continuar a numeração
+      // corretamente em vez de sempre reiniciar do "Semana 1" a cada importação
+      const semanasExistentesPorMes = {};
+      Object.values(state.semanas).forEach(s => {
+        if (!s.dataIni) return;
+        const key = s.dataIni.substring(0,7); // "YYYY-MM"
+        semanasExistentesPorMes[key] = (semanasExistentesPorMes[key]||0) + 1;
+      });
+
       blocos.forEach(b => {
         const placas = Object.keys(b.porPlaca);
         if (!placas.length) return; // bloco sem nenhum dado (ex: mês incompleto na ponta)
         const dIni = dataParaISO(b.inicio), dFim = dataParaISO(b.fim);
         const mesLabel = MESES_PT[b.inicio.getMonth()];
-        const nomePeriodo = `Semana ${semanasNovas+1} · ${mesLabel}. de ${b.inicio.getFullYear()}`;
+        const anoMesKey = dIni.substring(0,7);
+        semanasExistentesPorMes[anoMesKey] = (semanasExistentesPorMes[anoMesKey]||0) + 1;
+        const numSemana = semanasExistentesPorMes[anoMesKey];
+        const nomePeriodo = `Semana ${numSemana} · ${mesLabel}. de ${b.inicio.getFullYear()}`;
         const periodoId = nomePeriodo.toLowerCase().replace(/[^a-z0-9]/g,'_').replace(/_+/g,'_').substring(0,40) + '_' + Date.now() + '_' + semanasNovas;
 
         const dadosSemana = [];
