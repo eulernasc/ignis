@@ -1,6 +1,6 @@
 // ============================================================
 //  FuelTracker Pro — Relatório Mensal Automático de Eficiência
-//  Envio via Gmail SMTP (nodemailer)
+//  Envio via Microsoft 365 SMTP (nodemailer)
 // ============================================================
 
 import nodemailer from 'nodemailer';
@@ -31,17 +31,21 @@ const GRUPOS = [
 const LIMITE_EFICIENCIA = 98;
 const DIAS_JANELA = 15;
 
-// ── Busca o documento único do Firebase ──────────────────────
+// ── Busca os dados do Firebase (manifesto + chunks) ───────────
 async function carregarDados() {
   const PROJECT_ID = process.env.FIREBASE_PROJECT_ID;
   const API_KEY = process.env.FIREBASE_API_KEY;
+  if (!PROJECT_ID || !API_KEY) throw new Error('FIREBASE_PROJECT_ID/FIREBASE_API_KEY não configurados');
 
-  const url = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/fueltracker/dados?key=${API_KEY}`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Firestore error: ${res.status} ${await res.text()}`);
-  const doc = await res.json();
+  const baseUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/fueltracker`;
 
-  if (!doc.fields) throw new Error('Documento "fueltracker/dados" não encontrado ou vazio');
+  async function carregarDocumento(id, obrigatorio = true) {
+    const url = `${baseUrl}/${encodeURIComponent(id)}?key=${API_KEY}`;
+    const res = await fetch(url);
+    if (res.status === 404 && !obrigatorio) return null;
+    if (!res.ok) throw new Error(`Firestore ${id}: ${res.status} ${await res.text()}`);
+    return res.json();
+  }
 
   function parseValue(v) {
     if (!v) return null;
@@ -50,6 +54,7 @@ async function carregarDados() {
     if (v.doubleValue !== undefined) return parseFloat(v.doubleValue);
     if (v.booleanValue !== undefined) return v.booleanValue;
     if (v.nullValue !== undefined) return null;
+    if (v.timestampValue !== undefined) return v.timestampValue;
     if (v.arrayValue) return (v.arrayValue.values || []).map(parseValue);
     if (v.mapValue) {
       const obj = {};
@@ -59,9 +64,45 @@ async function carregarDados() {
     return null;
   }
 
-  const state = {};
-  for (const [k, v] of Object.entries(doc.fields)) state[k] = parseValue(v);
-  return state;
+  function parseDocumento(documento) {
+    if (!documento?.fields) return {};
+    const obj = {};
+    for (const [k, v] of Object.entries(documento.fields)) obj[k] = parseValue(v);
+    return obj;
+  }
+
+  const principal = parseDocumento(await carregarDocumento('dados'));
+  let abastecimentos = Array.isArray(principal.abastecimentos) ? principal.abastecimentos : [];
+
+  // Formato novo: manifesto versionado e atômico.
+  if (principal._storageVersion === 2 && principal._abastVersion) {
+    const total = Number(principal._abastChunks || 0);
+    if (!Number.isInteger(total) || total < 1 || total > 500) {
+      throw new Error(`Manifesto inválido: ${total} chunks`);
+    }
+    const docs = await Promise.all(
+      Array.from({ length: total }, (_, i) =>
+        carregarDocumento(`abast_${principal._abastVersion}_${i}`)
+      )
+    );
+    abastecimentos = docs.flatMap(d => parseDocumento(d).registros || []);
+  } else if (principal._hasAbast) {
+    // Compatibilidade com o formato antigo. O script anterior olhava apenas o
+    // documento principal, embora os abastecimentos já estivessem em chunks.
+    const primeiroDoc = await carregarDocumento('abast_0', false);
+    if (primeiroDoc) {
+      const primeiro = parseDocumento(primeiroDoc);
+      const total = Math.max(1, Number(primeiro.total || 1));
+      if (!Number.isInteger(total) || total > 500) throw new Error(`Chunks legados inválidos: ${total}`);
+      const restantes = total > 1
+        ? await Promise.all(Array.from({ length: total - 1 }, (_, i) => carregarDocumento(`abast_${i + 1}`)))
+        : [];
+      abastecimentos = [primeiroDoc, ...restantes].flatMap(d => parseDocumento(d).registros || []);
+    }
+  }
+
+  principal.abastecimentos = abastecimentos;
+  return principal;
 }
 
 // ── Lógica principal ──────────────────────────────────────────
@@ -94,15 +135,22 @@ async function gerarRelatorio() {
   for (const [placa, dados] of Object.entries(byMaq)) {
     const maq = maqMap[placa];
     if (!maq || !maq.meta || parseFloat(maq.meta) <= 0 || dados.horas <= 0) continue;
-    const mediaReal = dados.litros / dados.horas;
+    const tipoIgnis = maq.tipoIgnis
+      || (placa.startsWith('MAQ') ? 'maquina' : placa.startsWith('TRA') ? 'trator' : 'pesada');
+    const isKmL = tipoIgnis === 'pesada' || tipoIgnis === 'leve';
+    const mediaReal = isKmL
+      ? (dados.litros > 0 ? dados.horas / dados.litros : 0)
+      : (dados.horas > 0 ? dados.litros / dados.horas : 0);
     const meta = parseFloat(maq.meta);
-    const eficiencia = (meta / mediaReal) * 100;
+    if (mediaReal <= 0) continue;
+    const eficiencia = isKmL ? (mediaReal / meta) * 100 : (meta / mediaReal) * 100;
     if (eficiencia < LIMITE_EFICIENCIA) {
       maquinasComProblema.push({
         placa,
         operacao: (maq.operacao || 'Sem Operação').replace(/_/g, ' '),
         mediaReal: mediaReal.toFixed(2),
-        meta: meta.toFixed(1),
+        meta: meta.toFixed(2),
+        unidade: isKmL ? 'km/L' : 'L/h',
         eficiencia: eficiencia.toFixed(1),
         desvio: ((mediaReal - meta) / meta * 100).toFixed(1),
       });
@@ -125,7 +173,6 @@ async function gerarRelatorio() {
       user: process.env.OUTLOOK_USER,
       pass: process.env.OUTLOOK_PASS,
     },
-    tls: { ciphers: 'SSLv3' },
   });
 
   const mes = new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
@@ -167,8 +214,8 @@ function gerarHTML(nomeGrupo, maquinas, mes) {
     return `<tr style="border-bottom:1px solid #e5e7eb">
       <td style="padding:10px 12px;font-weight:600;color:#111827">${m.placa}</td>
       <td style="padding:10px 12px;color:#6b7280;font-size:13px">${m.operacao}</td>
-      <td style="padding:10px 12px;text-align:center;font-family:monospace;color:#3b82f6;font-weight:700">${m.meta} L/h</td>
-      <td style="padding:10px 12px;text-align:center;font-family:monospace;color:${cor};font-weight:700">${m.mediaReal} L/h</td>
+      <td style="padding:10px 12px;text-align:center;font-family:monospace;color:#3b82f6;font-weight:700">${m.meta} ${m.unidade}</td>
+      <td style="padding:10px 12px;text-align:center;font-family:monospace;color:${cor};font-weight:700">${m.mediaReal} ${m.unidade}</td>
       <td style="padding:10px 12px;text-align:center;font-family:monospace;color:${cor};font-weight:700">+${m.desvio}%</td>
       <td style="padding:10px 12px;text-align:center">
         <span style="background:${cor};color:#fff;padding:3px 10px;border-radius:99px;font-size:12px;font-weight:700">${m.eficiencia}%</span>

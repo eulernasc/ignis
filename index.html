@@ -9,7 +9,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, doc, setDoc, getDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, doc, setDoc, getDoc, deleteDoc, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 
 const firebaseConfig = {
@@ -37,78 +37,181 @@ const withTimeout = (promise, ms) => Promise.race([
 
 window.fbSave = async function(data) {
   try {
-    const { _users, abastecimentos, semanas, ...restData } = data;
+    // Snapshot imutável: evita que uma importação/edição altere os arrays enquanto
+    // o Firebase ainda está gravando os chunks.
+    const snapshot = typeof structuredClone === 'function'
+      ? structuredClone(data)
+      : JSON.parse(JSON.stringify(data));
 
-    // Remove registros das semanas antes de salvar — são reconstruídos no load
+    const { _users, abastecimentos, semanas, ...restData } = snapshot;
+
+    // Remove registros das semanas antes de salvar — são reconstruídos no load.
     const semanasSemRegistros = {};
-    Object.entries(semanas||{}).forEach(([id, s]) => {
-      const { registros, ...semMeta } = s;
-      semanasSemRegistros[id] = semMeta;
+    Object.entries(semanas || {}).forEach(([id, periodo]) => {
+      const { registros, ...semMeta } = periodo;
+      semanasSemRegistros[id] = {
+        ...semMeta,
+        count: Array.isArray(registros)
+          ? registros.length
+          : (Number.isFinite(Number(semMeta.count)) ? Number(semMeta.count) : 0)
+      };
     });
 
-    // Documento principal: sem abastecimentos e sem registros duplicados
-    await withTimeout(setDoc(doc(db, "fueltracker", "dados"), {
-      ...restData,
-      semanas: semanasSemRegistros,
-      _hasAbast: true
-    }), 10000);
+    const mainRef = doc(db, "fueltracker", "dados");
+    let versaoAnterior = null;
+    let chunksAnteriores = 0;
 
-    // Abastecimentos em chunks de 400 (~300KB cada)
-    const abast = abastecimentos || [];
+    // Lê somente o manifesto atual para poder limpar a versão antiga depois.
+    try {
+      const atualSnap = await withTimeout(getDoc(mainRef), 8000);
+      if (atualSnap.exists()) {
+        const atual = atualSnap.data();
+        versaoAnterior = atual._abastVersion || null;
+        chunksAnteriores = Number(atual._abastChunks || 0);
+      }
+    } catch (e) {
+      console.warn('Não foi possível ler o manifesto anterior; o save continuará:', e);
+    }
+
+    const abast = Array.isArray(abastecimentos) ? abastecimentos : [];
     const chunkSize = 400;
-    const numChunks = Math.ceil(abast.length / chunkSize) || 1;
+    const numChunks = Math.max(1, Math.ceil(abast.length / chunkSize));
+    const versao = `v${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+
+    // Grava chunks + manifesto no MESMO batch. Assim o Firestore nunca fica com
+    // metadados novos apontando para chunks antigos/parciais.
+    const batch = writeBatch(db);
     for (let i = 0; i < numChunks; i++) {
       const chunk = abast.slice(i * chunkSize, (i + 1) * chunkSize);
-      await withTimeout(setDoc(doc(db, "fueltracker", "abast_" + i), { registros: chunk, chunk: i, total: numChunks }), 10000);
+      batch.set(doc(db, "fueltracker", `abast_${versao}_${i}`), {
+        registros: chunk,
+        chunk: i,
+        total: numChunks,
+        version: versao
+      });
     }
-    // Remove chunks extras
-    for (let i = numChunks; i < numChunks + 5; i++) {
-      try { await withTimeout(deleteDoc(doc(db, "fueltracker", "abast_" + i)), 3000); } catch(e) {}
+
+    batch.set(mainRef, {
+      ...restData,
+      semanas: semanasSemRegistros,
+      _hasAbast: true,
+      _storageVersion: 2,
+      _abastVersion: versao,
+      _abastChunks: numChunks,
+      _abastCount: abast.length
+    });
+
+    await withTimeout(batch.commit(), 30000);
+
+    // A versão nova já está confirmada. A limpeza da anterior é apenas manutenção
+    // e não pode transformar um save bem-sucedido em erro.
+    if (versaoAnterior && versaoAnterior !== versao && chunksAnteriores > 0) {
+      Promise.allSettled(
+        Array.from({ length: chunksAnteriores }, (_, i) =>
+          deleteDoc(doc(db, "fueltracker", `abast_${versaoAnterior}_${i}`))
+        )
+      ).catch(() => {});
     }
+
     return true;
-  } catch(e) { console.error("Firebase save error:", e); return false; }
+  } catch(e) {
+    console.error("Firebase save error:", e);
+    return false;
+  }
 };
 
 window.fbLoad = async function() {
+  window._fbLoadFailed = false;
   try {
     const snap = await withTimeout(getDoc(doc(db, "fueltracker", "dados")), 8000);
     if (!snap.exists()) return null;
     const dados = snap.data();
 
-    // Carrega abastecimentos dos chunks
     if (dados._hasAbast) {
       let abastecimentos = [];
-      for (let i = 0; i < 20; i++) {
-        const chunkSnap = await withTimeout(getDoc(doc(db, "fueltracker", "abast_" + i)), 5000);
-        if (!chunkSnap.exists()) break;
-        const chunkData = chunkSnap.data();
-        abastecimentos = abastecimentos.concat(chunkData.registros || []);
-        if (i >= (chunkData.total || 1) - 1) break;
+
+      if (dados._storageVersion === 2 && dados._abastVersion) {
+        // Formato novo: lê exatamente a quantidade declarada no manifesto.
+        const total = Number(dados._abastChunks || 0);
+        if (!Number.isInteger(total) || total < 1 || total > 500) {
+          throw new Error(`Manifesto de abastecimentos inválido (${total} chunks)`);
+        }
+
+        const snaps = await Promise.all(
+          Array.from({ length: total }, (_, i) =>
+            withTimeout(getDoc(doc(db, "fueltracker", `abast_${dados._abastVersion}_${i}`)), 10000)
+          )
+        );
+
+        snaps.forEach((chunkSnap, i) => {
+          if (!chunkSnap.exists()) throw new Error(`Chunk ${i + 1}/${total} não encontrado no Firebase`);
+          abastecimentos = abastecimentos.concat(chunkSnap.data().registros || []);
+        });
+      } else {
+        // Compatibilidade com os dados antigos. Antes havia um limite fixo de 20
+        // chunks (8.000 registros), que fazia os períodos mais novos desaparecerem.
+        const primeiro = await withTimeout(getDoc(doc(db, "fueltracker", "abast_0")), 10000);
+        if (primeiro.exists()) {
+          const primeiroData = primeiro.data();
+          const total = Math.max(1, Number(primeiroData.total || 1));
+          if (!Number.isInteger(total) || total > 500) {
+            throw new Error(`Quantidade de chunks legados inválida (${total})`);
+          }
+
+          abastecimentos = abastecimentos.concat(primeiroData.registros || []);
+          if (total > 1) {
+            const restantes = await Promise.all(
+              Array.from({ length: total - 1 }, (_, idx) => {
+                const i = idx + 1;
+                return withTimeout(getDoc(doc(db, "fueltracker", "abast_" + i)), 10000);
+              })
+            );
+            restantes.forEach((chunkSnap, idx) => {
+              if (!chunkSnap.exists()) throw new Error(`Chunk legado ${idx + 2}/${total} não encontrado`);
+              abastecimentos = abastecimentos.concat(chunkSnap.data().registros || []);
+            });
+          }
+        }
       }
+
       dados.abastecimentos = abastecimentos;
-      // Reconstrói registros das semanas a partir dos abastecimentos
+
+      // Reconstrói registros das semanas a partir dos abastecimentos.
       if (dados.semanas) {
         Object.keys(dados.semanas).forEach(id => {
-          const p = dados.semanas[id];
+          const periodo = dados.semanas[id];
           let regs = abastecimentos.filter(a => a.periodoId === id);
-          // Fallback: registros sem periodoId dentro da faixa de datas → retaguarda e retaguarda
-          if (regs.length === 0 && p.dataIni && p.dataFim) {
-            const ini = new Date(p.dataIni), fim = new Date(p.dataFim);
-            fim.setHours(23,59,59);
+
+          // Compatibilidade com registros antigos sem periodoId.
+          if (regs.length === 0 && periodo.dataIni && periodo.dataFim) {
+            const ini = new Date(periodo.dataIni);
+            const fim = new Date(periodo.dataFim);
+            fim.setHours(23, 59, 59, 999);
             regs = abastecimentos.filter(a => {
               if (a.periodoId && a.periodoId !== id) return false;
-              const d = new Date(a.data); return d >= ini && d <= fim;
+              const data = new Date(a.data);
+              return data >= ini && data <= fim;
             });
             regs.forEach(a => { if (!a.periodoId) a.periodoId = id; });
           }
-          p.registros = regs;
-          if (!p.count || regs.length > 0) p.count = regs.length;
+
+          periodo.registros = regs;
+          periodo.count = regs.length;
         });
       }
     }
+
     delete dados._hasAbast;
+    delete dados._storageVersion;
+    delete dados._abastVersion;
+    delete dados._abastChunks;
+    delete dados._abastCount;
     return dados;
-  } catch(e) { console.error("Firebase load error:", e); return null; }
+  } catch(e) {
+    window._fbLoadFailed = true;
+    console.error("Firebase load error:", e);
+    return null;
+  }
 };
 
 // Funções exclusivas para usuários — documento separado e protegido
@@ -2047,7 +2150,10 @@ async function syncFromFirebase() {
   try {
     updateSyncStatus('syncing');
     const data = await window.fbLoad();
-    if (!data) { updateSyncStatus('connected'); return; }
+    if (!data) {
+      updateSyncStatus(window._fbLoadFailed ? 'error' : 'connected');
+      return;
+    }
 
     const { _users, ...rest } = data;
     const tsFirebase = rest._savedAt || 0;
@@ -2071,11 +2177,14 @@ async function syncFromFirebase() {
       // Firebase é sempre a fonte de verdade — o que está lá é o que vale.
       // A "proteção anti-perda" anterior causava reverter exclusões intencionais. Removida.
       // Merge apenas de configs locais (podem ter sido atualizadas entre dois syncs).
-      dados.dieselPrecos = { ...(dados.dieselPrecos||{}), ...(state.dieselPrecos||{}) };
-      dados.opConfigs    = { ...(dados.opConfigs||{}),    ...(state.opConfigs||{})    };
-
-      // Salva merge de volta ao Firebase se houve mudanças
-      setTimeout(() => saveState(), 2000);
+      const dieselFirebase = dados.dieselPrecos || {};
+      const opConfigsFirebase = dados.opConfigs || {};
+      const dieselMesclado = { ...dieselFirebase, ...(state.dieselPrecos || {}) };
+      const opConfigsMesclado = { ...opConfigsFirebase, ...(state.opConfigs || {}) };
+      const precisaSalvarMerge = JSON.stringify(dieselMesclado) !== JSON.stringify(dieselFirebase)
+                              || JSON.stringify(opConfigsMesclado) !== JSON.stringify(opConfigsFirebase);
+      dados.dieselPrecos = dieselMesclado;
+      dados.opConfigs = opConfigsMesclado;
 
       state = { ...state, ...dados };
       state._savedAt = tsFirebase;
@@ -2093,6 +2202,10 @@ async function syncFromFirebase() {
         localStorage.setItem('fueltracker_v3', JSON.stringify(_lean));
       } catch(e) { console.warn('localStorage quota ignorada (dados no Firebase):', e); }
       window._ultimoSaveAt = tsFirebase;
+
+      // Antes o sistema regravava todos os chunks em TODO carregamento da página.
+      // Agora só persiste se realmente houve merge de configurações locais.
+      if (precisaSalvarMerge) setTimeout(() => saveState(), 2000);
 
       // Re-inicializa TUDO que depende do state
       try { updateFilters(); } catch(e) { console.warn('updateFilters error:', e); }
@@ -2140,48 +2253,129 @@ async function syncFromFirebase() {
 }
 
 let _saveFirebaseTimer = null;
-function saveState() {
-  // 1. IDB local imediato — sem limite, sobrevive reload (não espera Firebase)
-  idbSave({ ...state, _savedAt: Date.now() });
+let _firebaseSaveInFlight = false;
+let _firebasePendingSnapshot = null;
+let _firebasePendingWaiters = [];
 
-  // 2. localStorage lean imediato — sem abastecimentos e sem registros de semanas (ficam só no Firebase)
+function cloneStateForSave(data) {
   try {
-    const _lean = { ...state };
-    delete _lean.abastecimentos;
-    if (_lean.semanas) {
-      const semanasMeta = {};
-      Object.entries(_lean.semanas).forEach(([k, v]) => {
-        semanasMeta[k] = { label: v.label, importedAt: v.importedAt, dataIni: v.dataIni, dataFim: v.dataFim, count: v.registros ? v.registros.length : (v.count||0) };
-      });
-      _lean.semanas = semanasMeta;
-    }
-    localStorage.setItem('fueltracker_v3', JSON.stringify(_lean));
-  } catch(e) { console.warn('localStorage quota ignorada (dados no Firebase):', e); }
+    return typeof structuredClone === 'function'
+      ? structuredClone(data)
+      : JSON.parse(JSON.stringify(data));
+  } catch (e) {
+    console.error('Falha ao criar snapshot para salvar:', e);
+    return { ...data };
+  }
+}
 
-  // 3. Firebase: DEBOUNCED — evita saves concorrentes que corrompem os chunks
-  //    Se várias semanas são importadas em sequência, só dispara 1 save com tudo junto
-  updateSyncStatus('syncing'); // mostra "Sincronizando..." durante o debounce
+function _agendarFlushFirebase(immediate = false) {
+  if (immediate) {
+    clearTimeout(_saveFirebaseTimer);
+    _saveFirebaseTimer = null;
+    queueMicrotask(_flushFirebaseSaveQueue);
+    return;
+  }
+
   clearTimeout(_saveFirebaseTimer);
   _saveFirebaseTimer = setTimeout(() => {
-    if (window.firebaseReady && window.fbSave) {
-      const agora = Date.now();
-      window._ultimoSaveAt = agora;
-      const users = (() => { try { return JSON.parse(localStorage.getItem('ignis_users_cache')||'{}'); } catch(e){ return {}; } })();
-      const dataToSave = { ...state, _savedAt: agora };
-      if (Object.keys(users).length) dataToSave._users = users;
-      window.fbSave(dataToSave).then(ok => {
-        if (ok) { updateSyncStatus('connected'); idbSave({ ...state, _savedAt: agora }); }
-        else updateSyncStatus('error');
-      });
+    _saveFirebaseTimer = null;
+    _flushFirebaseSaveQueue();
+  }, 1500);
+}
+
+async function _flushFirebaseSaveQueue() {
+  if (_firebaseSaveInFlight || !_firebasePendingSnapshot) return;
+
+  if (!window.firebaseReady || !window.fbSave) {
+    const waiters = _firebasePendingWaiters.splice(0);
+    _firebasePendingSnapshot = null;
+    waiters.forEach(resolve => resolve(false));
+    updateSyncStatus('error');
+    return;
+  }
+
+  const snapshot = _firebasePendingSnapshot;
+  const waiters = _firebasePendingWaiters.splice(0);
+  _firebasePendingSnapshot = null;
+  _firebaseSaveInFlight = true;
+  updateSyncStatus('syncing');
+
+  const agora = Date.now();
+  const users = (() => {
+    try { return JSON.parse(localStorage.getItem('ignis_users_cache') || '{}'); }
+    catch(e) { return {}; }
+  })();
+  const dataToSave = { ...snapshot, _savedAt: agora };
+  if (Object.keys(users).length) dataToSave._users = users;
+
+  let ok = false;
+  try {
+    ok = await window.fbSave(dataToSave);
+    if (ok) {
+      window._ultimoSaveAt = agora; // só avança depois que o Firebase confirmou
+      updateSyncStatus('connected');
+      await idbSave({ ...snapshot, _savedAt: agora });
+    } else {
+      updateSyncStatus('error');
     }
-  }, 1500); // 1.5s de espera — agrupa imports consecutivos num único save
+  } catch (e) {
+    console.error('Fila de save Firebase:', e);
+    updateSyncStatus('error');
+    ok = false;
+  } finally {
+    _firebaseSaveInFlight = false;
+    waiters.forEach(resolve => resolve(ok));
+
+    // Se houve novas alterações enquanto o save estava em andamento, salva a
+    // fotografia mais recente logo em seguida — nunca em paralelo.
+    if (_firebasePendingSnapshot) queueMicrotask(_flushFirebaseSaveQueue);
+  }
+}
+
+function saveState(options = {}) {
+  const immediate = options === true || options?.immediate === true;
+
+  // 1. Snapshot completo e imutável do estado atual.
+  const snapshot = cloneStateForSave(state);
+
+  // 2. IDB local imediato — backup completo, sem limite pequeno do localStorage.
+  idbSave({ ...snapshot, _savedAt: Date.now() });
+
+  // 3. localStorage leve — sem abastecimentos e sem registros duplicados das semanas.
+  try {
+    const lean = { ...snapshot };
+    delete lean.abastecimentos;
+    if (lean.semanas) {
+      const semanasMeta = {};
+      Object.entries(lean.semanas).forEach(([k, v]) => {
+        semanasMeta[k] = {
+          label: v.label,
+          importedAt: v.importedAt,
+          dataIni: v.dataIni,
+          dataFim: v.dataFim,
+          count: Array.isArray(v.registros) ? v.registros.length : (v.count || 0)
+        };
+      });
+      lean.semanas = semanasMeta;
+    }
+    localStorage.setItem('fueltracker_v3', JSON.stringify(lean));
+  } catch(e) {
+    console.warn('localStorage quota ignorada (dados no Firebase/IDB):', e);
+  }
+
+  // 4. Mantém apenas o snapshot mais recente na fila. Saves nunca rodam em paralelo.
+  _firebasePendingSnapshot = snapshot;
+  const promise = new Promise(resolve => _firebasePendingWaiters.push(resolve));
+  updateSyncStatus('syncing');
+  _agendarFlushFirebase(immediate);
+  return promise;
 }
 
 // Avisa o usuário se tentar fechar/recarregar com save pendente
 window.addEventListener('beforeunload', e => {
-  if (_saveFirebaseTimer !== null) {
+  if (_saveFirebaseTimer !== null || _firebaseSaveInFlight || _firebasePendingSnapshot) {
     e.preventDefault();
-    return (e.returnValue = 'Dados ainda sendo salvos no Firebase. Aguarde antes de fechar.');
+    return (e.returnValue = 'Dados ainda estão sendo salvos. Aguarde antes de fechar.');
   }
 });
 
@@ -4489,7 +4683,7 @@ function importarRelatorio(input) {
   const dataIniNova = document.getElementById('import-data-ini')?.value || '';
   const dataFimNova = document.getElementById('import-data-fim')?.value || '';
   const reader=new FileReader();
-  reader.onload=function(e){
+  reader.onload=async function(e){
     try {
       const wb=XLSX.read(e.target.result,{type:'array', dense: true, cellDates: false});
       const ws=wb.Sheets[wb.SheetNames[0]];
@@ -4626,7 +4820,7 @@ function importarRelatorio(input) {
         dataFim: dataFimRef
       };
 
-      saveState();
+      const salvoFirebase = await saveState({ immediate: true });
       renderHistoricoPeriodos();
       relChecarReincidencia();
       document.getElementById('import-preview').innerHTML=`
@@ -4639,7 +4833,11 @@ function importarRelatorio(input) {
           <div style="font-size:12px;color:var(--accent);margin-top:8px">📊 Acesse o Comparativo para analisar os períodos!</div>
         </div>`;
       updateFilters(); renderDashboard();
-      showToast(`"${nomePeriodo}": ${dadosSemana.length} registros importados!`,'success');
+      if (salvoFirebase) {
+        showToast(`"${nomePeriodo}": ${dadosSemana.length} registros importados e confirmados no Firebase!`, 'success');
+      } else {
+        showToast('Importado localmente, mas o Firebase não confirmou o salvamento. Não feche a página e tente novamente.', 'error');
+      }
     } catch(err){
       // Erros de quota do localStorage não devem aparecer para o usuário (dados já salvos no Firebase)
       const isQuota = err.name==='QuotaExceededError' || (err.message||'').toLowerCase().includes('quota') || (err.message||'').toLowerCase().includes('exceeded');
@@ -4683,7 +4881,7 @@ function importarRelatorioDiario(input) {
   previewEl.innerHTML = '<div style="font-size:13px;color:var(--text2);margin-top:10px">⏳ Lendo e consolidando o relatório...</div>';
 
   const reader = new FileReader();
-  reader.onload = function(e) {
+  reader.onload = async function(e) {
     try {
       const wb = XLSX.read(e.target.result, { type: 'array', dense: true, cellDates: false });
       const ws = wb.Sheets[wb.SheetNames[0]];
@@ -4864,7 +5062,7 @@ function importarRelatorioDiario(input) {
         } catch(e) {}
       }
 
-      saveState(); // um único save pro lote inteiro, não um por semana
+      const salvoFirebase = await saveState({ immediate: true }); // confirma o lote inteiro antes de avisar sucesso
       renderHistoricoPeriodos();
       relChecarReincidencia();
       updateFilters(); renderDashboard();
@@ -4878,7 +5076,11 @@ function importarRelatorioDiario(input) {
           ${ignoradasArla>0?`<div style="font-size:12px;color:var(--text3);margin-top:4px">🧪 ${ignoradasArla} linha(s) de Arla ignorada(s) — tem controle dedicado na aba Arla 32</div>`:''}
           ${conflitos.length>0?`<div style="font-size:12px;color:var(--accent);margin-top:4px">🔄 ${conflitos.length} semana(s) substituída(s)</div>`:''}
         </div>`;
-      showToast(`${semanasNovas} semanas importadas: ${registrosTotais} registros!`, 'success');
+      if (salvoFirebase) {
+        showToast(`${semanasNovas} semanas importadas e confirmadas: ${registrosTotais} registros!`, 'success');
+      } else {
+        showToast('As semanas foram importadas localmente, mas o Firebase não confirmou o salvamento. Não feche a página.', 'error');
+      }
     } catch(err) {
       previewEl.innerHTML = `<div style="color:var(--red);font-size:13px;margin-top:10px">Erro: ${err.message}</div>`;
       console.error(err);
@@ -5000,20 +5202,23 @@ function limparTodosDados() {
     } catch(e) { console.warn('IDB clear erro:', e); }
   })();
 
-  // Cancela qualquer save pendente e salva imediatamente no Firebase (sem debounce)
+  // Cancela o debounce pendente. Se já houver um save em andamento, o estado
+  // vazio entra na fila e será obrigatoriamente salvo logo depois, sem concorrência.
   clearTimeout(_saveFirebaseTimer);
   _saveFirebaseTimer = null;
-  if (window.firebaseReady && window.fbSave) {
-    const agora = Date.now();
-    window._ultimoSaveAt = agora;
-    updateSyncStatus('syncing');
-    window.fbSave({ ...state, _savedAt: agora }).then(ok => {
-      updateSyncStatus(ok ? 'connected' : 'error');
-    });
+  if (_firebasePendingSnapshot) {
+    _firebasePendingSnapshot = null;
+    const waitersCancelados = _firebasePendingWaiters.splice(0);
+    waitersCancelados.forEach(resolve => resolve(false));
   }
 
   updateFilters(); renderDashboard();
-  showToast('Todos os dados apagados (local + Firebase)!', 'success');
+  saveState({ immediate: true }).then(ok => {
+    showToast(ok
+      ? 'Todos os dados foram apagados e a exclusão foi confirmada no Firebase!'
+      : 'Os dados foram apagados localmente, mas o Firebase não confirmou. Não feche a página.',
+      ok ? 'success' : 'error');
+  });
 }
 
 function copiarScriptApps() {
