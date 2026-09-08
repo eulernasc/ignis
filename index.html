@@ -15,7 +15,7 @@
 <script async src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 <script type="module" async>
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, query, where, documentId, getDocs, getDocsFromCache, doc, setDoc, getDoc, deleteDoc, writeBatch, runTransaction } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, query, where, documentId, getDocs, getDocsFromCache, doc, setDoc, getDoc, deleteDoc, writeBatch, runTransaction, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBdfrSrif-vThP3WqWJF76hhKE7FXGFpL0",
@@ -374,6 +374,7 @@ window.fbSave = async function(data) {
       _saveMode,
       _saveChangedPeriods,
       _saveRemovedPeriods,
+      _lightChangedKeys,
       importacaoMonitorEventos,
       importacaoMonitorRegras,
       importacaoMonitorInicializado,
@@ -421,16 +422,22 @@ window.fbSave = async function(data) {
     const baseArlaSignature = String(_baseArlaSignature || '');
     let expectedRevision = expectedRevisionOriginal;
     if ((currentRevision || expectedRevision) && currentRevision !== expectedRevision) {
-      const safeFuelRebase = saveMode==='fuel' && baseFuelSignature && baseFuelSignature===currentFuelSignature;
-      const safeArlaRebase = saveMode==='arla' && baseArlaSignature && baseArlaSignature===currentArlaSignature;
-      if (safeFuelRebase || safeArlaRebase) {
+      // Alterações leves agora são mescladas por campo sobre o manifesto mais novo.
+      // Isso permite vários usuários simultâneos sem transformar cada clique em conflito.
+      if(saveMode==='light'){
         expectedRevision = currentRevision;
-        console.info('IGNIS: save rebaseado com segurança sobre revisão mais nova; a série pesada não mudou.');
       } else {
-        const conflict = new Error('A base de dados foi atualizada por outro usuário. O IGNIS preservou sua importação local para evitar sobrescrever dados novos.');
-        conflict.code = 'IGNIS_REVISION_CONFLICT';
-        conflict.currentRevision = currentRevision;
-        throw conflict;
+        const safeFuelRebase = saveMode==='fuel' && baseFuelSignature && baseFuelSignature===currentFuelSignature;
+        const safeArlaRebase = saveMode==='arla' && baseArlaSignature && baseArlaSignature===currentArlaSignature;
+        if (safeFuelRebase || safeArlaRebase) {
+          expectedRevision = currentRevision;
+          console.info('IGNIS: save rebaseado com segurança sobre revisão mais nova; a série pesada não mudou.');
+        } else {
+          const conflict = new Error('A base de dados foi atualizada por outro usuário. O IGNIS preservou sua importação local para evitar sobrescrever dados novos.');
+          conflict.code = 'IGNIS_REVISION_CONFLICT';
+          conflict.currentRevision = currentRevision;
+          throw conflict;
+        }
       }
     }
 
@@ -506,7 +513,14 @@ window.fbSave = async function(data) {
     // Saves pesados não reescrevem configurações leves que outro usuário possa ter
     // alterado enquanto os chunks eram enviados. Na importação de combustível, somente
     // os preços derivados do próprio relatório também pertencem a este save.
-    const scopedRest = (saveMode==='full' || saveMode==='light') ? restData
+    const lightKeys = Array.isArray(_lightChangedKeys) ? _lightChangedKeys.map(String) : Object.keys(restData);
+    const lightPatch = saveMode==='light' ? (()=>{
+      const out={_savedAt:restData._savedAt};
+      lightKeys.forEach(k=>{if(Object.prototype.hasOwnProperty.call(restData,k))out[k]=restData[k];});
+      return out;
+    })() : null;
+    const scopedRest = saveMode==='full' ? restData
+      : saveMode==='light' ? lightPatch
       : saveMode==='fuel' ? {
           _savedAt: restData._savedAt,
           dieselPrecos: restData.dieselPrecos ?? antigo.dieselPrecos,
@@ -530,7 +544,14 @@ window.fbSave = async function(data) {
 
     await fbRetry(() => withTimeout(runTransaction(db, async tx => {
       const latestSnap = await tx.get(mainRef);
-      const latestRevision = latestSnap.exists() ? String(latestSnap.data()?._revision || '') : '';
+      const latestData = latestSnap.exists() ? (latestSnap.data() || {}) : {};
+      const latestRevision = String(latestData._revision || '');
+      if(saveMode==='light'){
+        // Merge atômico somente dos campos realmente alterados pelo navegador atual.
+        // Campos pesados e alterações leves de outros usuários são preservados.
+        tx.set(mainRef, { ...latestData, ...lightPatch, _revision:version, _storageVersion:Number(latestData._storageVersion||FB_STORAGE_VERSION) });
+        return;
+      }
       if ((latestRevision || expectedRevision) && latestRevision !== expectedRevision) {
         const conflict = new Error('A base mudou enquanto os dados eram enviados. Atualize antes de tentar novamente.');
         conflict.code = 'IGNIS_REVISION_CONFLICT';
@@ -552,9 +573,9 @@ window.fbSave = async function(data) {
 
     window._lastFirebaseSaveError = '';
     return {
-      ok:true, revision:version, mode:saveMode,
-      fuelSignature:(()=>{const ps=abastPatches.map(p=>String(p?.version||'')).join(',');return [abastVersion||'',...(ps?[ps]:[]),maqVersion||'',medVersion||'',eficVersion||''].join('|');})(),
-      arlaSignature:String(arlaVersion||'')
+      ok:true, revision:version, mode:saveMode, lightChangedKeys:saveMode==='light'?lightKeys:[],
+      fuelSignature:saveMode==='light'?undefined:(()=>{const ps=abastPatches.map(p=>String(p?.version||'')).join(',');return [abastVersion||'',...(ps?[ps]:[]),maqVersion||'',medVersion||'',eficVersion||''].join('|');})(),
+      arlaSignature:saveMode==='light'?undefined:String(arlaVersion||'')
     };
   } catch(e) {
     window._lastFirebaseSaveError = e?.message || String(e);
@@ -724,6 +745,41 @@ window.fbLoad = async function() {
   } catch(e) {
     window._fbLoadFailed = true;
     console.error('Firebase load error:', e);
+    return null;
+  }
+};
+
+// ── MODO MANUTENÇÃO GLOBAL ──────────────────────────────────────────────────
+// Documento independente do manifesto principal. Assim o ADM Master consegue
+// pausar o uso do sistema mesmo quando existe um conflito de revisão nos dados.
+window.fbSetMaintenance = async function(active, options={}) {
+  try {
+    const payload = {
+      active: !!active,
+      message: String(options.message || 'Sistema temporariamente em manutenção. Aguarde a liberação do ADM Master.'),
+      updatedAt: Date.now(),
+      updatedBy: String(options.updatedBy || 'ADM Master')
+    };
+    await withTimeout(setDoc(doc(db,'fueltracker','maintenance'), payload, {merge:true}), 10000);
+    return true;
+  } catch(e) {
+    console.error('Firebase maintenance save:', e);
+    return false;
+  }
+};
+window.fbLoadMaintenance = async function() {
+  try {
+    const snap = await withTimeout(getDoc(doc(db,'fueltracker','maintenance')), 8000);
+    return snap.exists() ? (snap.data() || {active:false}) : {active:false};
+  } catch(e) { return null; }
+};
+window.fbWatchMaintenance = function(callback) {
+  try {
+    return onSnapshot(doc(db,'fueltracker','maintenance'), snap => {
+      callback(snap.exists() ? (snap.data() || {active:false}) : {active:false});
+    }, err => console.warn('IGNIS: monitor de manutenção indisponível:', err));
+  } catch(e) {
+    console.warn('IGNIS: não foi possível iniciar monitor de manutenção:', e);
     return null;
   }
 };
@@ -1729,10 +1785,38 @@ input[type="checkbox"]:indeterminate{background:rgba(233,95,50,.2);border-color:
   .kpi-card{min-height:96px!important;padding:12px!important}
   .dashboard-toolbar,.dashboard-filter-shell{padding:9px!important}
 }
+
+/* ── IGNIS · MODO MANUTENÇÃO GLOBAL ─────────────────────────────────────── */
+#ignis-maintenance-overlay{position:fixed;inset:0;z-index:12000;background:radial-gradient(900px 520px at 50% 15%,rgba(233,95,50,.13),transparent 62%),rgba(7,10,14,.98);display:none;align-items:center;justify-content:center;padding:24px;backdrop-filter:blur(14px)}
+#ignis-maintenance-overlay.open{display:flex}
+.ignis-maint-card{width:min(520px,100%);background:#111821;border:1px solid rgba(233,95,50,.34);border-radius:22px;padding:34px 30px;text-align:center;box-shadow:0 28px 90px rgba(0,0,0,.48)}
+.ignis-maint-icon{width:66px;height:66px;margin:0 auto 18px;border-radius:20px;display:grid;place-items:center;background:rgba(233,95,50,.12);border:1px solid rgba(233,95,50,.34);color:var(--accent);font-size:30px}
+.ignis-maint-title{font-size:26px;font-weight:800;color:var(--text);margin-bottom:8px}
+.ignis-maint-copy{font-size:14px;line-height:1.6;color:var(--text2);max-width:420px;margin:0 auto}
+.ignis-maint-meta{font-size:11px;color:var(--text3);margin-top:16px}
+.ignis-maint-actions{display:flex;justify-content:center;gap:10px;margin-top:22px}
+.maintenance-config-card{border-color:rgba(245,158,11,.42)!important;background:linear-gradient(180deg,rgba(245,158,11,.045),rgba(233,95,50,.025))!important}
+.maintenance-state-pill{display:inline-flex;align-items:center;gap:7px;padding:6px 10px;border-radius:999px;font-size:11px;font-weight:800;background:rgba(34,197,94,.1);color:var(--green);border:1px solid rgba(34,197,94,.25)}
+.maintenance-state-pill.on{background:rgba(239,68,68,.12);color:var(--red);border-color:rgba(239,68,68,.3)}
+.maintenance-state-pill::before{content:'';width:7px;height:7px;border-radius:50%;background:currentColor}
+#ignis-maintenance-master-banner{display:none;position:fixed;left:50%;top:12px;transform:translateX(-50%);z-index:9998;background:#2a1717;color:#fecaca;border:1px solid rgba(239,68,68,.38);border-radius:999px;padding:8px 14px;font-size:11px;font-weight:800;box-shadow:0 10px 30px rgba(0,0,0,.28)}
+#ignis-maintenance-master-banner.open{display:block}
 </style>
 
 </head>
 <body>
+
+<!-- ══ MODO MANUTENÇÃO GLOBAL ══ -->
+<div id="ignis-maintenance-overlay" aria-live="assertive" aria-hidden="true">
+  <div class="ignis-maint-card">
+    <div class="ignis-maint-icon">🛠</div>
+    <div class="ignis-maint-title">Sistema em manutenção</div>
+    <div class="ignis-maint-copy" id="ignis-maintenance-message">O IGNIS foi temporariamente pausado pelo ADM Master.</div>
+    <div class="ignis-maint-meta" id="ignis-maintenance-meta">Aguarde a liberação para continuar.</div>
+    <div class="ignis-maint-actions"><button class="btn btn-secondary" onclick="loginSair()">Sair</button></div>
+  </div>
+</div>
+<div id="ignis-maintenance-master-banner">🛠 Manutenção global ativa · somente ADM Master permanece com acesso</div>
 
 <!-- ══ LOADING OVERLAY ══ -->
 <div id="ignis-loading" style="position:fixed;inset:0;background:var(--bg);z-index:10000;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px">
@@ -2685,6 +2769,17 @@ input[type="checkbox"]:indeterminate{background:rgba(233,95,50,.2);border-color:
         <div class="sheets-hint" style="margin-bottom:14px">Crie usuários e defina quais abas cada um pode acessar.</div>
         <div id="users-lista" style="margin-bottom:14px"></div>
         <button class="btn btn-primary btn-sm" onclick="abrirModalNovoUsuario()">+ Novo Usuário</button>
+      </div>
+      <div class="sheets-config maintenance-config-card" id="config-maintenance-section" style="margin-top:16px;display:none">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px">
+          <div class="sheets-config-title" style="margin:0;color:var(--yellow)">🛠 Manutenção do Sistema</div>
+          <span class="maintenance-state-pill" id="maintenance-state-pill">Sistema liberado</span>
+        </div>
+        <div class="sheets-hint" style="margin-bottom:12px">Exclusivo do <strong>ADM Master</strong>. Quando ativado, todos os demais usuários têm o sistema bloqueado imediatamente. Use em atualizações ou se detectar conflito de sincronização.</div>
+        <input type="text" class="sheets-url-input" id="maintenance-message-input" value="Sistema temporariamente em manutenção. Aguarde a liberação do ADM Master." placeholder="Mensagem exibida aos usuários...">
+        <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap">
+          <button class="btn btn-danger btn-sm" id="maintenance-toggle-btn" onclick="ignisToggleMaintenance()">Parar sistema para manutenção</button>
+        </div>
       </div>
       <div class="sheets-config" id="config-danger-zone" style="margin-top:16px;border-color:rgba(239,68,68,.3)">
         <div class="sheets-config-title" style="color:var(--red)">⚠️ Zona de Perigo</div>
@@ -4398,7 +4493,7 @@ async function loadState() {
   }
   try { relChecarReincidencia(); } catch(e) { console.warn('relChecar no boot falhou:', e); }
   try { relgInit(); } catch(e) { console.warn('relgInit no boot falhou:', e); }
-  updateSyncStatus('idle');
+  updateSyncStatus(window._ignisMaintenanceState?.active?'maintenance':'idle');
   window._dadosCarregados = true; // libera importação só depois do sync inicial terminar
 
   // O login possui um watchdog para não congelar a interface. Em celular o download dos chunks
@@ -4492,6 +4587,8 @@ async function syncFromFirebase() {
       window._firebaseFuelSignature = cloudFuelSignature;
       window._firebaseArlaSignature = cloudArlaSignature;
       window._ultimoSaveAt = tsFirebase;
+      window._ignisSyncConflict = false;
+      window._firebaseLightBaseline = _ignisCaptureLightState(state);
       try { localStorage.removeItem('ignis_pending_cloud_save'); } catch(e) {}
 
       if(!Array.isArray(state.medidorAnomalias)) state.medidorAnomalias=[];
@@ -4577,7 +4674,31 @@ function _cloneValue(v){
   try { return typeof structuredClone === 'function' ? structuredClone(v) : JSON.parse(JSON.stringify(v)); }
   catch(e){ return v; }
 }
-function cloneStateForSave(data, mode='full') {
+const _IGNIS_LIGHT_INTERNAL = new Set(['_savedAt','_saveMode','_baseRevision','_baseFuelSignature','_baseArlaSignature','_saveChangedPeriods','_saveRemovedPeriods','_lightChangedKeys']);
+function _ignisCaptureLightState(data){
+  const out={};
+  Object.entries(data||{}).forEach(([k,v])=>{
+    if(_IGNIS_SAVE_HEAVY.has(k)||_IGNIS_LIGHT_INTERNAL.has(k))return;
+    out[k]=_cloneValue(v);
+  });
+  return out;
+}
+function _ignisStableValue(v){try{return JSON.stringify(v);}catch(e){return String(v);}}
+function _ignisLightChangedKeys(snapshot,baseline){
+  const base=baseline&&typeof baseline==='object'?baseline:{};
+  const cur=_ignisCaptureLightState(snapshot);
+  const keys=new Set([...Object.keys(cur),...Object.keys(base)]),changed=[];
+  keys.forEach(k=>{if(_ignisStableValue(cur[k])!==_ignisStableValue(base[k]))changed.push(k);});
+  return changed;
+}
+function _ignisUpdateLightBaseline(snapshot,keys){
+  if(!window._firebaseLightBaseline)window._firebaseLightBaseline={};
+  const cur=_ignisCaptureLightState(snapshot);
+  (Array.isArray(keys)?keys:Object.keys(cur)).forEach(k=>{
+    if(Object.prototype.hasOwnProperty.call(cur,k))window._firebaseLightBaseline[k]=_cloneValue(cur[k]);
+  });
+}
+function cloneStateForSave(data, mode='light') {
   mode=String(mode||'full').toLowerCase();
   const out={};
   // Copia primeiro só o estado leve. Isso torna IDT/configurações praticamente instantâneos.
@@ -4664,8 +4785,10 @@ async function _flushFirebaseSaveQueue() {
       window._lastFirebaseSaveError = '';
       window._ultimoSaveAt = agora;
       state._savedAt = agora;
+      window._ignisSyncConflict = false;
+      if(String(result?.mode||snapshot._saveMode||'')==='light')_ignisUpdateLightBaseline(snapshot,result?.lightChangedKeys||snapshot._lightChangedKeys||[]);
       try { localStorage.removeItem('ignis_pending_cloud_save'); } catch(e) {}
-      updateSyncStatus('connected');
+      updateSyncStatus(window._ignisMaintenanceState?.active?'maintenance':'connected');
       // O backup pesado já foi gravado antes do envio. Não fazemos uma segunda
       // clonagem completa aqui — isso era uma das travadas após importação.
       try {
@@ -4674,10 +4797,12 @@ async function _flushFirebaseSaveQueue() {
         localStorage.setItem('fueltracker_v3', JSON.stringify(leanRaw));
       } catch(e) {}
     } else {
-      updateSyncStatus('error');
       if (result?.conflict) {
-        showToast('Outro usuário atualizou a base. Seus dados locais foram preservados; atualize a página antes de tentar salvar novamente.', 'error');
+        window._ignisSyncConflict = true;
+        updateSyncStatus('conflict');
+        showToast('Outro usuário alterou a mesma série de dados. Atualize a página antes de continuar essa alteração.', 'error');
       } else if(result?.message) {
+        updateSyncStatus('error');
         window._lastFirebaseSaveError = String(result.message||'');
         console.warn('Firebase não confirmou:', result.message);
       }
@@ -4696,7 +4821,16 @@ async function _flushFirebaseSaveQueue() {
 
 function saveState(options = {}) {
   const immediate = options === true || options?.immediate === true;
-  const mode = String(options?.mode || 'full').toLowerCase();
+  const mode = String(options?.mode || 'light').toLowerCase();
+  if(window._ignisMaintenanceState?.active && !ignisIsAdmMaster()){
+    updateSyncStatus('maintenance');
+    return Promise.resolve(false);
+  }
+  if(window._ignisSyncConflict && (mode==='full'||mode==='fuel'||mode==='arla')){
+    updateSyncStatus('conflict');
+    showToast('Existe um conflito de sincronização. Atualize a página antes de alterar dados pesados.','error');
+    return Promise.resolve(false);
+  }
   const heavyChanged = mode==='full'||mode==='fuel';
   if(heavyChanged){
     markIgnisDataDirty('saveState:'+mode);
@@ -4714,6 +4848,7 @@ function saveState(options = {}) {
   snapshot._baseArlaSignature = String(window._firebaseArlaSignature || '');
   snapshot._saveChangedPeriods = Array.isArray(options?.changedPeriodIds) ? options.changedPeriodIds.map(String) : [];
   snapshot._saveRemovedPeriods = Array.isArray(options?.removedPeriodIds) ? options.removedPeriodIds.map(String) : [];
+  snapshot._lightChangedKeys = mode==='light' ? _ignisLightChangedKeys(snapshot, window._firebaseLightBaseline) : [];
   delete snapshot.importacaoMonitorEventos; delete snapshot.importacaoMonitorRegras; delete snapshot.importacaoMonitorInicializado;
   try {
     localStorage.setItem('ignis_pending_cloud_save', JSON.stringify({
@@ -4757,6 +4892,84 @@ window.addEventListener('beforeunload', e => {
     return (e.returnValue = 'Dados ainda estão sendo salvos. Aguarde antes de fechar.');
   }
 });
+
+// ── MANUTENÇÃO GLOBAL / PROTEÇÃO DE EDIÇÃO ──────────────────────────────────
+window._ignisMaintenanceState = window._ignisMaintenanceState || {active:false,message:'',updatedAt:0,updatedBy:''};
+window._ignisMaintenanceUnsub = window._ignisMaintenanceUnsub || null;
+window._ignisSyncConflict = false;
+
+function ignisIsAdmMaster(){ return window._authUser?.role === 'adm'; }
+function ignisCancelPendingSavesForMaintenance(){
+  clearTimeout(_saveFirebaseTimer); _saveFirebaseTimer=null;
+  _firebasePendingSnapshot=null;
+  const waiters=_firebasePendingWaiters.splice(0); waiters.forEach(resolve=>resolve(false));
+}
+function ignisRenderMaintenanceState(){
+  const st=window._ignisMaintenanceState||{active:false};
+  const isMaster=ignisIsAdmMaster();
+  const overlay=document.getElementById('ignis-maintenance-overlay');
+  const banner=document.getElementById('ignis-maintenance-master-banner');
+  const msg=document.getElementById('ignis-maintenance-message');
+  const meta=document.getElementById('ignis-maintenance-meta');
+  const pill=document.getElementById('maintenance-state-pill');
+  const btn=document.getElementById('maintenance-toggle-btn');
+  const inp=document.getElementById('maintenance-message-input');
+  const section=document.getElementById('config-maintenance-section');
+  if(section) section.style.display=isMaster?'block':'none';
+  if(msg) msg.textContent=st.message||'O IGNIS foi temporariamente pausado pelo ADM Master.';
+  if(meta) meta.textContent=st.updatedBy?`Ativado por ${st.updatedBy}. Aguarde a liberação para continuar.`:'Aguarde a liberação para continuar.';
+  if(pill){pill.textContent=st.active?'Manutenção ativa':'Sistema liberado';pill.classList.toggle('on',!!st.active);}
+  if(btn){btn.textContent=st.active?'Liberar sistema':'Parar sistema para manutenção';btn.classList.toggle('btn-danger',!st.active);btn.classList.toggle('btn-primary',!!st.active);}
+  if(inp && st.message && document.activeElement!==inp) inp.value=st.message;
+  if(st.active && !isMaster){
+    ignisCancelPendingSavesForMaintenance();
+    if(overlay){overlay.classList.add('open');overlay.setAttribute('aria-hidden','false');}
+    if(banner)banner.classList.remove('open');
+    updateSyncStatus('maintenance');
+  }else{
+    if(overlay){overlay.classList.remove('open');overlay.setAttribute('aria-hidden','true');}
+    if(banner)banner.classList.toggle('open',!!st.active&&isMaster);
+    if(st.active&&isMaster)updateSyncStatus('maintenance');
+    else if(!window._ignisSyncConflict)updateSyncStatus('connected');
+  }
+}
+function ignisApplyMaintenanceState(data){
+  const d=data&&typeof data==='object'?data:{};
+  window._ignisMaintenanceState={
+    active:!!d.active,
+    message:String(d.message||'Sistema temporariamente em manutenção. Aguarde a liberação do ADM Master.'),
+    updatedAt:Number(d.updatedAt||0),
+    updatedBy:String(d.updatedBy||'')
+  };
+  ignisRenderMaintenanceState();
+}
+function ignisStartMaintenanceWatch(){
+  try{if(typeof window._ignisMaintenanceUnsub==='function')window._ignisMaintenanceUnsub();}catch(e){}
+  window._ignisMaintenanceUnsub=null;
+  const start=()=>{
+    if(typeof window.fbWatchMaintenance==='function'){
+      window._ignisMaintenanceUnsub=window.fbWatchMaintenance(ignisApplyMaintenanceState);
+      if(typeof window.fbLoadMaintenance==='function')window.fbLoadMaintenance().then(d=>{if(d)ignisApplyMaintenanceState(d)}).catch(()=>{});
+    }
+  };
+  if(window.firebaseReady)start();
+  else window.addEventListener('firebaseReady',start,{once:true});
+}
+async function ignisToggleMaintenance(){
+  if(!ignisIsAdmMaster()){showToast('Somente o ADM Master pode controlar a manutenção.','error');return;}
+  const active=!!window._ignisMaintenanceState?.active;
+  const next=!active;
+  if(next&&!confirm('Parar o IGNIS para todos os outros usuários? O ADM Master continuará com acesso para manutenção.'))return;
+  const message=(document.getElementById('maintenance-message-input')?.value||'').trim()||'Sistema temporariamente em manutenção. Aguarde a liberação do ADM Master.';
+  const btn=document.getElementById('maintenance-toggle-btn');if(btn)btn.disabled=true;
+  try{
+    const ok=await window.fbSetMaintenance?.(next,{message,updatedBy:window._authUser?.nome||window._authUser?.id||'ADM Master'});
+    if(!ok)throw new Error('Firebase não confirmou a alteração.');
+    ignisApplyMaintenanceState({active:next,message,updatedAt:Date.now(),updatedBy:window._authUser?.nome||window._authUser?.id||'ADM Master'});
+    showToast(next?'Sistema parado para manutenção.':'Sistema liberado para os usuários.','success');
+  }catch(e){showToast('Não foi possível alterar o modo manutenção: '+(e?.message||e),'error');}
+  finally{if(btn)btn.disabled=false;}
+}
 
 // ── NAV ───────────────────────────────────────────────────────────────────────
 // ══════════════════════════════════════════════════════════════════════════════
@@ -5161,6 +5374,10 @@ function loginEntrarApp() {
   if (usersSection) usersSection.style.display = canManage ? 'block' : 'none';
   const dangerZone = document.getElementById('config-danger-zone');
   if (dangerZone) dangerZone.style.display = u.role === 'adm' ? 'block' : 'none';
+  const maintenanceSection = document.getElementById('config-maintenance-section');
+  if (maintenanceSection) maintenanceSection.style.display = u.role === 'adm' ? 'block' : 'none';
+  ignisStartMaintenanceWatch();
+  ignisRenderMaintenanceState();
   // Inicia app normalmente. O login já está concluído; armazenamento/sincronização
   // são limitados por watchdog para nunca congelar a entrada no sistema.
   Promise.race([
@@ -9818,6 +10035,8 @@ function updateSyncStatus(status) {
     connected:    {cls:'connected', text:'Firebase sincronizado ☁️'},
     syncing:      {cls:'syncing',   text:'Sincronizando...'},
     error:        {cls:'error',     text:'Erro de conexão'},
+    conflict:     {cls:'error',     text:'Conflito — atualize a página'},
+    maintenance:  {cls:'syncing',   text:'Manutenção global ativa'},
     idle:         {cls:'connected', text:'Firebase ativo ☁️'},
     disconnected: {cls:'',          text:'Sem conexão'},
   };
@@ -9826,9 +10045,9 @@ function updateSyncStatus(status) {
   label.textContent = c.text;
   const mobDot=document.getElementById('mob-sync-dot');
   if(mobDot){
-    const color=(status==='connected'||status==='idle')?'var(--green)':status==='syncing'?'var(--yellow)':status==='error'?'var(--red)':'var(--text3)';
+    const color=(status==='connected'||status==='idle')?'var(--green)':(status==='syncing'||status==='maintenance')?'var(--yellow)':(status==='error'||status==='conflict')?'var(--red)':'var(--text3)';
     mobDot.style.background=color;
-    mobDot.style.boxShadow=status==='syncing'?'0 0 0 3px rgba(232,148,26,.12)':'none';
+    mobDot.style.boxShadow=(status==='syncing'||status==='maintenance')?'0 0 0 3px rgba(232,148,26,.12)':'none';
   }
 }
 
@@ -9885,7 +10104,7 @@ function importarJSON(input) {
       const imported=JSON.parse(e.target.result);
       if(!imported.maquinas||!imported.abastecimentos) throw new Error('Arquivo inválido');
       Object.assign(state,imported);
-      saveState(); updateFilters(); renderDashboard();
+      saveState({mode:'full'}); updateFilters(); renderDashboard();
       showToast(`${state.abastecimentos.length} registros importados!`,'success');
     } catch(err){showToast('Arquivo inválido: '+err.message,'error');}
     input.value='';
@@ -9931,7 +10150,7 @@ function limparTodosDados() {
   }
 
   updateFilters(); renderDashboard();
-  saveState({ immediate: true }).then(ok => {
+  saveState({ immediate: true, mode:'full' }).then(ok => {
     showToast(ok
       ? 'Todos os dados foram apagados e a exclusão foi confirmada no Firebase!'
       : 'Os dados foram apagados localmente, mas o Firebase não confirmou. Não feche a página.',
@@ -13627,6 +13846,16 @@ function kmProcessarDados(sistema, cliente, criterios={}) {
   return { resultados, semNoSistema, semNoCliente };
 }
 
+function kmTotaisGerais(resultados=[], semNoSistema=[], semNoCliente=[]) {
+  const kmO2PCruzado=(resultados||[]).reduce((s,r)=>s+kmNumeroSeguro(r?.kmSistema,0),0);
+  const kmProdCruzado=(resultados||[]).reduce((s,r)=>s+kmNumeroSeguro(r?.kmCliente,0),0);
+  const kmO2PSo=(semNoCliente||[]).reduce((s,r)=>s+kmNumeroSeguro(r?.kmSistema,0),0);
+  const kmProdSo=(semNoSistema||[]).reduce((s,r)=>s+kmNumeroSeguro(r?.kmCliente,0),0);
+  const kmO2PTotal=kmO2PCruzado+kmO2PSo;
+  const kmProdTotal=kmProdCruzado+kmProdSo;
+  return {kmO2PCruzado,kmProdCruzado,kmO2PSo,kmProdSo,kmO2PTotal,kmProdTotal,diff:kmO2PTotal-kmProdTotal};
+}
+
 function kmMapaSistemaDoWorkbook(wb) {
   const ws = wb.Sheets[wb.SheetNames[0]];
   const raw = kmLerComHeaderDinamico(ws);
@@ -13799,10 +14028,10 @@ function kmMensalRenderLinhas() {
 
 function kmMensalResumo(item) {
   const resultados = item.resultados;
-  const soma = campo => resultados.reduce((acc,r) => acc + (r[campo] || 0), 0);
-  const kmS = soma('kmSistema');
-  const kmC = soma('kmCliente');
-  const diff = kmS - kmC;
+  const totais = kmTotaisGerais(resultados,item.semNoSistema||[],item.semNoCliente||[]);
+  const kmS = totais.kmO2PTotal;
+  const kmC = totais.kmProdTotal;
+  const diff = totais.diff;
   return {
     mesIdx:item.mesIdx,
     mes:KM_MESES[item.mesIdx].nome,
@@ -14347,6 +14576,7 @@ function kmComparar() {
   const label = document.getElementById('km-label').value.trim() || new Date().toLocaleDateString('pt-BR');
   const fmtKm = v => v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
   const { resultados, semNoSistema, semNoCliente } = kmProcessarDados(sistema, cliente, criterios);
+  const totaisGerais = kmTotaisGerais(resultados, semNoSistema, semNoCliente);
 
   // Salva no histórico de comparativos para uso no e-mail duplo
   if (!window._kmHistorico) window._kmHistorico = [];
@@ -14355,7 +14585,7 @@ function kmComparar() {
   if (window._kmHistorico.length > 10) window._kmHistorico.pop();
 
   // Salva para exportação e e-mail (usa valores globais para evitar ReferenceError)
-  window._kmResultado = { resultados, semNoSistema, semNoCliente, label, margemMin: margemMinGlobal, margemAtencao: margemAtencaoGlobal, margemExcesso: margemExcessoGlobal };
+  window._kmResultado = { resultados, semNoSistema, semNoCliente, totaisGerais, label, margemMin: margemMinGlobal, margemAtencao: margemAtencaoGlobal, margemExcesso: margemExcessoGlobal };
 
   // Ordena: alertas primeiro, depois atenção, ok, sem_base
   const ordem = { alerta: 0, excesso: 1, atencao: 2, sem_base: 3, ok: 4 };
@@ -14366,9 +14596,9 @@ function kmComparar() {
   const ok = resultados.filter(r => r.status === 'ok');
   const excessos = resultados.filter(r => r.status === 'excesso');
   try {
-    const kmSummaryPayload={ at:Date.now(), label, alertas:alertas.length, excessos:excessos.length, atencao:atencao.length, semNoSistema:semNoSistema.length, semNoCliente:semNoCliente.length, ok:ok.length };
+    const kmSummaryPayload={ at:Date.now(), label, alertas:alertas.length, excessos:excessos.length, atencao:atencao.length, semNoSistema:semNoSistema.length, semNoCliente:semNoCliente.length, ok:ok.length, kmO2PTotal:totaisGerais.kmO2PTotal, kmProdTotal:totaisGerais.kmProdTotal };
     localStorage.setItem('ignis_km_summary', JSON.stringify(kmSummaryPayload));
-    state.kmSummary=kmSummaryPayload; saveState();
+    state.kmSummary=kmSummaryPayload; saveState({mode:'light'});
     if (typeof pendMarkDirty === 'function') pendMarkDirty();
   } catch(e) {}
 
@@ -14380,6 +14610,9 @@ function kmComparar() {
   // KPIs
   let html = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:20px">';
   html += kpiExec('📅 Comparativo', label, new Date().toLocaleDateString('pt-BR'), '#8b90a7');
+  html += kpiExec('KM O2P Total', fmtKm(totaisGerais.kmO2PTotal), fmtKm(totaisGerais.kmO2PCruzado)+' cruzado · '+fmtKm(totaisGerais.kmO2PSo)+' só O2P', 'var(--accent)');
+  html += kpiExec('KM Produtivo Total', fmtKm(totaisGerais.kmProdTotal), fmtKm(totaisGerais.kmProdCruzado)+' cruzado · '+fmtKm(totaisGerais.kmProdSo)+' só cliente', 'var(--accent2)');
+  html += kpiExec('Diferença Total', (totaisGerais.diff>=0?'+':'')+fmtKm(totaisGerais.diff), 'considera todas as placas dos dois arquivos', totaisGerais.diff>=0?'var(--green)':'var(--red)');
   html += kpiExec('OK', ok.length + '', 'dentro dos limites', 'var(--green)');
   const opsComMargem = Object.keys(margensOp).length; html += kpiExec('⚠️ Atenção', atencao.length + '', opsComMargem ? 'margem por operação configurada' : 'margem baixa (' + margemMinGlobal + '–' + margemAtencaoGlobal + '%)', 'var(--yellow)');
   html += kpiExec('🔴 Alerta', alertas.length + '', 'KM O2P abaixo do Produtivo', 'var(--red)');
@@ -14951,10 +15184,11 @@ function kmCopiarEmail() {
   const excessos = resultados.filter(r => r.status === 'excesso').sort((a,b) => b.diff - a.diff);
   const fmtKm = v => v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
-  // Totais gerais (todas as placas cruzadas)
-  const totalO2P  = resultados.reduce((s,r) => s + (r.kmSistema||0), 0);
-  const totalProd = resultados.reduce((s,r) => s + (r.kmCliente||0), 0);
-  const totalDiff = totalO2P - totalProd;
+  // Totais gerais: considera todas as placas, mesmo sem correspondência.
+  const totaisGerais = kmTotaisGerais(resultados,semNoSistema,semNoCliente);
+  const totalO2P  = totaisGerais.kmO2PTotal;
+  const totalProd = totaisGerais.kmProdTotal;
+  const totalDiff = totaisGerais.diff;
   const totalPct  = totalProd > 0 ? ((totalO2P - totalProd) / totalProd * 100) : null;
   const difColor  = totalDiff >= 0 ? '#16a34a' : '#dc2626';
 
@@ -15340,7 +15574,7 @@ function rcComparar() {
     const rcMeses=[...new Set([..._rcO2P,..._rcTicket].map(r=>String(r.data||'').slice(0,7)).filter(x=>/^\d{4}-\d{2}$/.test(x)))];
     const reconSummaryPayload={ at:Date.now(), totalO2P:_rcO2P.length, totalTicket:_rcTicket.length, soO2P:_rcDados.o2p.length, soTicket:_rcDados.ticket.length, ambos:_rcDados.ambos.length, meses:rcMeses };
     localStorage.setItem('ignis_recon_summary', JSON.stringify(reconSummaryPayload));
-    state.reconSummary=reconSummaryPayload; saveState();
+    state.reconSummary=reconSummaryPayload; saveState({mode:'light'});
     if (typeof pendMarkDirty === 'function') pendMarkDirty();
   } catch(e) {}
   document.getElementById('rc-badge-o2p').textContent    = _rcDados.o2p.length;
