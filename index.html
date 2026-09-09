@@ -1226,6 +1226,68 @@ body{overflow-x:hidden;}
 /* user info in sidebar bottom */
 .user-info{padding:10px 16px;border-top:1px solid var(--border);display:flex;align-items:center;gap:8px;font-size:12px;}
 .user-avatar{width:28px;height:28px;background:var(--accent);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;flex-shrink:0;}
+
+/* ── CONFIGURAÇÕES ORGANIZADAS ── */
+.config-shell{max-width:1180px;margin:0 auto;}
+.config-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px;padding:6px;background:rgba(15,20,27,.88);border:1px solid var(--border);border-radius:14px;position:sticky;top:0;z-index:4;backdrop-filter:blur(10px);}
+.config-tab{border:1px solid transparent;background:transparent;color:var(--text2);padding:10px 16px;border-radius:10px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;transition:.18s ease;}
+.config-tab:hover{color:var(--text);background:rgba(255,255,255,.035);}
+.config-tab.active{color:#fff;background:linear-gradient(135deg,rgba(233,95,50,.95),rgba(219,70,36,.95));border-color:rgba(255,112,70,.35);box-shadow:0 8px 18px rgba(233,95,50,.18);}
+.config-panel{display:none;}
+.config-panel.active{display:block;}
+.config-two-col{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;}
+.config-card-clean{margin:0!important;min-width:0;}
+.config-card-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:14px;}
+.config-card-heading .sheets-config-title{margin:0 0 5px;font-size:15px;}
+.config-section-title{font-size:16px!important;color:var(--text)!important;}
+.config-card-sub{font-size:12px;line-height:1.5;color:var(--text3);}
+.config-icon-badge{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;flex-shrink:0;background:rgba(233,95,50,.10);border:1px solid rgba(233,95,50,.22);color:var(--accent);font-weight:800;}
+.config-icon-badge.danger{color:var(--red);background:rgba(239,68,68,.09);border-color:rgba(239,68,68,.24);}
+.config-help-details{margin-top:12px;border:1px solid var(--border);border-radius:10px;background:rgba(255,255,255,.018);overflow:hidden;}
+.config-help-details summary{padding:10px 12px;font-size:12px;font-weight:700;color:var(--text2);cursor:pointer;list-style:none;}
+.config-help-details summary::-webkit-details-marker{display:none;}
+.config-help-details summary:after{content:'+';float:right;color:var(--accent);font-size:15px;}
+.config-help-details[open] summary:after{content:'−';}
+.config-help-body{padding:0 12px 12px;line-height:1.65;}
+.config-actions-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;}
+.config-backup-box{border:1px dashed var(--border);border-radius:12px;padding:16px;background:rgba(255,255,255,.015);}
+.config-backup-copy{font-size:12px;line-height:1.55;color:var(--text2);}
+.config-users-section{margin:0!important;border-color:rgba(233,95,50,.28)!important;}
+.config-users-header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:16px;}
+.config-user-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:14px;}
+.config-user-stat{background:rgba(255,255,255,.022);border:1px solid var(--border);border-radius:11px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:12px;}
+.config-user-stat span{font-size:11px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;font-weight:700;}
+.config-user-stat strong{font-size:22px;color:var(--text);line-height:1;}
+.config-users-toolbar{display:grid;grid-template-columns:minmax(0,1fr) 190px;gap:10px;margin-bottom:14px;}
+.config-user-search-wrap{position:relative;}
+.config-user-search-wrap .ui-icon{position:absolute;left:12px;top:50%;transform:translateY(-50%);width:17px;height:17px;color:var(--text3);pointer-events:none;}
+.config-user-search-wrap input{width:100%;height:42px;background:var(--bg2);border:1px solid var(--border);border-radius:10px;color:var(--text);padding:0 12px 0 38px;font:inherit;font-size:13px;outline:none;}
+.config-user-search-wrap input:focus{border-color:rgba(233,95,50,.55);box-shadow:0 0 0 3px rgba(233,95,50,.08);}
+.config-users-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;}
+.config-user-card{background:linear-gradient(180deg,rgba(24,31,41,.98),rgba(19,25,33,.98));border:1px solid var(--border);border-radius:12px;padding:13px;min-width:0;display:grid;gap:11px;transition:.16s ease;}
+.config-user-card:hover{border-color:rgba(233,95,50,.30);transform:translateY(-1px);}
+.config-user-card.is-current{border-color:rgba(233,95,50,.42);box-shadow:inset 3px 0 0 var(--accent);}
+.config-user-main{display:grid;grid-template-columns:38px minmax(0,1fr) auto;gap:10px;align-items:center;min-width:0;}
+.config-user-main .user-avatar{width:38px;height:38px;font-size:14px;}
+.config-user-ident{min-width:0;}
+.config-user-ident .user-name{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.config-user-login{font-size:10px;color:var(--text3);font-family:monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:3px;}
+.config-user-access{display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-height:24px;}
+.config-access-chip{font-size:10px;color:var(--text2);background:rgba(255,255,255,.035);border:1px solid var(--border);border-radius:999px;padding:4px 8px;white-space:nowrap;}
+.config-access-chip.extra{color:#93b7df;}
+.config-access-chip.manage{color:var(--yellow);border-color:rgba(232,148,26,.25);background:rgba(232,148,26,.06);}
+.config-user-footer{display:flex;align-items:center;justify-content:space-between;gap:8px;padding-top:9px;border-top:1px solid rgba(151,164,178,.10);}
+.config-user-actions{display:flex;gap:6px;margin-left:auto;}
+.config-user-you{font-size:10px;color:var(--accent);font-weight:700;}
+.config-users-empty{grid-column:1/-1;text-align:center;padding:28px 16px;border:1px dashed var(--border);border-radius:12px;color:var(--text3);font-size:12px;}
+.config-system-grid .sheets-config{margin:0!important;}
+.config-danger-card{border-color:rgba(239,68,68,.26)!important;}
+.config-diesel-card{margin:0!important;border-color:rgba(245,158,11,.26)!important;}
+.config-diesel-hint{margin-bottom:14px;max-width:900px;}
+.config-diesel-list{display:flex;flex-direction:column;gap:8px;margin-bottom:0;max-height:560px;overflow:auto;padding-right:4px;}
+@media(max-width:950px){.config-two-col,.config-users-grid{grid-template-columns:1fr}.config-shell{max-width:none}.config-tabs{position:static}.config-users-toolbar{grid-template-columns:1fr}.config-user-stats{grid-template-columns:1fr 1fr 1fr}}
+@media(max-width:620px){.config-user-stats{grid-template-columns:1fr}.config-users-header{flex-direction:column}.config-users-header .btn{width:100%}.config-tabs{display:grid;grid-template-columns:1fr 1fr}.config-tab{padding:9px 10px}.config-card-heading{flex-direction:column}.config-user-main{grid-template-columns:36px minmax(0,1fr)}.config-user-main>.user-role-badge{grid-column:2;justify-self:start}.config-user-footer{align-items:flex-start;flex-direction:column}.config-user-actions{margin-left:0}}
+
 .user-details{flex:1;min-width:0;}
 .user-display-name{font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .user-display-role{font-size:10px;color:var(--text3);}
@@ -2735,62 +2797,125 @@ input[type="checkbox"]:indeterminate{background:rgba(233,95,50,.2);border-color:
   
   <div id="page-config" class="page">
     <div class="page-header">
-      <div><div class="page-title">Configurações</div><div class="page-sub">Sincronização e preferências</div></div>
+      <div><div class="page-title">Configurações</div><div class="page-sub">Organize acessos, sincronização e parâmetros do IGNIS</div></div>
     </div>
-    <div style="max-width:600px">
-      <div class="sheets-config">
-        <div class="sheets-config-title">🔗 Sincronização com Google Sheets</div>
-        <input type="text" class="sheets-url-input" id="sheets-url" placeholder="Cole aqui a URL do seu Google Apps Script..." oninput="salvarConfig()">
-        <div class="sheets-hint">
-          Para sincronizar seus dados em qualquer computador:<br>
-          1. Acesse <strong>script.google.com</strong> e crie um novo projeto<br>
-          2. Cole o código do Apps Script (botão abaixo)<br>
-          3. Clique em <strong>Implantar → Novo deployment → App da Web</strong><br>
-          4. Em "Quem tem acesso" selecione <strong>"Qualquer pessoa"</strong><br>
-          5. Copie a URL gerada e cole aqui acima
-        </div>
-        <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">
-          <button class="btn btn-secondary btn-sm" onclick="copiarScriptApps()">Copiar código Apps Script</button>
-          <button class="btn btn-primary btn-sm" onclick="testarConexao()">Testar conexão</button>
-          <button class="btn btn-primary btn-sm" onclick="sincronizarAgora()">Sincronizar agora</button>
+
+    <div class="config-shell">
+      <div class="config-tabs" role="tablist" aria-label="Seções de configurações">
+        <button class="config-tab active" data-config-tab="geral" onclick="configSetTab('geral',this)">Geral</button>
+        <button class="config-tab" id="config-tab-users-btn" data-config-tab="usuarios" onclick="configSetTab('usuarios',this)">Usuários</button>
+        <button class="config-tab" id="config-tab-diesel-btn" data-config-tab="diesel" onclick="configSetTab('diesel',this)">Operações e Diesel</button>
+        <button class="config-tab" id="config-tab-system-btn" data-config-tab="sistema" onclick="configSetTab('sistema',this)">Sistema</button>
+      </div>
+
+      <div class="config-panel active" id="config-panel-geral" data-config-panel="geral">
+        <div class="config-two-col">
+          <div class="sheets-config config-card-clean">
+            <div class="config-card-heading">
+              <div><div class="sheets-config-title">Sincronização com Google Sheets</div><div class="config-card-sub">Conexão auxiliar para sincronização e integrações externas.</div></div>
+              <span class="config-icon-badge">↗</span>
+            </div>
+            <input type="text" class="sheets-url-input" id="sheets-url" placeholder="Cole aqui a URL do seu Google Apps Script..." oninput="salvarConfig()">
+            <details class="config-help-details">
+              <summary>Ver instruções de configuração</summary>
+              <div class="sheets-hint config-help-body">
+                1. Acesse <strong>script.google.com</strong> e crie um novo projeto<br>
+                2. Cole o código do Apps Script<br>
+                3. Clique em <strong>Implantar → Novo deployment → App da Web</strong><br>
+                4. Em "Quem tem acesso" selecione <strong>"Qualquer pessoa"</strong><br>
+                5. Copie a URL gerada e cole no campo acima
+              </div>
+            </details>
+            <div class="config-actions-row">
+              <button class="btn btn-secondary btn-sm" onclick="copiarScriptApps()">Copiar Apps Script</button>
+              <button class="btn btn-primary btn-sm" onclick="testarConexao()">Testar conexão</button>
+              <button class="btn btn-primary btn-sm" onclick="sincronizarAgora()">Sincronizar agora</button>
+            </div>
+          </div>
+
+          <div class="sheets-config config-card-clean">
+            <div class="config-card-heading">
+              <div><div class="sheets-config-title">Backup Local</div><div class="config-card-sub">Exporte ou restaure uma cópia manual dos dados.</div></div>
+              <span class="config-icon-badge">↓</span>
+            </div>
+            <div class="config-backup-box">
+              <div class="config-backup-copy">Use JSON para contingência, transferência ou recuperação manual.</div>
+              <div class="config-actions-row">
+                <button class="btn btn-secondary btn-sm" onclick="exportarJSON()">Exportar JSON</button>
+                <button class="btn btn-secondary btn-sm" onclick="verificarSenha(()=>document.getElementById('import-json').click())">Importar JSON</button>
+              </div>
+            </div>
+            <input type="file" id="import-json" accept=".json" style="display:none" onchange="importarJSON(this)">
+          </div>
         </div>
       </div>
-      <div class="sheets-config" style="margin-top:16px">
-        <div class="sheets-config-title">💾 Backup Local</div>
-        <div style="display:flex;gap:10px">
-          <button class="btn btn-secondary btn-sm" onclick="exportarJSON()">⬇️ Exportar dados (JSON)</button>
-          <button class="btn btn-secondary btn-sm" onclick="verificarSenha(()=>document.getElementById('import-json').click())">⬆️ Importar dados (JSON)</button>
+
+      <div class="config-panel" id="config-panel-usuarios" data-config-panel="usuarios">
+        <div class="sheets-config config-users-section" id="config-users-section">
+          <div class="config-users-header">
+            <div>
+              <div class="sheets-config-title config-section-title">Gerenciamento de Usuários</div>
+              <div class="config-card-sub">Pesquise, filtre e gerencie permissões sem ocupar a tela inteira.</div>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="abrirModalNovoUsuario()">+ Novo Usuário</button>
+          </div>
+
+          <div class="config-user-stats">
+            <div class="config-user-stat"><span>Total</span><strong id="config-users-stat-total">0</strong></div>
+            <div class="config-user-stat"><span>Administradores</span><strong id="config-users-stat-admin">0</strong></div>
+            <div class="config-user-stat"><span>Usuários</span><strong id="config-users-stat-normal">0</strong></div>
+          </div>
+
+          <div class="config-users-toolbar">
+            <div class="config-user-search-wrap">
+              <svg class="ui-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+              <input type="text" id="config-users-search" placeholder="Buscar por nome ou login..." oninput="authRenderUsuarios()">
+            </div>
+            <select id="config-users-role-filter" class="filter-select" onchange="authRenderUsuarios()">
+              <option value="all">Todos os perfis</option>
+              <option value="adm">ADM Master</option>
+              <option value="admin">Admins</option>
+              <option value="usuario">Usuários</option>
+            </select>
+          </div>
+
+          <div id="users-lista" class="config-users-grid"></div>
         </div>
-        <input type="file" id="import-json" accept=".json" style="display:none" onchange="importarJSON(this)">
-        <div class="sheets-hint" style="margin-top:10px">Use o backup JSON para transferir dados entre computadores sem internet.</div>
       </div>
-      <div class="sheets-config" style="margin-top:16px;border-color:rgba(233,95,50,.4)" id="config-users-section">
-        <div class="sheets-config-title" style="color:var(--accent)">👥 Gerenciamento de Usuários</div>
-        <div class="sheets-hint" style="margin-bottom:14px">Crie usuários e defina quais abas cada um pode acessar.</div>
-        <div id="users-lista" style="margin-bottom:14px"></div>
-        <button class="btn btn-primary btn-sm" onclick="abrirModalNovoUsuario()">+ Novo Usuário</button>
-      </div>
-      <div class="sheets-config maintenance-config-card" id="config-maintenance-section" style="margin-top:16px;display:none">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px">
-          <div class="sheets-config-title" style="margin:0;color:var(--yellow)">🛠 Manutenção do Sistema</div>
-          <span class="maintenance-state-pill" id="maintenance-state-pill">Sistema liberado</span>
-        </div>
-        <div class="sheets-hint" style="margin-bottom:12px">Exclusivo do <strong>ADM Master</strong>. Quando ativado, todos os demais usuários têm o sistema bloqueado imediatamente. Use em atualizações ou se detectar conflito de sincronização.</div>
-        <input type="text" class="sheets-url-input" id="maintenance-message-input" value="Sistema temporariamente em manutenção. Aguarde a liberação do ADM Master." placeholder="Mensagem exibida aos usuários...">
-        <div style="margin-top:12px;display:flex;gap:10px;flex-wrap:wrap">
-          <button class="btn btn-danger btn-sm" id="maintenance-toggle-btn" onclick="ignisToggleMaintenance()">Parar sistema para manutenção</button>
+
+      <div class="config-panel" id="config-panel-diesel" data-config-panel="diesel">
+        <div class="sheets-config config-card-clean config-diesel-card">
+          <div class="config-card-heading">
+            <div><div class="sheets-config-title config-section-title">Preço do Diesel por Operação</div><div class="config-card-sub">Preço de contingência, meta do cliente, coeficiente de rota e túnel por operação.</div></div>
+            <button class="btn btn-primary btn-sm" onclick="dieselPopularOps()">Atualizar operações</button>
+          </div>
+          <div class="sheets-hint config-diesel-hint">O IGNIS rejeita Diesel abaixo de R$ 5,00/L e acima de R$ 15,00/L. Gasolina e Etanol importados são tratados separadamente conforme o combustível do registro.</div>
+          <div id="diesel-preco-lista" class="config-diesel-list"></div>
         </div>
       </div>
-      <div class="sheets-config" id="config-danger-zone" style="margin-top:16px;border-color:rgba(239,68,68,.3)">
-        <div class="sheets-config-title" style="color:var(--red)">⚠️ Zona de Perigo</div>
-        <button class="btn btn-danger btn-sm" onclick="verificarSenha(limparTodosDados)">Reset completo (local + Firebase)</button>
-      </div>
-      <div class="sheets-config" style="margin-top:16px;border-color:rgba(245,158,11,.4)">
-        <div class="sheets-config-title">Preço do Diesel por Operação</div>
-        <div class="sheets-hint" style="margin-bottom:14px">Preço de contingência para registros antigos sem valor por litro. O IGNIS rejeita Diesel abaixo de R$ 5,00/L e valores acima de R$ 15,00/L. Gasolina e Etanol importados são tratados separadamente pelo combustível do registro.</div>
-        <div id="diesel-preco-lista" style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px;max-height:300px;overflow-y:auto"></div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn btn-primary btn-sm" onclick="dieselPopularOps()">Atualizar operações</button>
+
+      <div class="config-panel" id="config-panel-sistema" data-config-panel="sistema">
+        <div class="config-two-col config-system-grid">
+          <div class="sheets-config maintenance-config-card" id="config-maintenance-section" style="display:none">
+            <div class="config-card-heading">
+              <div><div class="sheets-config-title" style="color:var(--yellow)">Manutenção do Sistema</div><div class="config-card-sub">Bloqueie temporariamente o acesso dos demais usuários.</div></div>
+              <span class="maintenance-state-pill" id="maintenance-state-pill">Sistema liberado</span>
+            </div>
+            <div class="sheets-hint" style="margin-bottom:12px">Exclusivo do <strong>ADM Master</strong>. Use em atualizações ou quando detectar conflito de sincronização.</div>
+            <input type="text" class="sheets-url-input" id="maintenance-message-input" value="Sistema temporariamente em manutenção. Aguarde a liberação do ADM Master." placeholder="Mensagem exibida aos usuários...">
+            <div class="config-actions-row">
+              <button class="btn btn-danger btn-sm" id="maintenance-toggle-btn" onclick="ignisToggleMaintenance()">Parar sistema para manutenção</button>
+            </div>
+          </div>
+
+          <div class="sheets-config config-danger-card" id="config-danger-zone">
+            <div class="config-card-heading">
+              <div><div class="sheets-config-title" style="color:var(--red)">Zona de Perigo</div><div class="config-card-sub">Ações irreversíveis e exclusivas do ADM Master.</div></div>
+              <span class="config-icon-badge danger">!</span>
+            </div>
+            <div class="sheets-hint" style="margin-bottom:14px">O reset completo remove os dados locais e também a base sincronizada. Use apenas quando realmente necessário.</div>
+            <button class="btn btn-danger btn-sm" onclick="verificarSenha(limparTodosDados)">Reset completo (local + Firebase)</button>
+          </div>
         </div>
       </div>
     </div>
@@ -5376,6 +5501,11 @@ function loginEntrarApp() {
   if (dangerZone) dangerZone.style.display = u.role === 'adm' ? 'block' : 'none';
   const maintenanceSection = document.getElementById('config-maintenance-section');
   if (maintenanceSection) maintenanceSection.style.display = u.role === 'adm' ? 'block' : 'none';
+  const usersTabBtn = document.getElementById('config-tab-users-btn');
+  if (usersTabBtn) usersTabBtn.style.display = canManage ? '' : 'none';
+  const systemTabBtn = document.getElementById('config-tab-system-btn');
+  if (systemTabBtn) systemTabBtn.style.display = u.role === 'adm' ? '' : 'none';
+  configRestoreTab();
   ignisStartMaintenanceWatch();
   ignisRenderMaintenanceState();
   // Inicia app normalmente. O login já está concluído; armazenamento/sincronização
@@ -5462,20 +5592,35 @@ function authResumoPermissoesUsuario(usr){
   const perms=Array.isArray(usr?.perms)?usr.perms:[];
   const pageIds=new Set(AUTH_PAGES.map(p=>p.id));
   const abas=perms.filter(p=>pageIds.has(p)).length;
-  const acoes=[];
-  if(perms.includes('motoristas_idt_importar'))acoes.push('importar IDT');
-  if(perms.includes('motoristas_idt_excluir'))acoes.push('excluir IDT');
-  if(perms.includes('motoristas_gobrax_historico'))acoes.push('histórico Gobrax');
-  if(perms.includes('motoristas_gobrax_importar'))acoes.push('importar Gobrax');
-  if(perms.includes('motoristas_gobrax_excluir'))acoes.push('excluir Gobrax');
-  if(perms.includes('motoristas_gobrax_faixas'))acoes.push('faixas Gobrax');
-  if(perms.includes('motoristas_eficiencia_faixas'))acoes.push('faixas eficiência geral');
-  if(perms.includes('motoristas_vinculos'))acoes.push('vincular nomes');
-  if(perms.includes('motoristas_gerenciar'))acoes.push('gerenciar motoristas PX');
-  if(perms.includes('motoristas_financeiro_ver'))acoes.push('ver financeiro PX');
-  const acaoTxt=acoes.length?` · <span style="color:#93b7df">${acoes.join(' + ')}</span>`:'';
-  const manage=perms.includes('manage_users')?'<span style="color:var(--yellow)"> · gerencia usuários</span>':'';
-  return `${abas} aba(s)${acaoTxt}${manage}`;
+  const extraPerms=new Set([
+    'motoristas_idt_importar','motoristas_idt_excluir','motoristas_gobrax_historico',
+    'motoristas_gobrax_importar','motoristas_gobrax_excluir','motoristas_gobrax_faixas',
+    'motoristas_eficiencia_faixas','motoristas_vinculos','motoristas_gerenciar','motoristas_financeiro_ver'
+  ]);
+  const extras=perms.filter(p=>extraPerms.has(p)).length;
+  return {abas,extras,manage:perms.includes('manage_users')};
+}
+
+function configSetTab(tab,btn){
+  const target=document.querySelector(`[data-config-panel="${tab}"]`);
+  if(!target) return;
+  document.querySelectorAll('.config-panel').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.config-tab').forEach(b=>b.classList.remove('active'));
+  target.classList.add('active');
+  const activeBtn=btn||document.querySelector(`[data-config-tab="${tab}"]`);
+  if(activeBtn) activeBtn.classList.add('active');
+  try{sessionStorage.setItem('ignis_config_tab',tab);}catch(e){}
+  if(tab==='usuarios') authRenderUsuarios();
+  if(tab==='diesel') dieselPopularOps();
+  if(tab==='sistema') ignisRenderMaintenanceState();
+}
+
+function configRestoreTab(){
+  let tab='geral';
+  try{tab=sessionStorage.getItem('ignis_config_tab')||'geral';}catch(e){}
+  const btn=document.querySelector(`[data-config-tab="${tab}"]`);
+  if(btn && btn.style.display!=='none') configSetTab(tab,btn);
+  else configSetTab('geral',document.querySelector('[data-config-tab="geral"]'));
 }
 
 async function authRenderUsuarios(usersOverride) {
@@ -5484,20 +5629,74 @@ async function authRenderUsuarios(usersOverride) {
   if (!lista) return;
   const u = window._authUser;
   const isAdm = u?.role === 'adm';
-  const entries = Object.entries(users);
-  if (!entries.length) { lista.innerHTML = '<div style="font-size:13px;color:var(--text3)">Nenhum usuário cadastrado.</div>'; return; }
-  lista.innerHTML = entries.map(([id, usr]) => `
-    <div class="user-row">
-      <div class="user-avatar" style="flex-shrink:0">${(usr.nome||id).charAt(0).toUpperCase()}</div>
-      <div style="flex:1">
-        <div class="user-name">${usr.nome||id} <span style="font-size:11px;color:var(--text3);font-family:monospace">(${id})</span></div>
-        <div style="font-size:11px;color:var(--text3);margin-top:2px">${authResumoPermissoesUsuario(usr)}</div>
-      </div>
-      <span class="user-role-badge ${usr.role==='adm'?'adm':usr.role==='admin'?'adm':''}">${usr.role==='adm'?'ADM Master':usr.role==='admin'?'Admin':'Usuário'}</span>
-      ${u?.id !== id && (isAdm || usr.role !== 'adm') ? `<button class="btn btn-secondary btn-sm icon-action-btn" onclick="abrirModalEditarUsuario('${id}')" title="Editar usuário"><svg class="ui-icon" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/></svg></button>
-      <button class="btn btn-danger btn-sm icon-action-btn" onclick="confirmarExcluirUsuario('${id}')" title="Excluir usuário"><svg class="ui-icon" viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M7 7l1 14h8l1-14"/></svg></button>` : `<span style="font-size:11px;color:var(--text3)">(você)</span>`}
-    </div>
-  `).join('');
+  const allEntries = Object.entries(users);
+
+  const statTotal=document.getElementById('config-users-stat-total');
+  const statAdmin=document.getElementById('config-users-stat-admin');
+  const statNormal=document.getElementById('config-users-stat-normal');
+  if(statTotal) statTotal.textContent=allEntries.length;
+  if(statAdmin) statAdmin.textContent=allEntries.filter(([,usr])=>usr?.role==='adm'||usr?.role==='admin').length;
+  if(statNormal) statNormal.textContent=allEntries.filter(([,usr])=>usr?.role!=='adm'&&usr?.role!=='admin').length;
+
+  const search=(document.getElementById('config-users-search')?.value||'').trim().toLowerCase();
+  const roleFilter=document.getElementById('config-users-role-filter')?.value||'all';
+  const roleRank={adm:0,admin:1,usuario:2};
+  const normalizedRole=usr=>usr?.role==='adm'?'adm':usr?.role==='admin'?'admin':'usuario';
+
+  const entries=allEntries
+    .filter(([id,usr])=>{
+      const role=normalizedRole(usr);
+      if(roleFilter!=='all'&&role!==roleFilter) return false;
+      if(!search) return true;
+      return `${usr?.nome||''} ${id} ${role}`.toLowerCase().includes(search);
+    })
+    .sort((a,b)=>{
+      if(a[0]===u?.id) return -1;
+      if(b[0]===u?.id) return 1;
+      const ra=roleRank[normalizedRole(a[1])]??9, rb=roleRank[normalizedRole(b[1])]??9;
+      if(ra!==rb) return ra-rb;
+      return String(a[1]?.nome||a[0]).localeCompare(String(b[1]?.nome||b[0]),'pt-BR');
+    });
+
+  if (!allEntries.length) {
+    lista.innerHTML = '<div class="config-users-empty">Nenhum usuário cadastrado.</div>';
+    return;
+  }
+  if (!entries.length) {
+    lista.innerHTML = '<div class="config-users-empty">Nenhum usuário encontrado com esses filtros.</div>';
+    return;
+  }
+
+  lista.innerHTML = entries.map(([id, usr]) => {
+    const resumo=authResumoPermissoesUsuario(usr);
+    const role=normalizedRole(usr);
+    const roleLabel=role==='adm'?'ADM Master':role==='admin'?'Admin':'Usuário';
+    const current=u?.id===id;
+    const canEdit=!current && (isAdm || usr.role !== 'adm');
+    return `
+      <div class="config-user-card ${current?'is-current':''}">
+        <div class="config-user-main">
+          <div class="user-avatar">${(usr.nome||id).charAt(0).toUpperCase()}</div>
+          <div class="config-user-ident">
+            <div class="user-name" title="${usr.nome||id}">${usr.nome||id}</div>
+            <div class="config-user-login" title="${id}">${id}</div>
+          </div>
+          <span class="user-role-badge ${role==='adm'||role==='admin'?'adm':''}">${roleLabel}</span>
+        </div>
+        <div class="config-user-access">
+          <span class="config-access-chip">${resumo.abas} aba${resumo.abas===1?'':'s'}</span>
+          ${resumo.extras?`<span class="config-access-chip extra">${resumo.extras} ação${resumo.extras===1?'':'ões'} extra${resumo.extras===1?'':'s'}</span>`:''}
+          ${resumo.manage?'<span class="config-access-chip manage">Gerencia usuários</span>':''}
+        </div>
+        <div class="config-user-footer">
+          <span class="config-user-you">${current?'Sua conta':''}</span>
+          <div class="config-user-actions">
+            ${canEdit?`<button class="btn btn-secondary btn-sm icon-action-btn" onclick="abrirModalEditarUsuario('${id}')" title="Editar usuário"><svg class="ui-icon" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/></svg></button>
+            <button class="btn btn-danger btn-sm icon-action-btn" onclick="confirmarExcluirUsuario('${id}')" title="Excluir usuário"><svg class="ui-icon" viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M7 7l1 14h8l1-14"/></svg></button>`:''}
+          </div>
+        </div>
+      </div>`;
+  }).join('');
 }
 
 function abrirModalNovoUsuario() {
@@ -6067,7 +6266,10 @@ function showPage(page,el) {
     const u = window._authUser;
     const canManage = u?.role === 'adm' || u?.role === 'admin';
     if(canManage) authRenderUsuarios();
+    configRestoreTab();
     _markPageClean(page);
+  } else if(page==='config') {
+    configRestoreTab();
   }
   if(page==='excluir' && precisaAtualizar) { onShowExcluir(); _markPageClean(page); }
   if(page==='arla' && precisaAtualizar) { arlaOnShow(); _markPageClean(page); }
