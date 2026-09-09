@@ -14682,6 +14682,9 @@ function kmComparar() {
   html += kpiExec('KM O2P Total', fmtKm(totaisGerais.kmO2PTotal), fmtKm(totaisGerais.kmO2PCruzado)+' cruzado · '+fmtKm(totaisGerais.kmO2PSo)+' só O2P', 'var(--accent)');
   html += kpiExec('KM Produtivo Total', fmtKm(totaisGerais.kmProdTotal), fmtKm(totaisGerais.kmProdCruzado)+' cruzado · '+fmtKm(totaisGerais.kmProdSo)+' só cliente', 'var(--accent2)');
   html += kpiExec('Diferença Total', (totaisGerais.diff>=0?'+':'')+fmtKm(totaisGerais.diff), 'considera todas as placas dos dois arquivos', totaisGerais.diff>=0?'var(--green)':'var(--red)');
+  const qtdPlacasO2P = Object.keys(sistema || {}).length;
+  const diffMediaPorPlacaO2P = qtdPlacasO2P > 0 ? totaisGerais.diff / qtdPlacasO2P : 0;
+  html += kpiExec('Diferença / placa O2P', (diffMediaPorPlacaO2P>=0?'+':'')+fmtKm(diffMediaPorPlacaO2P), fmtKm(totaisGerais.diff)+' ÷ '+qtdPlacasO2P+' placa'+(qtdPlacasO2P===1?'':'s')+' O2P', diffMediaPorPlacaO2P>=0?'var(--green)':'var(--red)');
   html += kpiExec('OK', ok.length + '', 'dentro dos limites', 'var(--green)');
   const opsComMargem = Object.keys(margensOp).length; html += kpiExec('⚠️ Atenção', atencao.length + '', opsComMargem ? 'margem por operação configurada' : 'margem baixa (' + margemMinGlobal + '–' + margemAtencaoGlobal + '%)', 'var(--yellow)');
   html += kpiExec('🔴 Alerta', alertas.length + '', 'KM O2P abaixo do Produtivo', 'var(--red)');
