@@ -4716,6 +4716,11 @@ async function syncFromFirebase() {
       window._firebaseLightBaseline = _ignisCaptureLightState(state);
       try { localStorage.removeItem('ignis_pending_cloud_save'); } catch(e) {}
 
+      // Migração segura: versões anteriores podiam criar dois cards com o mesmo
+      // nome de semana quando o novo arquivo começava depois do último dia já salvo.
+      // Une somente períodos da mesma semana que NÃO possuem datas sobrepostas.
+      const reparoSemanasDuplicadas = ignisConsolidarSemanasDuplicadasNaoSobrepostas();
+
       if(!Array.isArray(state.medidorAnomalias)) state.medidorAnomalias=[];
       if(!Array.isArray(state.eficienciaAnomalias)) state.eficienciaAnomalias=[];
       if(!Number.isFinite(Number(state.eficienciaAnomaliaLimite))) state.eficienciaAnomaliaLimite=140;
@@ -4736,6 +4741,20 @@ async function syncFromFirebase() {
         }
         localStorage.setItem('fueltracker_v3', JSON.stringify(lean));
       } catch(e) { console.warn('localStorage quota ignorada (dados no Firebase):', e); }
+
+      if(reparoSemanasDuplicadas.changed){
+        const reparoSalvo = await saveState({
+          immediate:true,
+          mode:'fuel',
+          changedPeriodIds:reparoSemanasDuplicadas.changedPeriodIds,
+          removedPeriodIds:reparoSemanasDuplicadas.removedPeriodIds
+        });
+        if(reparoSalvo){
+          showToast(`${reparoSemanasDuplicadas.gruposMesclados} semana(s) duplicada(s) consolidada(s) automaticamente.`, 'success');
+        }else{
+          console.warn('IGNIS: semanas duplicadas foram consolidadas nesta sessão, mas o Firebase ainda não confirmou a correção.');
+        }
+      }
 
       // v38: IndexedDB é apenas cache. No Safari uma transação grande pode demorar
       // muito e NÃO pode manter a interface inteira em "Sincronizando...".
@@ -8061,6 +8080,95 @@ function openImport() {
   if (modal) modal.classList.add('open');
 }
 
+
+// ── NORMALIZAÇÃO DE SEMANAS ──────────────────────────────────────────────────
+// Uma semana do IGNIS é identificada pela posição Seg→Dom dentro do mês.
+// Importações parciais de dias diferentes da mesma semana devem cair no MESMO período.
+function ignisSemanaKeyData(data){
+  const d = data instanceof Date ? new Date(data) : new Date(String(data||'')+'T00:00:00');
+  if(Number.isNaN(d.getTime())) return '';
+  const primeiroDia = new Date(d.getFullYear(), d.getMonth(), 1);
+  const deslocamento = (primeiroDia.getDay() + 6) % 7; // segunda=0 ... domingo=6
+  const numero = Math.floor((d.getDate() - 1 + deslocamento) / 7) + 1;
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-W${numero}`;
+}
+function ignisSemanaKeyIso(iso){
+  const m = String(iso||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if(!m) return '';
+  return ignisSemanaKeyData(new Date(Number(m[1]), Number(m[2])-1, Number(m[3])));
+}
+function ignisPeriodoRangeSeguro(p){
+  if(!p?.dataIni || !p?.dataFim) return null;
+  const ini = new Date(String(p.dataIni)+'T00:00:00');
+  const fim = new Date(String(p.dataFim)+'T23:59:59.999');
+  if(Number.isNaN(ini.getTime()) || Number.isNaN(fim.getTime())) return null;
+  return {ini,fim};
+}
+function ignisRangesSobrepoem(a,b){ return !!(a&&b&&a.ini<=b.fim&&b.ini<=a.fim); }
+
+// Corrige automaticamente o caso que gerava duas "Semana 2", "Semana 3", etc.
+// A consolidação automática só ocorre quando os intervalos NÃO se sobrepõem,
+// portanto nunca soma duas importações que possam representar os mesmos dias.
+function ignisConsolidarSemanasDuplicadasNaoSobrepostas(){
+  const semanas = state?.semanas || {};
+  const grupos = new Map();
+  Object.entries(semanas).forEach(([id,p])=>{
+    const key = ignisSemanaKeyIso(p?.dataIni);
+    const range = ignisPeriodoRangeSeguro(p);
+    if(!key || !range) return;
+    if(!grupos.has(key)) grupos.set(key,[]);
+    grupos.get(key).push({id,p,range});
+  });
+
+  const changedPeriodIds = [], removedPeriodIds = [];
+  let gruposMesclados = 0, registrosMovidos = 0;
+
+  grupos.forEach(items=>{
+    if(items.length < 2) return;
+    items.sort((a,b)=>a.range.ini-b.range.ini);
+
+    // Se houver qualquer sobreposição, não mexe automaticamente: evita duplicar
+    // ou apagar dados quando duas importações cobrem os mesmos dias.
+    for(let i=0;i<items.length;i++){
+      for(let j=i+1;j<items.length;j++){
+        if(ignisRangesSobrepoem(items[i].range,items[j].range)) return;
+      }
+    }
+
+    const keep = items[0];
+    const ids = new Set(items.map(x=>String(x.id)));
+    const drop = items.slice(1);
+    const dataIni = items.map(x=>String(x.p.dataIni||'')).filter(Boolean).sort()[0];
+    const dataFim = items.map(x=>String(x.p.dataFim||'')).filter(Boolean).sort().slice(-1)[0];
+    const importedAt = [...items].reverse().find(x=>x.p?.importedAt)?.p?.importedAt || keep.p?.importedAt || new Date().toLocaleDateString('pt-BR');
+
+    (state.abastecimentos||[]).forEach(a=>{
+      if(ids.has(String(a?.periodoId||'')) && String(a.periodoId)!==String(keep.id)){
+        a.periodoId = keep.id;
+        registrosMovidos++;
+      }
+    });
+
+    const registros = (state.abastecimentos||[]).filter(a=>String(a?.periodoId||'')===String(keep.id));
+    state.semanas[keep.id] = {
+      ...(keep.p||{}),
+      label: keep.p?.label || items.find(x=>x.p?.label)?.p?.label || keep.id,
+      dataIni, dataFim, importedAt,
+      registros, count: registros.length
+    };
+    drop.forEach(x=>{ delete state.semanas[x.id]; removedPeriodIds.push(String(x.id)); });
+    changedPeriodIds.push(String(keep.id));
+    gruposMesclados++;
+  });
+
+  return {
+    changed: gruposMesclados>0,
+    gruposMesclados, registrosMovidos,
+    changedPeriodIds:[...new Set(changedPeriodIds)],
+    removedPeriodIds:[...new Set(removedPeriodIds)]
+  };
+}
+
 function ignisPeriodoAttr(v){return String(v??'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function renderHistoricoPeriodos() {
   const c = document.getElementById('historico-periodos');
@@ -10074,15 +10182,25 @@ async function importarRelatorioDiario(input) {
       const encontrarPeriodoDoBloco=(b)=>{
         const bi=new Date(b.inicio);bi.setHours(0,0,0,0);
         const bf=new Date(b.fim);bf.setHours(23,59,59,999);
-        const candidatos=periodosExistentes.filter(x=>x.ini<=bf&&x.fim>=bi);
+        const weekKey=ignisSemanaKeyData(bi);
+
+        // PRIMEIRO procura pela semana-calendário. Assim, por exemplo, um arquivo
+        // somente de 10/09 encontra a Semana 2 já existente de 07/09–09/09.
+        let candidatos=periodosExistentes.filter(x=>ignisSemanaKeyIso(x.p?.dataIni)===weekKey);
+
+        // Fallback legado: períodos antigos sem chave semanal confiável ainda podem
+        // ser reconhecidos pela interseção de datas.
+        if(!candidatos.length)candidatos=periodosExistentes.filter(x=>x.ini<=bf&&x.fim>=bi);
         if(!candidatos.length)return null;
-        // Prioriza período que contém todo o bloco importado; em seguida o maior overlap.
+
+        // Quando houver mais de um candidato legado, prefere o que mais se sobrepõe.
         candidatos.sort((x,y)=>{
           const xc=x.ini<=bi&&x.fim>=bf?1:0,yc=y.ini<=bi&&y.fim>=bf?1:0;
           if(xc!==yc)return yc-xc;
           const xo=Math.max(0,Math.min(x.fim,bf)-Math.max(x.ini,bi));
           const yo=Math.max(0,Math.min(y.fim,bf)-Math.max(y.ini,bi));
-          return yo-xo;
+          if(xo!==yo)return yo-xo;
+          return x.ini-y.ini;
         });
         return candidatos[0];
       };
@@ -10098,8 +10216,9 @@ async function importarRelatorioDiario(input) {
 
 ${lista}
 
-O sistema vai atualizar somente: ${opsTxt}.
-As outras operações dessas semanas serão preservadas.
+O sistema vai consolidar os dados na semana correta.
+Quando forem dias novos da mesma semana, eles serão acrescentados sem apagar os dias anteriores.
+Quando houver sobreposição de datas, somente ${opsTxt} será(ão) atualizado(s), preservando as demais operações.
 
 Continuar?`)){
           input.value='';return;
@@ -10113,6 +10232,8 @@ Continuar?`)){
       const newPeriodIds=[];
       const periodosMarcados=new Set();
       let semanasMescladas=0;
+      let semanasComplementadas=0;
+      let semanasAtualizadasPorOperacao=0;
       let registrosPreservados=0;
       let registrosSubstituidos=0;
 
@@ -10129,10 +10250,13 @@ Continuar?`)){
         const numSemana = numeroSemanaNoMes(b.inicio);
         const nomePeriodoCalculado = `Semana ${numSemana} · ${mesLabel}. de ${b.inicio.getFullYear()}`;
         const existente = b._periodoExistente || null;
-        const dIni = existente?.p?.dataIni || dIniImport;
-        const dFim = existente?.p?.dataFim || dFimImport;
+        const antigoIni = existente?.p?.dataIni || '';
+        const antigoFim = existente?.p?.dataFim || '';
+        const dIni = existente ? [antigoIni,dIniImport].filter(Boolean).sort()[0] : dIniImport;
+        const dFim = existente ? [antigoFim,dFimImport].filter(Boolean).sort().slice(-1)[0] : dFimImport;
         const nomePeriodo = existente?.p?.label || nomePeriodoCalculado;
         const periodoId = existente?.id || (nomePeriodoCalculado.toLowerCase().replace(/[^a-z0-9]/g,'_').replace(/_+/g,'_').substring(0,40) + '_' + Date.now() + '_' + semanasNovas);
+        const complementoSemSobreposicao = !!(existente && antigoIni && antigoFim && (dFimImport < antigoIni || dIniImport > antigoFim));
 
         const dadosSemana = [];
         grupos.forEach(grupoKey => {
@@ -10166,8 +10290,8 @@ Continuar?`)){
             const precoPonderado = p._litrosPreco>0 ? (p._custoComb/p._litrosPreco) : 0;
             const operacaoMista = false; // importação nova já foi separada por operação acima
             const coberturaPrecoSemana = p.litros>0 ? p._litrosPreco/p.litros : 0;
-            const motoristasPeriodo=Object.values(p._motoristas||{}).map(m=>({nome:m.nome,matricula:m.matricula||'',key:m.key,litros:Number(m.litros)||0,km:Number(m.km)||0,metaNum:Number(m.metaNum)||0,metaLitros:Number(m.metaLitros)||0,registros:Number(m.registros)||0,primeiraData:m.primeiraData||dIni,ultimaData:m.ultimaData||dFim,idealLitros:Number(m.idealLitros)||0,litrosComMeta:Number(m.litrosComMeta)||0,custoReal:Number(m.custoReal)||0,litrosComPreco:Number(m.litrosComPreco)||0,impactoR:Number(m.impactoR)||0,litrosFinanceiroExato:Number(m.litrosFinanceiroExato)||0,financeiroV:4,dias:Object.values(m._dias||{}).sort((a,b)=>String(a.data).localeCompare(String(b.data))).map(d=>({data:String(d.data||''),km:Number(d.km)||0,litros:Number(d.litros)||0,metaNum:Number(d.metaNum)||0,metaLitros:Number(d.metaLitros)||0,registros:Number(d.registros)||0,idealLitros:Number(d.idealLitros)||0,litrosComMeta:Number(d.litrosComMeta)||0,custoReal:Number(d.custoReal)||0,litrosComPreco:Number(d.litrosComPreco)||0,impactoR:Number(d.impactoR)||0,litrosFinanceiroExato:Number(d.litrosFinanceiroExato)||0,financeiroV:4}))}));
-            const entry = { placa, data:dIni, litros:p.litros, horas:p.kmReal, operador:'', operacao:p.operacao, modelo:p.modelo, tipo:p.tipoVeic, tipoIgnis, periodoId, metaIdeal:p.mediaIdeal||0, combustivel:combustivelSemana, precoLitro:(combustivelSemana&&combustivelSemana!=='MISTO'&&coberturaPrecoSemana>=0.999&&ignisPrecoCombustivelValido(combustivelSemana,precoPonderado))?precoPonderado:0, precoCobertura:coberturaPrecoSemana, operacaoMista, operacoesPeriodo:opsSemana, motoristas:motoristasPeriodo };
+            const motoristasPeriodo=Object.values(p._motoristas||{}).map(m=>({nome:m.nome,matricula:m.matricula||'',key:m.key,litros:Number(m.litros)||0,km:Number(m.km)||0,metaNum:Number(m.metaNum)||0,metaLitros:Number(m.metaLitros)||0,registros:Number(m.registros)||0,primeiraData:m.primeiraData||dIniImport,ultimaData:m.ultimaData||dFimImport,idealLitros:Number(m.idealLitros)||0,litrosComMeta:Number(m.litrosComMeta)||0,custoReal:Number(m.custoReal)||0,litrosComPreco:Number(m.litrosComPreco)||0,impactoR:Number(m.impactoR)||0,litrosFinanceiroExato:Number(m.litrosFinanceiroExato)||0,financeiroV:4,dias:Object.values(m._dias||{}).sort((a,b)=>String(a.data).localeCompare(String(b.data))).map(d=>({data:String(d.data||''),km:Number(d.km)||0,litros:Number(d.litros)||0,metaNum:Number(d.metaNum)||0,metaLitros:Number(d.metaLitros)||0,registros:Number(d.registros)||0,idealLitros:Number(d.idealLitros)||0,litrosComMeta:Number(d.litrosComMeta)||0,custoReal:Number(d.custoReal)||0,litrosComPreco:Number(d.litrosComPreco)||0,impactoR:Number(d.impactoR)||0,litrosFinanceiroExato:Number(d.litrosFinanceiroExato)||0,financeiroV:4}))}));
+            const entry = { placa, data:dIniImport, litros:p.litros, horas:p.kmReal, operador:'', operacao:p.operacao, modelo:p.modelo, tipo:p.tipoVeic, tipoIgnis, periodoId, metaIdeal:p.mediaIdeal||0, combustivel:combustivelSemana, precoLitro:(combustivelSemana&&combustivelSemana!=='MISTO'&&coberturaPrecoSemana>=0.999&&ignisPrecoCombustivelValido(combustivelSemana,precoPonderado))?precoPonderado:0, precoCobertura:coberturaPrecoSemana, operacaoMista, operacoesPeriodo:opsSemana, motoristas:motoristasPeriodo };
             dadosSemana.push(entry);
           }
 
@@ -10187,23 +10311,38 @@ Continuar?`)){
         });
 
         if(existente){
-          const opsBloco=new Set(dadosSemana.map(x=>ignisImportNorm(x?.operacao||'')).filter(Boolean));
           const antigosSemana=state.abastecimentos.filter(a=>String(a?.periodoId||'')===String(periodoId));
-          const preservados=antigosSemana.filter(a=>!opsBloco.has(ignisImportNorm(a?.operacao||'')));
-          const substituidos=antigosSemana.length-preservados.length;
+          let preservados=[],substituidos=0,mesclados=[];
+
+          if(complementoSemSobreposicao){
+            // Novo(s) dia(s) da mesma semana, sem sobreposição com o que já estava salvo:
+            // acumula os dados. Ex.: 07–09/09 já importado + arquivo de 10/09.
+            preservados=antigosSemana;
+            substituidos=0;
+            mesclados=[...antigosSemana,...dadosSemana];
+            semanasComplementadas++;
+          }else{
+            // Reimportação que toca datas já existentes: mantém a regra anterior de
+            // substituir somente as operações presentes no arquivo.
+            const opsBloco=new Set(dadosSemana.map(x=>ignisImportNorm(x?.operacao||'')).filter(Boolean));
+            preservados=antigosSemana.filter(a=>!opsBloco.has(ignisImportNorm(a?.operacao||'')));
+            substituidos=antigosSemana.length-preservados.length;
+            mesclados=[...preservados,...dadosSemana];
+            semanasAtualizadasPorOperacao++;
+          }
+
           registrosPreservados+=preservados.length;
           registrosSubstituidos+=substituidos;
 
-          // Limpa só a versão antiga deste período em memória e recompõe com:
-          // demais operações preservadas + operações importadas/corrigidas agora.
           state.abastecimentos=state.abastecimentos.filter(a=>String(a?.periodoId||'')!==String(periodoId));
-          const mesclados=[...preservados,...dadosSemana];
           state.abastecimentos.push(...mesclados);
           state.semanas[periodoId]={...(existente.p||{}),label:nomePeriodo,registros:mesclados,count:mesclados.length,importedAt:new Date().toLocaleDateString('pt-BR'),dataIni:dIni,dataFim:dFim};
 
-          // Remove anomalias antigas somente das operações atualizadas, sem apagar as
-          // anomalias das outras operações que continuam na mesma semana.
-          if(typeof ignisRemoveAnomaliasOperacoesRange==='function')ignisRemoveAnomaliasOperacoesRange(dIni,dFim,dadosSemana.map(x=>x.operacao));
+          // Em complemento de dias, limpa anomalias só do intervalo recém-importado.
+          // Em reimportação sobreposta, mantém o comportamento consolidado do período.
+          const anomIni=complementoSemSobreposicao?dIniImport:dIni;
+          const anomFim=complementoSemSobreposicao?dFimImport:dFim;
+          if(typeof ignisRemoveAnomaliasOperacoesRange==='function')ignisRemoveAnomaliasOperacoesRange(anomIni,anomFim,dadosSemana.map(x=>x.operacao));
 
           if(!periodosMarcados.has(periodoId)){
             newPeriodIds.push(periodoId);
@@ -10277,7 +10416,8 @@ Continuar?`)){
           ${precosAtualizados>0?`<div style="font-size:13px;color:var(--yellow);margin-top:4px">${precosAtualizados} preço(s) de diesel atualizado(s)</div>`:''}
           ${ignoradasExclusao>0?`<div style="font-size:12px;color:var(--text3);margin-top:4px">${ignoradasExclusao} linha(s) ignorada(s) (IEV, manutenção, locação, etc.)</div>`:''}
           ${ignoradasArla>0?`<div style="font-size:12px;color:var(--text3);margin-top:4px">${ignoradasArla} linha(s) de Arla ignorada(s) — tem controle dedicado na aba Arla 32</div>`:''}
-          ${semanasMescladas>0?`<div style="font-size:12px;color:var(--accent);margin-top:4px">${semanasMescladas} semana(s) atualizada(s) por operação · ${registrosPreservados} registro(s) de outras operações preservado(s) · ${registrosSubstituidos} registro(s) antigo(s) da operação substituído(s)</div>`:''}
+          ${semanasComplementadas>0?`<div style="font-size:12px;color:var(--accent);margin-top:4px">${semanasComplementadas} semana(s) complementada(s) com novo(s) dia(s), sem apagar os dados anteriores</div>`:''}
+          ${semanasAtualizadasPorOperacao>0?`<div style="font-size:12px;color:var(--accent);margin-top:4px">${semanasAtualizadasPorOperacao} semana(s) atualizada(s) por operação · ${registrosPreservados} registro(s) preservado(s) · ${registrosSubstituidos} registro(s) antigo(s) substituído(s)</div>`:''}
           ${anomaliasEficienciaImport.length>0?`<div style="font-size:12px;color:var(--yellow);margin-top:4px">${anomaliasEficienciaImport.filter(x=>x.faixa==='alta').length} alta(s) · ${anomaliasEficienciaImport.filter(x=>x.faixa==='baixa').length} baixa(s) de combustível enviadas para Anomalias</div>`:''}
         </div>`;
       showToast(`Importação confirmada: ${semanasNovas} semana(s) nova(s), ${semanasMescladas} atualizada(s) e ${registrosTotais} registro(s) do arquivo processado(s).`, 'success');
