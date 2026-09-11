@@ -1885,6 +1885,49 @@ input[type="checkbox"]:indeterminate{background:rgba(233,95,50,.2);border-color:
 #ignis-maintenance-master-banner.open{display:block}
 </style>
 
+<style id="ignis-postos-css">
+/* IGNIS · Rede de Postos */
+#page-postos .postos-shell{display:grid;gap:14px}
+#page-postos .postos-hero{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;flex-wrap:wrap}
+#page-postos .postos-beta{display:inline-flex;align-items:center;gap:7px;padding:7px 10px;border:1px solid rgba(255,107,44,.22);background:rgba(255,107,44,.08);border-radius:9px;color:#f39a76;font-size:11px;font-weight:700}
+#page-postos .postos-toolbar{background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:14px;box-shadow:0 14px 34px rgba(0,0,0,.10)}
+#page-postos .postos-modes{display:flex;gap:6px;margin-bottom:12px;padding:4px;background:rgba(255,255,255,.025);border:1px solid var(--border);border-radius:10px;width:max-content;max-width:100%}
+#page-postos .postos-mode-btn{border:0;background:transparent;color:var(--text2);padding:8px 12px;border-radius:8px;font:inherit;font-size:12px;font-weight:700;cursor:pointer;transition:.18s}
+#page-postos .postos-mode-btn.active{background:rgba(255,107,44,.12);color:var(--accent);box-shadow:inset 0 0 0 1px rgba(255,107,44,.2)}
+#page-postos .postos-fields{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:10px;align-items:end}
+#page-postos .postos-field{display:flex;flex-direction:column;gap:5px;min-width:0}
+#page-postos .postos-field label{font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--text3);font-weight:800}
+#page-postos .postos-field select,#page-postos .postos-field input{width:100%;height:38px;background:var(--bg3);border:1px solid var(--border);border-radius:9px;color:var(--text);padding:0 11px;font-family:'DM Sans',sans-serif;font-size:12px;outline:none;transition:.18s;box-sizing:border-box}
+#page-postos .postos-field select:focus,#page-postos .postos-field input:focus{border-color:rgba(255,107,44,.48);box-shadow:0 0 0 3px rgba(255,107,44,.08)}
+#page-postos .postos-field.span-2{grid-column:span 2}#page-postos .postos-field.span-3{grid-column:span 3}#page-postos .postos-field.span-4{grid-column:span 4}
+#page-postos .postos-search-btn{height:38px;border:1px solid rgba(255,107,44,.35);background:var(--accent);color:#fff;border-radius:9px;padding:0 16px;font:inherit;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap;transition:.18s}
+#page-postos .postos-search-btn:hover{filter:brightness(1.06);transform:translateY(-1px)}
+#page-postos .postos-status{border:1px solid var(--border);background:rgba(255,255,255,.018);border-radius:11px;padding:10px 12px;font-size:11px;color:var(--text2);display:flex;flex-direction:column;gap:7px}
+#page-postos .postos-status.success{border-color:rgba(34,197,94,.2);background:rgba(34,197,94,.045)}#page-postos .postos-status.error{border-color:rgba(239,68,68,.25);background:rgba(239,68,68,.05);color:#fca5a5}#page-postos .postos-status.loading{border-color:rgba(255,107,44,.22);background:rgba(255,107,44,.04)}
+#page-postos .postos-progress{height:4px;border-radius:999px;background:rgba(255,255,255,.055);overflow:hidden;display:none}#page-postos .postos-progress>i{display:block;height:100%;width:0;background:var(--accent);border-radius:999px;transition:width .25s}
+#page-postos .postos-main-grid{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(310px,.75fr);gap:14px;min-height:590px}
+#page-postos .postos-map-card,#page-postos .postos-list-card{background:var(--bg2);border:1px solid var(--border);border-radius:14px;overflow:hidden;box-shadow:0 14px 34px rgba(0,0,0,.10)}
+#page-postos .postos-map-head,#page-postos .postos-list-head{height:48px;padding:0 14px;display:flex;align-items:center;justify-content:space-between;gap:10px;border-bottom:1px solid var(--border)}
+#page-postos .postos-map-head b,#page-postos .postos-list-head b{font-size:12px;color:var(--text)}
+#page-postos .postos-map-head span,#page-postos .postos-list-head span{font-size:10px;color:var(--text3)}
+#page-postos #postos-map{height:540px;background:#111820}
+#page-postos .postos-list-card{display:flex;flex-direction:column;min-height:590px}
+#page-postos .postos-results{padding:10px;display:flex;flex-direction:column;gap:8px;overflow:auto;max-height:520px;flex:1}
+#page-postos .postos-result-card{width:100%;text-align:left;border:1px solid var(--border);background:rgba(255,255,255,.018);border-radius:10px;padding:10px;color:var(--text);cursor:pointer;transition:.18s;font-family:'DM Sans',sans-serif}
+#page-postos .postos-result-card:hover,#page-postos .postos-result-card.selected{border-color:rgba(255,107,44,.3);background:rgba(255,107,44,.055);transform:translateY(-1px)}
+#page-postos .postos-result-top{display:flex;align-items:flex-start;gap:9px}.postos-result-index{width:22px;height:22px;min-width:22px;display:flex;align-items:center;justify-content:center;border-radius:7px;background:rgba(255,107,44,.1);color:var(--accent);font-size:9px;font-weight:900}
+#page-postos .postos-result-top b{display:block;font-size:11.5px;line-height:1.3}#page-postos .postos-result-top small{display:block;color:var(--text3);font-size:9.5px;margin-top:2px}
+#page-postos .postos-result-address{font-size:10px;color:var(--text2);margin:7px 0 5px;line-height:1.35}.postos-result-metric{font-size:10px;color:#f39a76;font-weight:750}
+#page-postos .postos-empty{min-height:180px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:4px;color:var(--text3);padding:22px}.postos-empty b{font-size:12px;color:var(--text2)}.postos-empty span{font-size:10px}
+#page-postos .postos-footer-actions{padding:10px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+#page-postos .postos-mini-btn{border:1px solid var(--border);background:var(--bg3);color:var(--text2);border-radius:8px;padding:7px 10px;font:inherit;font-size:10px;font-weight:700;cursor:pointer}.postos-mini-btn:hover{border-color:rgba(255,107,44,.3);color:var(--text)}
+#page-postos #postos-load-more{display:none;border-color:rgba(255,107,44,.3);color:var(--accent)}
+#page-postos .postos-note{font-size:10px;color:var(--text3);line-height:1.45}
+#page-postos .leaflet-container{font-family:'DM Sans',sans-serif}.postos-popup{font-family:'DM Sans',sans-serif;color:#17202a;min-width:230px}.postos-popup>b{font-size:13px;display:block;margin-bottom:3px}.postos-popup>span{font-size:10px;color:#6b7280;display:block;margin-bottom:7px}.postos-popup>div{font-size:11px;line-height:1.35;margin-top:2px}.postos-popup .postos-popup-metric{margin-top:8px;font-weight:800;color:#d85e2e}.postos-popup-actions{display:flex;gap:5px;flex-wrap:wrap;margin-top:9px!important}.postos-popup-actions button{border:0;border-radius:7px;background:#202833;color:white;padding:7px 8px;font-size:10px;font-weight:700;cursor:pointer}.postos-popup-actions button:first-child{background:#ef6b36}
+@media(max-width:1000px){#page-postos .postos-main-grid{grid-template-columns:1fr}#page-postos #postos-map{height:470px}#page-postos .postos-list-card{min-height:0}#page-postos .postos-results{max-height:420px}}
+@media(max-width:720px){#page-postos .postos-fields{grid-template-columns:1fr 1fr}#page-postos .postos-field.span-2,#page-postos .postos-field.span-3,#page-postos .postos-field.span-4{grid-column:span 1}#page-postos .postos-field.postos-wide{grid-column:1/-1}#page-postos .postos-search-btn{width:100%}#page-postos #postos-map{height:420px}#page-postos .postos-toolbar{padding:11px}#page-postos .postos-modes{width:100%}#page-postos .postos-mode-btn{flex:1}}
+
+</style>
 </head>
 <body>
 <div id="ignis-sync-banner" class="ignis-sync-banner" data-state="syncing" role="status" aria-live="polite" aria-atomic="true">
@@ -2000,6 +2043,7 @@ input[type="checkbox"]:indeterminate{background:rgba(233,95,50,.2);border-color:
 
     <div class="nav-section-label">Operação</div>
     <div class="nav-item" onclick="showPage('abastecimentos',this)"><span class="icon"><svg class="ui-icon" viewBox="0 0 24 24"><path d="M3 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18"/><path d="M3 9h12"/><path d="M15 7h2l3 3v8a2 2 0 0 1-4 0v-3"/><path d="M6 5h6"/></svg></span><span class="nav-label">Abastecimentos</span></div>
+    <div class="nav-item" id="nav-postos" onclick="showPage('postos',this);postosOnShow()"><span class="icon"><svg class="ui-icon" viewBox="0 0 24 24"><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></svg></span><span class="nav-label">Rede de Postos</span></div>
     <div class="nav-item" onclick="showPage('maquinas',this)"><span class="icon"><svg class="ui-icon" viewBox="0 0 24 24"><rect x="3" y="5" width="7" height="6" rx="1.5"/><rect x="14" y="5" width="7" height="6" rx="1.5"/><rect x="7" y="15" width="10" height="5" rx="1.5"/></svg></span><span class="nav-label">Frota e Equipamentos</span></div>
     <div class="nav-item" onclick="showPage('motoristas',this)"><span class="icon"><svg class="ui-icon" viewBox="0 0 24 24"><circle cx="12" cy="7" r="3"/><path d="M5 21v-2a7 7 0 0 1 14 0v2"/><path d="M8 14h8"/></svg></span><span class="nav-label">Motoristas</span></div>
 
@@ -2816,6 +2860,61 @@ input[type="checkbox"]:indeterminate{background:rgba(233,95,50,.2);border-color:
     </div>
     <div id="maquinas-grid" class="machines-grid"></div>
   </div>
+
+  <div id="page-postos" class="page">
+    <div class="postos-shell">
+      <div class="page-header postos-hero">
+        <div class="page-header-title">
+          <div class="page-title page-title-icon"><span class="title-icon"><svg class="ui-icon" viewBox="0 0 24 24"><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></svg></span>Rede de Postos</div>
+          <div class="page-sub">Localize postos credenciados por cidade ou encontre opções próximas da sua rota.</div>
+        </div>
+        <div class="postos-beta">TESTE GRATUITO · OpenStreetMap + OSRM</div>
+      </div>
+
+      <div class="postos-toolbar">
+        <div class="postos-modes">
+          <button class="postos-mode-btn active" data-mode="regiao" onclick="postosSetMode('regiao')">Buscar por região</button>
+          <button class="postos-mode-btn" data-mode="rota" onclick="postosSetMode('rota')">Postos na rota</button>
+        </div>
+
+        <div id="postos-panel-regiao" class="postos-fields">
+          <div class="postos-field span-2"><label>UF</label><select id="postos-uf" onchange="postosPopularCidades()"><option value="">Selecione a UF</option></select></div>
+          <div class="postos-field span-4 postos-wide"><label>Cidade</label><select id="postos-cidade"><option value="">Selecione a cidade</option></select></div>
+          <div class="postos-field span-2"><label>Raio do centro</label><select id="postos-raio"><option value="5">5 km</option><option value="10">10 km</option><option value="25" selected>25 km</option><option value="50">50 km</option><option value="100">100 km</option></select></div>
+          <div class="postos-field span-2"><label>&nbsp;</label><button class="postos-search-btn" onclick="postosBuscarRegiao(true)">Buscar postos</button></div>
+        </div>
+
+        <div id="postos-panel-rota" class="postos-fields" style="display:none">
+          <div class="postos-field span-4 postos-wide"><label>Ponto de partida</label><input id="postos-origem" placeholder="Ex.: Juatuba - MG"></div>
+          <div class="postos-field span-4 postos-wide"><label>Destino</label><input id="postos-destino" placeholder="Ex.: Ribeirão Preto - SP"></div>
+          <div class="postos-field span-2"><label>Máx. fora da rota</label><select id="postos-corredor"><option value="2">2 km</option><option value="5" selected>5 km</option><option value="10">10 km</option><option value="20">20 km</option></select></div>
+          <div class="postos-field span-2"><label>&nbsp;</label><button class="postos-search-btn" onclick="postosBuscarRota(true)">Calcular rota</button></div>
+        </div>
+      </div>
+
+      <div id="postos-status" class="postos-status info">
+        <div id="postos-status-text">Abra esta aba para carregar a base credenciada.</div>
+        <div class="postos-progress"><i id="postos-progress-bar"></i></div>
+      </div>
+
+      <div class="postos-main-grid">
+        <section class="postos-map-card">
+          <div class="postos-map-head"><b>Mapa</b><span id="postos-base-summary">Base credenciada aguardando carregamento</span></div>
+          <div id="postos-map"></div>
+        </section>
+        <section class="postos-list-card">
+          <div class="postos-list-head"><b id="postos-results-title">Postos encontrados</b><span><strong id="postos-results-count">0</strong> resultado(s)</span></div>
+          <div id="postos-results" class="postos-results"><div class="postos-empty"><b>Nenhum posto exibido ainda.</b><span>Faça uma busca por região ou calcule uma rota.</span></div></div>
+          <div class="postos-footer-actions">
+            <button id="postos-load-more" class="postos-mini-btn">Processar mais</button>
+            <button class="postos-mini-btn" onclick="postosLimparCache()">Limpar cache de localização</button>
+            <span class="postos-note">A primeira busca pode levar alguns segundos porque as coordenadas são consultadas uma vez e guardadas neste navegador.</span>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+
 
   <!-- CONFIG -->
   
@@ -17468,6 +17567,242 @@ async function fechExportarExcel(){
     showToast('Falha ao gerar o Excel: '+msg,'error');
   }finally{if(btn){btn.disabled=false;btn.innerHTML=original||'Exportar resumo em Excel';}}
 }
+
+</script>
+
+<script id="ignis-postos-js">
+/* IGNIS · Rede de Postos — primeira etapa gratuita (OpenStreetMap + Nominatim + OSRM) */
+const POSTOS_GEO_CACHE_KEY = 'ignis_postos_geo_v1';
+const POSTOS_PLACE_CACHE_KEY = 'ignis_postos_place_v1';
+const POSTOS_REVERSE_CACHE_KEY = 'ignis_postos_reverse_v1';
+const POSTOS_BATCH = 70;
+let _postosBase = null;
+let _postosMap = null;
+let _postosMarkers = null;
+let _postosRouteLayer = null;
+let _postosGeoCache = null;
+let _postosPlaceCache = null;
+let _postosReverseCache = null;
+let _postosCacheTimer = null;
+let _postosLastGeoAt = 0;
+let _postosCurrentSearch = null;
+let _postosLeafletPromise = null;
+let _postosBasePromise = null;
+
+const POSTOS_UF_NOMES = {
+  'ACRE':'AC','ALAGOAS':'AL','AMAPA':'AP','AMAZONAS':'AM','BAHIA':'BA','CEARA':'CE','DISTRITO FEDERAL':'DF',
+  'ESPIRITO SANTO':'ES','GOIAS':'GO','MARANHAO':'MA','MATO GROSSO':'MT','MATO GROSSO DO SUL':'MS','MINAS GERAIS':'MG',
+  'PARA':'PA','PARAIBA':'PB','PARANA':'PR','PERNAMBUCO':'PE','PIAUI':'PI','RIO DE JANEIRO':'RJ','RIO GRANDE DO NORTE':'RN',
+  'RIO GRANDE DO SUL':'RS','RONDONIA':'RO','RORAIMA':'RR','SANTA CATARINA':'SC','SAO PAULO':'SP','SERGIPE':'SE','TOCANTINS':'TO'
+};
+
+function postosEsc(v){return String(v??'').replace(/[&<>'\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','\"':'&quot;'}[c]));}
+function postosNorm(v){return String(v??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9]+/g,' ').trim().toUpperCase();}
+function postosFmtCep(v){const d=String(v||'').replace(/\D/g,'').padStart(8,'0');return d.length===8?d.slice(0,5)+'-'+d.slice(5):String(v||'');}
+function postosFmtNum(v,n=1){return Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:n,maximumFractionDigits:n});}
+function postosSleep(ms){return new Promise(r=>setTimeout(r,ms));}
+function postosSetStatus(text,type='info',progress=null){
+  const box=document.getElementById('postos-status'); if(!box)return;
+  box.className='postos-status '+type;
+  const txt=document.getElementById('postos-status-text'); if(txt)txt.textContent=text||'';
+  const bar=document.getElementById('postos-progress-bar');
+  if(bar){bar.style.width=progress==null?'0%':Math.max(0,Math.min(100,progress))+'%';bar.parentElement.style.display=progress==null?'none':'block';}
+}
+function postosUpdateSummary(extra=''){
+  const el=document.getElementById('postos-base-summary'); if(!el)return;
+  const total=_postosBase?.length||0, cached=Object.keys(_postosGeoCache||{}).length;
+  el.textContent=`Base credenciada: ${total.toLocaleString('pt-BR')} postos · ${cached.toLocaleString('pt-BR')} localização(ões) em cache${extra?' · '+extra:''}`;
+}
+function postosLoadCache(key){try{const x=JSON.parse(localStorage.getItem(key)||'{}');return x&&typeof x==='object'?x:{};}catch(e){return {};}}
+function postosScheduleCacheSave(){
+  clearTimeout(_postosCacheTimer);_postosCacheTimer=setTimeout(()=>{
+    try{localStorage.setItem(POSTOS_GEO_CACHE_KEY,JSON.stringify(_postosGeoCache||{}));}catch(e){console.warn('IGNIS postos cache EC',e);}
+    try{localStorage.setItem(POSTOS_PLACE_CACHE_KEY,JSON.stringify(_postosPlaceCache||{}));}catch(e){console.warn('IGNIS postos cache locais',e);}
+    try{localStorage.setItem(POSTOS_REVERSE_CACHE_KEY,JSON.stringify(_postosReverseCache||{}));}catch(e){console.warn('IGNIS postos cache reverso',e);}
+    postosUpdateSummary();
+  },450);
+}
+async function postosEnsureLeaflet(){
+  if(window.L)return true;
+  if(_postosLeafletPromise)return _postosLeafletPromise;
+  _postosLeafletPromise=new Promise((resolve,reject)=>{
+    if(!document.getElementById('ignis-leaflet-css')){const l=document.createElement('link');l.id='ignis-leaflet-css';l.rel='stylesheet';l.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';document.head.appendChild(l);}
+    const existing=document.getElementById('ignis-leaflet-js');
+    if(existing){existing.addEventListener('load',()=>resolve(true),{once:true});existing.addEventListener('error',()=>reject(new Error('Não foi possível carregar o mapa.')),{once:true});return;}
+    const s=document.createElement('script');s.id='ignis-leaflet-js';s.src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';s.onload=()=>resolve(true);s.onerror=()=>reject(new Error('Não foi possível carregar o mapa.'));document.head.appendChild(s);
+  });
+  return _postosLeafletPromise;
+}
+async function postosEnsureBase(){
+  if(_postosBase)return _postosBase;
+  if(window.IGNIS_POSTOS_BASE){postosBuildBase();return _postosBase;}
+  if(_postosBasePromise)return _postosBasePromise;
+  _postosBasePromise=new Promise((resolve,reject)=>{
+    const existing=document.getElementById('ignis-postos-base-js');
+    if(existing){existing.addEventListener('load',()=>{postosBuildBase();resolve(_postosBase);},{once:true});existing.addEventListener('error',()=>reject(new Error('Base de postos não encontrada.')),{once:true});return;}
+    const s=document.createElement('script');s.id='ignis-postos-base-js';s.src='postos-base.js?v=20260911';s.onload=()=>{postosBuildBase();resolve(_postosBase);};s.onerror=()=>reject(new Error('Não foi possível carregar postos-base.js. Coloque o arquivo junto do index.html.'));document.head.appendChild(s);
+  });
+  return _postosBasePromise;
+}
+function postosBuildBase(){
+  const raw=Array.isArray(window.IGNIS_POSTOS_BASE)?window.IGNIS_POSTOS_BASE:[];
+  _postosBase=raw.map(r=>({codigo:String(r[0]||''),nome:String(r[1]||''),uf:String(r[2]||'').toUpperCase(),cidade:String(r[3]||''),bairro:String(r[4]||''),endereco:String(r[5]||''),cep:String(r[6]||''),cityNorm:postosNorm(r[3])}));
+  _postosGeoCache=_postosGeoCache||postosLoadCache(POSTOS_GEO_CACHE_KEY);_postosPlaceCache=_postosPlaceCache||postosLoadCache(POSTOS_PLACE_CACHE_KEY);_postosReverseCache=_postosReverseCache||postosLoadCache(POSTOS_REVERSE_CACHE_KEY);
+  postosPopularUF();postosUpdateSummary();
+}
+function postosPopularUF(){
+  const sel=document.getElementById('postos-uf');if(!sel||!_postosBase)return;
+  const atual=sel.value;const ufs=[...new Set(_postosBase.map(p=>p.uf).filter(Boolean))].sort();
+  sel.innerHTML='<option value="">Selecione a UF</option>'+ufs.map(uf=>`<option value="${postosEsc(uf)}">${postosEsc(uf)}</option>`).join('');
+  if(ufs.includes(atual))sel.value=atual;
+  postosPopularCidades();
+}
+function postosPopularCidades(){
+  const uf=document.getElementById('postos-uf')?.value||'';const sel=document.getElementById('postos-cidade');if(!sel||!_postosBase)return;
+  const atual=sel.value;const cidades=[...new Set(_postosBase.filter(p=>!uf||p.uf===uf).map(p=>p.cidade).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
+  sel.innerHTML='<option value="">Selecione a cidade</option>'+cidades.map(c=>`<option value="${postosEsc(c)}">${postosEsc(c)}</option>`).join('');
+  if(cidades.includes(atual))sel.value=atual;
+}
+function postosInitMap(){
+  if(_postosMap||!window.L)return;
+  _postosMap=L.map('postos-map',{zoomControl:true,preferCanvas:true}).setView([-14.235,-51.925],4);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; OpenStreetMap contributors'}).addTo(_postosMap);
+  _postosMarkers=L.layerGroup().addTo(_postosMap);
+}
+function postosClearMap(keepRoute=false){
+  if(_postosMarkers)_postosMarkers.clearLayers();
+  if(!keepRoute&&_postosRouteLayer&&_postosMap){_postosMap.removeLayer(_postosRouteLayer);_postosRouteLayer=null;}
+}
+function postosSetMode(mode){
+  document.querySelectorAll('.postos-mode-btn').forEach(b=>b.classList.toggle('active',b.dataset.mode===mode));
+  const r=document.getElementById('postos-panel-regiao'),rt=document.getElementById('postos-panel-rota');if(r)r.style.display=mode==='regiao'?'grid':'none';if(rt)rt.style.display=mode==='rota'?'grid':'none';
+  const title=document.getElementById('postos-results-title');if(title)title.textContent=mode==='rota'?'Postos encontrados na rota':'Postos encontrados';
+  _postosCurrentSearch=null;postosClearMap(false);postosRenderResults([]);postosSetStatus(mode==='rota'?'Informe origem e destino para calcular a rota.':'Selecione UF, cidade e raio para iniciar.','info');
+}
+async function postosOnShow(){
+  try{
+    postosSetStatus('Carregando mapa e base credenciada...','info',8);
+    await Promise.all([postosEnsureLeaflet(),postosEnsureBase()]);
+    postosInitMap();setTimeout(()=>_postosMap?.invalidateSize(),80);
+    postosSetStatus('Pronto. A primeira localização de cada posto é consultada gratuitamente e fica salva em cache neste navegador.','success');
+  }catch(e){console.error('IGNIS postos:',e);postosSetStatus(e.message||'Falha ao carregar a Rede de Postos.','error');}
+}
+async function postosRateLimit(){const wait=Math.max(0,1100-(Date.now()-_postosLastGeoAt));if(wait)await postosSleep(wait);_postosLastGeoAt=Date.now();}
+async function postosNominatim(url){
+  await postosRateLimit();
+  const r=await fetch(url,{headers:{'Accept':'application/json','Accept-Language':'pt-BR,pt;q=0.9'}});if(!r.ok)throw new Error('Serviço gratuito de localização indisponível ('+r.status+').');return r.json();
+}
+function postosUfFromAddress(a){
+  if(!a)return '';
+  const iso=a['ISO3166-2-lvl4']||a['ISO3166-2-lvl3']||'';const m=String(iso).match(/BR-([A-Z]{2})/i);if(m)return m[1].toUpperCase();
+  return POSTOS_UF_NOMES[postosNorm(a.state||'')]||'';
+}
+async function postosGeocodeText(text){
+  const key=postosNorm(text);if(_postosPlaceCache?.[key])return _postosPlaceCache[key];
+  const url='https://nominatim.openstreetmap.org/search?format=jsonv2&countrycodes=br&limit=1&addressdetails=1&q='+encodeURIComponent(text);
+  const data=await postosNominatim(url);const x=data?.[0];if(!x)return null;
+  const out={lat:Number(x.lat),lon:Number(x.lon),display:x.display_name||text,address:x.address||{}};_postosPlaceCache[key]=out;postosScheduleCacheSave();return out;
+}
+async function postosGeocodeStation(p){
+  if(_postosGeoCache?.[p.codigo])return _postosGeoCache[p.codigo];
+  const cep=postosFmtCep(p.cep);
+  const street=encodeURIComponent(p.endereco);const city=encodeURIComponent(p.cidade);const state=encodeURIComponent(p.uf);const postal=encodeURIComponent(cep);const country=encodeURIComponent('Brasil');
+  let url=`https://nominatim.openstreetmap.org/search?format=jsonv2&countrycodes=br&limit=1&addressdetails=1&street=${street}&city=${city}&state=${state}&postalcode=${postal}&country=${country}`;
+  let data=await postosNominatim(url);let x=data?.[0];
+  if(!x){const q=[p.endereco,p.bairro,p.cidade,p.uf,cep,'Brasil'].filter(Boolean).join(', ');url='https://nominatim.openstreetmap.org/search?format=jsonv2&countrycodes=br&limit=1&addressdetails=1&q='+encodeURIComponent(q);data=await postosNominatim(url);x=data?.[0];}
+  if(!x){_postosGeoCache[p.codigo]={missing:true,at:Date.now()};postosScheduleCacheSave();return null;}
+  const out={lat:Number(x.lat),lon:Number(x.lon),at:Date.now()};_postosGeoCache[p.codigo]=out;postosScheduleCacheSave();return out;
+}
+async function postosReverse(lat,lon){
+  const key=`${Number(lat).toFixed(3)},${Number(lon).toFixed(3)}`;if(_postosReverseCache?.[key])return _postosReverseCache[key];
+  const url=`https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=10&addressdetails=1&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lon)}`;
+  const x=await postosNominatim(url);const a=x?.address||{};const city=a.city||a.town||a.village||a.municipality||a.county||'';const out={city,uf:postosUfFromAddress(a)};_postosReverseCache[key]=out;postosScheduleCacheSave();return out;
+}
+function postosHaversine(lat1,lon1,lat2,lon2){const R=6371,toRad=x=>x*Math.PI/180,dLat=toRad(lat2-lat1),dLon=toRad(lon2-lon1),a=Math.sin(dLat/2)**2+Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;return 2*R*Math.asin(Math.sqrt(a));}
+function postosMarkerPopup(r){
+  const p=r.posto;const extra=r.alongKm!=null?`<div class="postos-popup-metric">Km ${postosFmtNum(r.alongKm,0)} da viagem · ${postosFmtNum(r.offKm,1)} km fora da rota</div>`:`<div class="postos-popup-metric">${postosFmtNum(r.distKm,1)} km do centro selecionado</div>`;
+  const origem=document.getElementById('postos-origem')?.value.trim()||'',destino=document.getElementById('postos-destino')?.value.trim()||'';
+  const routeBtn=(r.alongKm!=null&&origem&&destino)?`<button onclick="postosAbrirRotaComParada(${r.lat},${r.lon})">Usar como parada</button>`:'';
+  return `<div class="postos-popup"><b>${postosEsc(p.nome)}</b><span>Código EC ${postosEsc(p.codigo)}</span><div>${postosEsc(p.endereco)}</div><div>${postosEsc(p.bairro)} · ${postosEsc(p.cidade)}/${postosEsc(p.uf)}</div><div>CEP ${postosEsc(postosFmtCep(p.cep))}</div>${extra}<div class="postos-popup-actions"><button onclick="postosAbrirGoogle(${r.lat},${r.lon})">Abrir no Google Maps</button>${routeBtn}</div></div>`;
+}
+function postosRenderResults(results,meta={}){
+  const list=document.getElementById('postos-results');if(!list)return;
+  const count=document.getElementById('postos-results-count');if(count)count.textContent=results.length.toLocaleString('pt-BR');
+  if(!results.length){list.innerHTML='<div class="postos-empty"><b>Nenhum posto exibido ainda.</b><span>Faça uma busca por região ou calcule uma rota.</span></div>';return;}
+  list.innerHTML=results.map((r,i)=>{const p=r.posto;const metric=r.alongKm!=null?`Km ${postosFmtNum(r.alongKm,0)} · desvio ${postosFmtNum(r.offKm,1)} km`:`${postosFmtNum(r.distKm,1)} km do centro`;return `<button class="postos-result-card" onclick="postosFocusResult(${i})"><div class="postos-result-top"><span class="postos-result-index">${i+1}</span><div><b>${postosEsc(p.nome)}</b><small>${postosEsc(p.cidade)}/${postosEsc(p.uf)} · EC ${postosEsc(p.codigo)}</small></div></div><div class="postos-result-address">${postosEsc(p.endereco)} · ${postosEsc(p.bairro)}</div><div class="postos-result-metric">${metric}</div></button>`;}).join('');
+  window._postosRenderedResults=results;
+}
+function postosPlotResults(results,{fit=true,keepRoute=false,center=null}={}){
+  postosClearMap(keepRoute);if(!_postosMap)return;
+  const bounds=[];
+  results.forEach((r,i)=>{const m=L.circleMarker([r.lat,r.lon],{radius:6,weight:2,color:'#ff6b2c',fillColor:'#ff6b2c',fillOpacity:.78});m.bindPopup(postosMarkerPopup(r),{maxWidth:330});m.on('click',()=>{document.querySelectorAll('.postos-result-card').forEach((el,j)=>el.classList.toggle('selected',j===i));});m.addTo(_postosMarkers);r._marker=m;bounds.push([r.lat,r.lon]);});
+  if(fit&&bounds.length){_postosMap.fitBounds(bounds,{padding:[38,38],maxZoom:14});}else if(center){_postosMap.setView(center,11);}
+}
+function postosFocusResult(i){const r=window._postosRenderedResults?.[i];if(!r||!_postosMap)return;_postosMap.setView([r.lat,r.lon],15);r._marker?.openPopup();document.getElementById('postos-map')?.scrollIntoView({behavior:'smooth',block:'center'});}
+function postosAbrirGoogle(lat,lon){window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lon}`,'_blank','noopener');}
+function postosAbrirRotaComParada(lat,lon){const o=document.getElementById('postos-origem')?.value.trim()||'',d=document.getElementById('postos-destino')?.value.trim()||'';if(!o||!d)return postosAbrirGoogle(lat,lon);window.open(`https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(o)}&destination=${encodeURIComponent(d)}&waypoints=${lat},${lon}`,'_blank','noopener');}
+
+async function postosBuscarRegiao(reset=true){
+  try{
+    await postosOnShow();const uf=document.getElementById('postos-uf')?.value||'',cidade=document.getElementById('postos-cidade')?.value||'',radius=Number(document.getElementById('postos-raio')?.value||25);
+    if(!uf||!cidade){postosSetStatus('Selecione a UF e a cidade.','error');return;}
+    if(reset){
+      const center=await postosGeocodeText(`${cidade}, ${uf}, Brasil`);if(!center)throw new Error('Não consegui localizar o centro da cidade selecionada.');
+      const candidates=_postosBase.filter(p=>p.uf===uf&&p.cidade===cidade);
+      _postosCurrentSearch={mode:'regiao',center,candidates,index:0,results:[],radius,fail:0};postosClearMap(false);_postosMap.setView([center.lat,center.lon],11);postosRenderResults([]);
+    }
+    const s=_postosCurrentSearch;if(!s||s.mode!=='regiao')return;
+    const start=s.index,end=Math.min(s.candidates.length,start+POSTOS_BATCH);
+    for(let i=start;i<end;i++){
+      const p=s.candidates[i];const pct=s.candidates.length?((i+1)/s.candidates.length*100):100;postosSetStatus(`Localizando postos de ${cidade}: ${i+1} de ${s.candidates.length}...`,'loading',pct);
+      let g=null;try{g=await postosGeocodeStation(p);}catch(e){console.warn('Geocode posto',p.codigo,e);}
+      if(!g||g.missing){s.fail++;continue;}const dist=postosHaversine(s.center.lat,s.center.lon,g.lat,g.lon);if(dist<=s.radius)s.results.push({posto:p,lat:g.lat,lon:g.lon,distKm:dist});
+    }
+    s.index=end;s.results.sort((a,b)=>a.distKm-b.distKm);postosRenderResults(s.results);postosPlotResults(s.results,{fit:true,center:[s.center.lat,s.center.lon]});
+    const remain=s.candidates.length-s.index;postosSetStatus(`${s.results.length} posto(s) dentro de ${s.radius} km do centro de ${cidade}. ${s.index} de ${s.candidates.length} credenciados da cidade processados${s.fail?` · ${s.fail} sem coordenada`:''}.`,'success');postosUpdateSummary(`${cidade}/${uf}`);postosToggleMore(remain>0,`Processar mais ${Math.min(POSTOS_BATCH,remain)} postos`,()=>postosBuscarRegiao(false));
+  }catch(e){console.error('Busca regional:',e);postosSetStatus(e.message||'Erro ao buscar postos.','error');}
+}
+function postosRouteCum(coords){const cum=[0];for(let i=1;i<coords.length;i++)cum[i]=cum[i-1]+postosHaversine(coords[i-1][0],coords[i-1][1],coords[i][0],coords[i][1]);return cum;}
+function postosSampleRoute(coords,cum,step=60,max=20){
+  if(!coords.length)return[];const total=cum[cum.length-1]||0;if(total<=0)return[coords[0]];const effective=Math.max(step,total/Math.max(1,max-1));const out=[];let target=0,idx=0;while(target<=total&&out.length<max){while(idx<cum.length-1&&cum[idx]<target)idx++;out.push(coords[idx]);target+=effective;}const last=coords[coords.length-1];if(out.length<max&&(out.at(-1)?.[0]!==last[0]||out.at(-1)?.[1]!==last[1]))out.push(last);return out;
+}
+function postosNearestRoute(lat,lon,coords,cum){let best=Infinity,bestI=0;for(let i=0;i<coords.length;i++){const d=postosHaversine(lat,lon,coords[i][0],coords[i][1]);if(d<best){best=d;bestI=i;}}return{offKm:best,alongKm:cum[bestI]||0};}
+async function postosBuscarRota(reset=true){
+  try{
+    await postosOnShow();const origem=document.getElementById('postos-origem')?.value.trim()||'',destino=document.getElementById('postos-destino')?.value.trim()||'',corridor=Number(document.getElementById('postos-corredor')?.value||5);
+    if(!origem||!destino){postosSetStatus('Informe o ponto de partida e o destino.','error');return;}
+    if(reset){
+      postosClearMap(false);postosRenderResults([]);postosToggleMore(false);postosSetStatus('Localizando origem e destino...','loading',5);
+      const [o,d]=await Promise.all([postosGeocodeText(origem),postosGeocodeText(destino)]);if(!o||!d)throw new Error('Não consegui localizar a origem ou o destino. Tente informar cidade/UF ou endereço mais completo.');
+      postosSetStatus('Calculando rota rodoviária gratuita...','loading',12);
+      const routeUrl=`https://router.project-osrm.org/route/v1/driving/${o.lon},${o.lat};${d.lon},${d.lat}?overview=full&geometries=geojson&steps=false`;
+      const rr=await fetch(routeUrl);if(!rr.ok)throw new Error('Serviço gratuito de rotas indisponível ('+rr.status+').');const routeJson=await rr.json();const route=routeJson?.routes?.[0];if(!route)throw new Error('Não foi possível calcular uma rota entre os pontos informados.');
+      const coords=route.geometry.coordinates.map(c=>[Number(c[1]),Number(c[0])]);const cum=postosRouteCum(coords);const distanceKm=Number(route.distance||0)/1000;
+      _postosRouteLayer=L.polyline(coords,{color:'#ff6b2c',weight:5,opacity:.78}).addTo(_postosMap);_postosMap.fitBounds(_postosRouteLayer.getBounds(),{padding:[30,30]});
+      const sample=postosSampleRoute(coords,cum,60,20);const keys=[],seen=new Set();
+      for(let i=0;i<sample.length;i++){
+        postosSetStatus(`Identificando cidades ao longo da rota: ${i+1} de ${sample.length}...`,'loading',15+(i+1)/sample.length*25);
+        try{const x=await postosReverse(sample[i][0],sample[i][1]);if(x?.city){const city=postosNorm(x.city),uf=x.uf||'';const key=(uf?uf+'|':'')+city;if(!seen.has(key)){seen.add(key);keys.push({city,uf});}}}catch(e){console.warn('Reverse route sample',e);}
+      }
+      [o,d].forEach(x=>{const a=x.address||{},city=postosNorm(a.city||a.town||a.village||a.municipality||a.county||''),uf=postosUfFromAddress(a);if(city){const key=(uf?uf+'|':'')+city;if(!seen.has(key)){seen.add(key);keys.push({city,uf});}}});
+      const order=new Map();keys.forEach((k,i)=>order.set((k.uf?k.uf+'|':'')+k.city,i));
+      let candidates=_postosBase.filter(p=>keys.some(k=>p.cityNorm===k.city&&(!k.uf||p.uf===k.uf)));
+      candidates.sort((a,b)=>{const ak=(order.get(a.uf+'|'+a.cityNorm)??order.get(a.cityNorm)??999),bk=(order.get(b.uf+'|'+b.cityNorm)??order.get(b.cityNorm)??999);return ak-bk||a.nome.localeCompare(b.nome,'pt-BR');});
+      _postosCurrentSearch={mode:'rota',coords,cum,distanceKm,corridor,candidates,index:0,results:[],fail:0,cities:keys};
+      if(!candidates.length){postosSetStatus('A rota foi calculada, mas não encontrei cidades da base credenciada nos pontos amostrados. Vamos ajustar esse reconhecimento na próxima etapa.','error');return;}
+    }
+    const s=_postosCurrentSearch;if(!s||s.mode!=='rota')return;const start=s.index,end=Math.min(s.candidates.length,start+POSTOS_BATCH);
+    for(let i=start;i<end;i++){
+      const p=s.candidates[i],pct=45+(i+1)/Math.max(1,s.candidates.length)*50;postosSetStatus(`Conferindo credenciados próximos da rota: ${i+1} de ${s.candidates.length}...`,'loading',pct);
+      let g=null;try{g=await postosGeocodeStation(p);}catch(e){console.warn('Geocode route posto',p.codigo,e);}
+      if(!g||g.missing){s.fail++;continue;}const near=postosNearestRoute(g.lat,g.lon,s.coords,s.cum);if(near.offKm<=s.corridor)s.results.push({posto:p,lat:g.lat,lon:g.lon,offKm:near.offKm,alongKm:near.alongKm});
+    }
+    s.index=end;s.results.sort((a,b)=>a.alongKm-b.alongKm||a.offKm-b.offKm);postosRenderResults(s.results);postosPlotResults(s.results,{fit:false,keepRoute:true});
+    const remain=s.candidates.length-s.index;postosSetStatus(`Rota de ${postosFmtNum(s.distanceKm,0)} km · ${s.results.length} posto(s) até ${s.corridor} km da rota · ${s.index} de ${s.candidates.length} credenciados candidatos processados${s.fail?` · ${s.fail} sem coordenada`:''}.`,'success');postosUpdateSummary(`${s.cities.length} cidade(s) detectada(s) na rota`);postosToggleMore(remain>0,`Processar mais ${Math.min(POSTOS_BATCH,remain)} postos`,()=>postosBuscarRota(false));
+  }catch(e){console.error('Roteirizador postos:',e);postosSetStatus(e.message||'Erro ao calcular rota.','error');}
+}
+function postosToggleMore(show,label='',fn=null){const b=document.getElementById('postos-load-more');if(!b)return;b.style.display=show?'inline-flex':'none';b.textContent=label||'Processar mais';b.onclick=fn||null;}
+function postosLimparCache(){if(!confirm('Limpar apenas o cache de localização dos postos neste navegador? A base e os dados do IGNIS não serão apagados.'))return;_postosGeoCache={};_postosPlaceCache={};_postosReverseCache={};try{localStorage.removeItem(POSTOS_GEO_CACHE_KEY);localStorage.removeItem(POSTOS_PLACE_CACHE_KEY);localStorage.removeItem(POSTOS_REVERSE_CACHE_KEY);}catch(e){}postosUpdateSummary();postosSetStatus('Cache geográfico limpo. A próxima busca consultará as localizações novamente.','success');}
 
 </script>
 
