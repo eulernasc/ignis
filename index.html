@@ -1,11 +1,11 @@
 <!DOCTYPE html>
-<!-- IGNIS v58 · carregamento prioritário e cache persistente em todos os aparelhos -->
+<!-- IGNIS v58 · carregamento paralelo, cache persistente e bloqueio contra estado parcial -->
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <!-- IGNIS v46 · correção de travamento Motoristas PX + cache de nomes + renderização única -->
-<meta name="ignis-build" content="2026-09-14-loading-firebase-v4">
+<meta name="ignis-build" content="2026-09-14-loading-firebase-safe-v5">
 <title>Ignis — Gestão Inteligente de Frotas e Equipamentos</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23ff6b2c'/%3E%3Cpath d='M36 9c1 8-4 11-7 15-3 4-5 8-2 14 2-4 5-6 9-8-1 8 5 11 5 17 6-4 9-10 8-17-1-10-7-17-13-21Z' fill='none' stroke='white' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -601,12 +601,15 @@ window.fbLoad = async function() {
     const storageV = Number(dados._storageVersion || 0);
     const seriesPrefix = usingV4 ? FB_SERIES_PREFIX : '';
 
-    // A frota é pequena e essencial para os filtros. Começamos sua leitura junto
-    // com os abastecimentos em qualquer aparelho, evitando que o desktop espere
-    // toda a base pesada para só então iniciar em "Carregando frota 0%".
-    let maqPromise = null;
+    // Todas as séries começam juntas. Isso elimina a fila antiga (abastecimentos
+    // primeiro, frota depois), mas só devolvemos a base quando todas estiverem
+    // confirmadas — nenhuma gravação pode partir de um estado carregado pela metade.
+    let maqPromise = null, medPromise = null, eficPromise = null, arlaPromise = null;
     if (storageV >= 3) {
       maqPromise = fbReadChunkSeries(seriesPrefix+'maq', dados._maqVersion, dados._maqChunks);
+      medPromise = fbReadChunkSeries(seriesPrefix+'med', dados._medVersion, dados._medChunks);
+      eficPromise = fbReadChunkSeries(seriesPrefix+'efic', dados._eficVersion, dados._eficChunks);
+      arlaPromise = fbReadChunkSeries(seriesPrefix+'arla', dados._arlaVersion, dados._arlaChunks);
       maqPromise.then(maqs => {
         try {
           window.dispatchEvent(new CustomEvent('ignis:firebase-metadata',{
@@ -615,6 +618,15 @@ window.fbLoad = async function() {
         } catch(e) {}
       }).catch(e => console.warn('IGNIS: pré-carga da frota falhou:',e));
     }
+    const revisoesPromise=(async()=>{
+      try{
+        const revSnap=await withTimeout(getDoc(doc(db,'fueltracker','anomalia_revisoes')),10000);
+        return revSnap.exists()&&Array.isArray(revSnap.data()?.items)?revSnap.data().items:[];
+      }catch(e){
+        console.warn('IGNIS: histórico de revisões indisponível no momento.',e);
+        return [];
+      }
+    })();
 
     let abastecimentos = [];
     if (dados._hasAbast) {
@@ -644,39 +656,23 @@ window.fbLoad = async function() {
     }
     dados.abastecimentos = abastecimentos;
 
-    // Storage v3/v4: dados essenciais primeiro em celular e computador.
-    // Anomalias e Arla continuam em background e atualizam suas próprias telas
-    // quando terminam; o Dashboard não precisa esperar por esses históricos.
+    // As leituras já aconteceram em paralelo com os abastecimentos. A espera aqui
+    // apenas garante que o state oficial esteja completo antes de liberar edições.
     if (storageV >= 3) {
-      const maqs = await (maqPromise || fbReadChunkSeries(seriesPrefix+'maq', dados._maqVersion, dados._maqChunks));
+      const [maqs,meds,efics,arla,revisoes]=await Promise.all([
+        maqPromise || fbReadChunkSeries(seriesPrefix+'maq', dados._maqVersion, dados._maqChunks),
+        medPromise || fbReadChunkSeries(seriesPrefix+'med', dados._medVersion, dados._medChunks),
+        eficPromise || fbReadChunkSeries(seriesPrefix+'efic', dados._eficVersion, dados._eficChunks),
+        arlaPromise || fbReadChunkSeries(seriesPrefix+'arla', dados._arlaVersion, dados._arlaChunks),
+        revisoesPromise
+      ]);
       dados.maquinas = maqs;
-
-      // Evita que eventuais campos inline antigos sobrescrevam o cache enquanto
-      // as séries oficiais são carregadas em segundo plano.
-      delete dados.medidorAnomalias;
-      delete dados.eficienciaAnomalias;
-      delete dados.arlaMeses;
-      delete dados.anomaliaRevisoes;
-
-      (async()=>{
-        try{
-          const [meds,efics,arla] = await Promise.all([
-          fbReadChunkSeries(seriesPrefix+'med',  dados._medVersion,  dados._medChunks),
-          fbReadChunkSeries(seriesPrefix+'efic', dados._eficVersion, dados._eficChunks),
-          fbReadChunkSeries(seriesPrefix+'arla', dados._arlaVersion, dados._arlaChunks)
-          ]);
-          let revisoes=[];
-          try{
-            const revSnap=await withTimeout(getDoc(doc(db,'fueltracker','anomalia_revisoes')),10000);
-            revisoes=revSnap.exists()&&Array.isArray(revSnap.data()?.items)?revSnap.data().items:[];
-          }catch(e){}
-          window.dispatchEvent(new CustomEvent('ignis:firebase-secondary',{
-            detail:{medidorAnomalias:meds,eficienciaAnomalias:efics,arlaMeses:arla,anomaliaRevisoes:revisoes}
-          }));
-        }catch(e){
-          console.warn('IGNIS: dados secundários serão tentados novamente ao abrir o sistema:',e);
-        }
-      })();
+      dados.medidorAnomalias = meds;
+      dados.eficienciaAnomalias = efics;
+      dados.arlaMeses = arla;
+      dados.anomaliaRevisoes = revisoes;
+    }else{
+      dados.anomaliaRevisoes = await revisoesPromise;
     }
     // Em storage v1/v2, esses campos continuam inline e são mantidos como vieram.
 
@@ -703,9 +699,6 @@ window.fbLoad = async function() {
         periodo.count = regs.length;
       });
     }
-
-    // O histórico de revisões também segue no carregamento secundário acima.
-    // Ele não é necessário para liberar Dashboard, filtros e abastecimentos.
 
     // A revisão viaja separada do state de negócio e é usada para impedir
     // sobrescrita por cache antigo em outro computador/usuário.
@@ -5079,17 +5072,23 @@ async function loadState() {
   }
   // Tentar carregar do Firebase. As análises secundárias são executadas uma única
   // vez depois deste passo para não varrer os mesmos milhares de registros 2–3 vezes no boot.
+  let firebaseLoadOk=false;
   if (window.firebaseReady) {
-    await syncFromFirebase();
+    firebaseLoadOk=await syncFromFirebase();
   } else {
     window.addEventListener('firebaseReady', async () => {
-      await syncFromFirebase();
+      const ok=await syncFromFirebase();
+      if(ok){
+        window._dadosCarregados=true;
+        updateSyncStatus(window._ignisMaintenanceState?.active?'maintenance':'connected');
+        try{relChecarReincidencia();relgInit();updateFilters();renderDashboard();document.dispatchEvent(new CustomEvent('ignis:data-ready'));}catch(e){}
+      }
     });
   }
+  window._dadosCarregados = !!firebaseLoadOk;
   try { relChecarReincidencia(); } catch(e) { console.warn('relChecar no boot falhou:', e); }
   try { relgInit(); } catch(e) { console.warn('relgInit no boot falhou:', e); }
-  window._dadosCarregados = true; // só agora o carregamento inicial terminou de verdade
-  updateSyncStatus(window._ignisMaintenanceState?.active?'maintenance':'connected');
+  updateSyncStatus(firebaseLoadOk?(window._ignisMaintenanceState?.active?'maintenance':'connected'):(window._fbLoadFailed?'error':'syncing'));
 
   // O login possui um watchdog para não congelar a interface. Em celular o download dos chunks
   // pode ultrapassar esse tempo; antes, o watchdog desenhava zeros e quando o Firebase terminava
@@ -5120,7 +5119,7 @@ async function syncFromFirebase() {
     const data = await window.fbLoad();
     if (!data) {
       updateSyncStatus(window._fbLoadFailed ? 'error' : 'connected');
-      return;
+      return !window._fbLoadFailed;
     }
 
     const { _users, ...rest } = data;
@@ -5164,7 +5163,7 @@ async function syncFromFirebase() {
         if (recovered) {
           updateSyncStatus('connected');
           showToast('Importação pendente recuperada e confirmada no Firebase.', 'success');
-          return;
+          return true;
         }
       } else {
         console.warn('IGNIS: recuperação local não aplicada porque a série correspondente mudou na nuvem.');
@@ -5215,6 +5214,7 @@ async function syncFromFirebase() {
       if(reparoSemanasDuplicadas.changed){
         const reparoSalvo = await saveState({
           immediate:true,
+          internalLoad:true,
           mode:'fuel',
           changedPeriodIds:reparoSemanasDuplicadas.changedPeriodIds,
           removedPeriodIds:reparoSemanasDuplicadas.removedPeriodIds
@@ -5263,7 +5263,7 @@ async function syncFromFirebase() {
       }
 
       updateSyncStatus('connected');
-      return;
+      return true;
     }
 
     // Firebase vazio/indisponível: mantém o backup local apenas como contingência,
@@ -5272,9 +5272,11 @@ async function syncFromFirebase() {
     window._firebaseFuelSignature = cloudFuelSignature;
     window._firebaseArlaSignature = cloudArlaSignature;
     updateSyncStatus('connected');
+    return true;
   } catch(e) {
     console.error('syncFromFirebase erro:', e);
     updateSyncStatus('error');
+    return false;
   }
 }
 
@@ -5436,6 +5438,11 @@ async function _flushFirebaseSaveQueue() {
 function saveState(options = {}) {
   const immediate = options === true || options?.immediate === true;
   const mode = String(options?.mode || 'light').toLowerCase();
+  if(window._dadosCarregados!==true&&!options?.recovery&&!options?.internalLoad){
+    updateSyncStatus(window._fbLoadFailed?'error':'syncing');
+    showToast('Alteração bloqueada por segurança: aguarde todos os dados do Firebase terminarem de carregar. Nada foi enviado.','info');
+    return Promise.resolve(false);
+  }
   if(window._ignisMaintenanceState?.active && !ignisIsAdmMaster()){
     updateSyncStatus('maintenance');
     return Promise.resolve(false);
@@ -11136,6 +11143,10 @@ function precisaSenha() {
 }
 
 function verificarSenha(callback) {
+  if(window._dadosCarregados!==true){
+    showToast('Aguarde a confirmação completa dos dados do Firebase antes de alterar informações.','info');
+    return;
+  }
   // Sistema novo: verifica role do usuário logado
   const u = window._authUser;
   if (!u) { showToast('Você precisa estar logado para esta ação.', 'error'); return; }
@@ -11144,6 +11155,10 @@ function verificarSenha(callback) {
 }
 
 function arlaVerificarSenhaEMes() {
+  if(window._dadosCarregados!==true){
+    showToast('Aguarde a confirmação completa dos dados do Firebase antes de importar o relatório de Arla.','info');
+    return;
+  }
   const u = window._authUser;
   if (u?.role === 'adm' || u?.role === 'admin') { arlaAbrirCarregar(); return; }
   showToast('Sem permissão. Apenas ADM Master e Admin podem realizar esta ação.', 'error');
