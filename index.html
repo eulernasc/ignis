@@ -1210,6 +1210,60 @@ window.fbSavePostosPriceLinks = async function(items, meta = {}) {
   }
 };
 
+// ── REDE DE POSTOS: preços sem vínculo aguardando revisão ────────────────
+// Guarda também os produtos/preços do relatório para que o administrador
+// possa vincular depois, sem precisar manter o modal da importação aberto.
+const FB_POSTOS_PENDING_DOC = 'postos_preco_pendentes_manifest';
+const FB_POSTOS_PENDING_PREFIX = 'postos_preco_pendentes';
+function fbNormalizePostoPricePendingProduct(entry) {
+  if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return null;
+  const produto = String(entry.produto || '').trim();
+  const produtoKey = String(entry.produtoKey || '').trim();
+  const preco = Number(entry.preco);
+  const inicio = Math.max(0, Number(entry.inicio || 0));
+  const fim = Math.max(0, Number(entry.fim || 0));
+  if (!produto || !produtoKey || !Number.isFinite(preco) || preco <= 0 || !inicio) return null;
+  return {produto,produtoKey,preco,inicio,fim,cnpj:String(entry.cnpj || '').replace(/\D/g,'').slice(0,14)};
+}
+function fbNormalizePostoPricePending(item) {
+  if (!item || typeof item !== 'object' || Array.isArray(item)) return null;
+  const nome=String(item.nome||'').trim(), endereco=String(item.endereco||'').trim();
+  const cnpj=String(item.cnpj||'').replace(/\D/g,'').slice(0,14);
+  const key=String(item.key||'').trim() || (cnpj ? `CNPJ:${cnpj}` : `TXT:${nome}|${endereco}`);
+  const products=(Array.isArray(item.products)?item.products:[]).map(fbNormalizePostoPricePendingProduct).filter(Boolean);
+  if(!key||!nome||!endereco||!products.length)return null;
+  return {key,nome,endereco,cnpj,products};
+}
+window.fbLoadPostosPricePending = async function(currentVersion='') {
+  const manifestRef=doc(db,'fueltracker',FB_POSTOS_PENDING_DOC);
+  let snap,fromCache=false;
+  try{snap=await withTimeout(getDoc(manifestRef),12000);}catch(networkError){
+    try{snap=await withTimeout(getDocFromCache(manifestRef),3500);fromCache=true;}catch(cacheError){throw networkError;}
+  }
+  fromCache=fromCache||!!snap?.metadata?.fromCache;
+  if(!snap.exists())return {version:'',chunks:0,total:0,signature:'',updatedAt:0,updatedBy:'',sourceFile:'',fromCache,items:[],unchanged:true};
+  const manifest=snap.data()||{},version=String(manifest.version||''),chunks=Number(manifest.chunks||0),total=Number(manifest.total||0);
+  if(!version||!Number.isInteger(chunks)||chunks<0||!Number.isInteger(total)||total<0||(total>0&&chunks<1))throw new Error('Manifesto de postos pendentes inválido.');
+  const metadata={version,chunks,total,signature:String(manifest.signature||''),sourceFile:String(manifest.sourceFile||''),updatedAt:Number(manifest.updatedAt||0),updatedBy:String(manifest.updatedBy||''),fromCache};
+  if(String(currentVersion||'')===version)return {...metadata,items:null,unchanged:true};
+  const items=(await fbReadChunkSeries(FB_POSTOS_PENDING_PREFIX,version,chunks)).map(fbNormalizePostoPricePending);
+  if(items.some(x=>!x)||items.length!==total)throw new Error(`Lista de postos pendentes incompleta (${items.filter(Boolean).length}/${total}).`);
+  return {...metadata,items,unchanged:false};
+};
+window.fbSavePostosPricePending = async function(items,meta={}) {
+  const safe=(Array.isArray(items)?items:[]).map(fbNormalizePostoPricePending).filter(Boolean);
+  const manifestRef=doc(db,'fueltracker',FB_POSTOS_PENDING_DOC),oldSnap=await withTimeout(getDoc(manifestRef),12000),old=oldSnap.exists()?(oldSnap.data()||{}):{},currentVersion=String(old.version||'');
+  if(Object.prototype.hasOwnProperty.call(meta,'expectedVersion')&&String(meta.expectedVersion||'')!==currentVersion){const conflict=new Error('A lista de postos pendentes foi alterada por outro usuário. Atualize a tela e tente novamente.');conflict.code='IGNIS_POSTOS_PENDING_VERSION_CONFLICT';throw conflict;}
+  const version=fbVersion(),predictedChunks=fbBuildAdaptiveChunks(safe,150).length;let chunks=0;
+  try{
+    chunks=await fbWriteChunkSeries(FB_POSTOS_PENDING_PREFIX,version,safe,150);
+    const manifest={schema:1,version,chunks,total:safe.length,signature:String(meta.signature||''),sourceFile:String(meta.sourceFile||'').slice(0,180),updatedAt:Date.now(),updatedBy:String(meta.updatedBy||'').slice(0,100)};
+    await fbRetry(()=>withTimeout(runTransaction(db,async tx=>{const latestSnap=await tx.get(manifestRef),latest=latestSnap.exists()?(latestSnap.data()||{}):{};if(String(latest.version||'')!==currentVersion){const conflict=new Error('A lista de postos pendentes mudou enquanto você revisava. Atualize e tente novamente.');conflict.code='IGNIS_POSTOS_PENDING_VERSION_CONFLICT';throw conflict;}tx.set(manifestRef,manifest);}),25000),3,650);
+    fbDeleteChunkSeries(FB_POSTOS_PENDING_PREFIX,String(old.version||''),Number(old.chunks||0));
+    return manifest;
+  }catch(e){fbDeleteChunkSeries(FB_POSTOS_PENDING_PREFIX,version,chunks||predictedChunks);throw e;}
+};
+
 window._ultimoSaveAt = 0;
 window.firebaseReady = true;
 window.dispatchEvent(new Event('firebaseReady'));
@@ -2329,6 +2383,15 @@ input[type="checkbox"]:indeterminate{background:rgba(233,95,50,.2);border-color:
 #page-postos .postos-import-btn:hover{background:rgba(255,107,44,.15);border-color:rgba(255,107,44,.48);color:#fff;transform:translateY(-1px)}
 #page-postos .postos-import-btn .ui-icon{width:15px;height:15px}
 #page-postos .postos-import-btn[hidden]{display:none!important}
+#page-postos .postos-import-btn .postos-pending-badge{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;border-radius:999px;background:rgba(255,107,44,.18);color:#ff9a73;font-size:9px;font-weight:900;line-height:1}
+#page-postos .postos-import-btn.has-pending{border-color:rgba(246,173,117,.5);background:rgba(246,173,117,.12);color:#ffb07f}
+#page-postos .postos-autocomplete{position:relative;width:100%}
+#page-postos .postos-autocomplete-menu{display:none;position:absolute;left:0;right:0;top:calc(100% + 5px);z-index:1600;max-height:260px;overflow:auto;padding:5px;background:#101821;border:1px solid rgba(148,163,184,.2);border-radius:10px;box-shadow:0 16px 40px rgba(0,0,0,.48)}
+#page-postos .postos-autocomplete-menu.open{display:grid;gap:2px}
+#page-postos .postos-autocomplete-option{width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 10px;border:0;border-radius:8px;background:transparent;color:var(--text);font:650 11px 'DM Sans',sans-serif;text-align:left;cursor:pointer}
+#page-postos .postos-autocomplete-option:hover,#page-postos .postos-autocomplete-option.active{background:rgba(255,107,44,.11);color:#fff}
+#page-postos .postos-autocomplete-option small{color:var(--text3);font-size:9px;font-weight:800;white-space:nowrap}
+#page-postos .postos-autocomplete-empty{padding:10px;color:var(--text3);font-size:10px}
 #page-postos .postos-map-card,#page-postos .postos-list-card{border-color:rgba(148,163,184,.13);background:linear-gradient(180deg,#111820,#0f161e)}
 #page-postos .postos-mobile-switch{display:none}
 #page-postos .postos-result-card{background:#121a23;border-color:rgba(148,163,184,.12)}
@@ -3433,6 +3496,7 @@ input[type="checkbox"]:indeterminate{background:rgba(233,95,50,.2);border-color:
         <div class="postos-hero-actions">
           <button id="postos-import-btn" class="postos-import-btn" type="button" hidden onclick="postosAbrirImportacao()"><svg class="ui-icon" viewBox="0 0 24 24"><path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>Atualizar planilha</button>
           <button id="postos-price-import-btn" class="postos-import-btn" type="button" hidden onclick="postosAbrirImportacaoPrecos()"><svg class="ui-icon" viewBox="0 0 24 24"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7H14a3.5 3.5 0 0 1 0 7H6"/></svg>Atualizar preços</button>
+          <button id="postos-price-pending-btn" class="postos-import-btn" type="button" hidden onclick="postosAbrirPendentesVinculos()"><svg class="ui-icon" viewBox="0 0 24 24"><path d="M4 12h16M12 4v16"/><circle cx="12" cy="12" r="9"/></svg>Vincular pendentes <span id="postos-price-pending-count" class="postos-pending-badge">0</span></button>
           <div class="postos-beta"><svg class="ui-icon" viewBox="0 0 24 24"><path d="M7 18h10a4 4 0 0 0 .8-7.9A6 6 0 0 0 6.4 8.3 4.8 4.8 0 0 0 7 18Z"/><path d="m9 13 2 2 4-4"/></svg> COORDENADAS COMPARTILHADAS</div>
         </div>
       </div>
@@ -3451,14 +3515,14 @@ input[type="checkbox"]:indeterminate{background:rgba(233,95,50,.2);border-color:
 
         <div id="postos-panel-regiao" class="postos-fields">
           <div class="postos-field span-2"><label>UF</label><select id="postos-uf" onchange="postosPopularCidades()"><option value="">Selecione a UF</option></select></div>
-          <div class="postos-field span-4 postos-wide"><label>Cidade</label><select id="postos-cidade"><option value="">Selecione a cidade</option></select></div>
+          <div class="postos-field span-4 postos-wide"><label>Cidade</label><div class="postos-autocomplete"><input id="postos-cidade" type="search" autocomplete="off" placeholder="Digite para pesquisar a cidade" onfocus="postosAutocompleteInput('regiao',this.value,true)" oninput="postosAutocompleteInput('regiao',this.value)" onblur="postosAutocompleteBlur('regiao')"><div id="postos-cidade-sugestoes" class="postos-autocomplete-menu"></div></div></div>
           <div class="postos-field span-2"><label>Raio do centro</label><select id="postos-raio"><option value="5">5 km</option><option value="10">10 km</option><option value="25" selected>25 km</option><option value="50">50 km</option><option value="100">100 km</option></select></div>
           <div class="postos-field span-2"><label>&nbsp;</label><button class="postos-search-btn" onclick="postosBuscarRegiao(true)">Buscar postos</button></div>
         </div>
 
         <div id="postos-panel-rota" class="postos-fields" style="display:none">
-          <div class="postos-field span-4 postos-wide"><label>Ponto de partida</label><input id="postos-origem" placeholder="Ex.: Juatuba - MG"></div>
-          <div class="postos-field span-4 postos-wide"><label>Destino</label><input id="postos-destino" placeholder="Ex.: Ribeirão Preto - SP"></div>
+          <div class="postos-field span-4 postos-wide"><label>Ponto de partida</label><div class="postos-autocomplete"><input id="postos-origem" type="search" autocomplete="off" placeholder="Digite uma cidade ou endereço" onfocus="postosAutocompleteInput('origem',this.value,true)" oninput="postosAutocompleteInput('origem',this.value)" onblur="postosAutocompleteBlur('origem')"><div id="postos-origem-sugestoes" class="postos-autocomplete-menu"></div></div></div>
+          <div class="postos-field span-4 postos-wide"><label>Destino</label><div class="postos-autocomplete"><input id="postos-destino" type="search" autocomplete="off" placeholder="Digite uma cidade ou endereço" onfocus="postosAutocompleteInput('destino',this.value,true)" oninput="postosAutocompleteInput('destino',this.value)" onblur="postosAutocompleteBlur('destino')"><div id="postos-destino-sugestoes" class="postos-autocomplete-menu"></div></div></div>
           <div class="postos-field span-2"><label>Máx. fora da rota</label><select id="postos-corredor"><option value="2">2 km</option><option value="5" selected>5 km</option><option value="10">10 km</option><option value="20">20 km</option></select></div>
           <div class="postos-field span-2"><label>&nbsp;</label><button class="postos-search-btn" onclick="postosBuscarRota(true)">Calcular rota</button></div>
         </div>
@@ -18319,6 +18383,13 @@ let _postosPriceLinkMeta = {source:'nenhuma',version:'',updatedAt:0,updatedBy:''
 let _postosPriceLinkPromise = null;
 let _postosPriceLinkCloudCheckPromise = null;
 let _postosPriceLinkCloudCheckedAt = 0;
+let _postosPricePendingCloudItems = [];
+let _postosPricePendingMeta = {source:'nenhuma',version:'',updatedAt:0,updatedBy:'',signature:'',sourceFile:'',fromCache:false};
+let _postosPricePendingPromise = null;
+let _postosPricePendingCloudCheckPromise = null;
+let _postosPricePendingCloudCheckedAt = 0;
+let _postosPriceReviewMode = 'import';
+let _postosAutocompleteMatches = {regiao:[],origem:[],destino:[]};
 
 const POSTOS_UF_NOMES = {
   'ACRE':'AC','ALAGOAS':'AL','AMAPA':'AP','AMAZONAS':'AM','BAHIA':'BA','CEARA':'CE','DISTRITO FEDERAL':'DF',
@@ -18347,6 +18418,9 @@ function postosNormalizePriceEntry(x){
   const produto=postosCellText(x.produto||''),produtoKey=postosNorm(x.produtoKey||produto),preco=Number(x.preco),inicio=Math.max(0,Number(x.inicio||0)),fim=Math.max(0,Number(x.fim||0));
   if(!produto||!produtoKey||!Number.isFinite(preco)||preco<=0||!inicio)return null;
   return {produto,produtoKey,preco,inicio,fim,cnpj:String(x.cnpj||'').replace(/\D/g,'').slice(0,14)};
+}
+function postosPricePendingSignature(items){
+  return (Array.isArray(items)?items:[]).map(item=>`${item.key||''}|${item.cnpj||''}|${item.nome||''}|${item.endereco||''}|${(item.products||[]).map(x=>`${x.produtoKey||''}:${Number(x.preco||0).toFixed(4)}:${Number(x.inicio||0)}:${Number(x.fim||0)}`).sort().join(',')}`).sort().join('||');
 }
 function postosPriceSignature(items){
   let hash=2166136261;
@@ -18500,6 +18574,19 @@ async function postosEnsurePriceLinks(forceCloud=false){
   _postosPriceLinkPromise=(async()=>{try{return await postosRefreshPriceLinks(forceCloud);}catch(e){console.warn('IGNIS postos: vínculos CNPJ indisponíveis.',e);return null;}})();
   try{return await _postosPriceLinkPromise;}finally{_postosPriceLinkPromise=null;}
 }
+function postosBuildPricePending(items,meta={}){
+  _postosPricePendingCloudItems=(Array.isArray(items)?items:[]).map(item=>({key:String(item?.key||''),nome:String(item?.nome||''),endereco:String(item?.endereco||''),cnpj:postosPriceCnpj(item?.cnpj),products:(Array.isArray(item?.products)?item.products:[]).map(x=>({produto:String(x?.produto||''),produtoKey:String(x?.produtoKey||postosNorm(x?.produto)||'PRECO'),preco:Number(x?.preco||0),inicio:Number(x?.inicio||0),fim:Number(x?.fim||0),cnpj:postosPriceCnpj(x?.cnpj||item?.cnpj)})).filter(x=>x.produto&&x.preco>0&&x.inicio)})).filter(x=>x.key&&x.nome&&x.endereco&&x.products.length);
+  _postosPricePendingMeta={source:meta.source||'firebase',version:String(meta.version||''),updatedAt:Number(meta.updatedAt||0),updatedBy:String(meta.updatedBy||''),signature:String(meta.signature||postosPricePendingSignature(_postosPricePendingCloudItems)),sourceFile:String(meta.sourceFile||''),fromCache:!!meta.fromCache};
+  postosAtualizarPendentesUI();return _postosPricePendingCloudItems;
+}
+async function postosRefreshPricePending(force=false){
+  if(!force&&_postosPricePendingCloudCheckedAt&&Date.now()-_postosPricePendingCloudCheckedAt<60000)return _postosPricePendingMeta?.source==='firebase'?_postosPricePendingMeta:null;
+  if(_postosPricePendingCloudCheckPromise)return _postosPricePendingCloudCheckPromise;
+  _postosPricePendingCloudCheckPromise=(async()=>{if(!(await postosFirebaseBaseReady())||typeof window.fbLoadPostosPricePending!=='function')throw new Error('O Firebase ainda não está disponível para consultar os postos pendentes.');const cloud=await window.fbLoadPostosPricePending(String(_postosPricePendingMeta?.version||''));_postosPricePendingCloudCheckedAt=Date.now();if(cloud&&cloud.version!==_postosPricePendingMeta?.version)postosBuildPricePending(cloud.items||[],{source:'firebase',...cloud});else if(cloud&&!cloud.version&&!_postosPricePendingMeta?.version&&Array.isArray(cloud.items))postosBuildPricePending(cloud.items,{source:'firebase',...cloud});return cloud;})();
+  try{return await _postosPricePendingCloudCheckPromise;}catch(e){_postosPricePendingCloudCheckedAt=Date.now();throw e;}finally{_postosPricePendingCloudCheckPromise=null;}
+}
+async function postosEnsurePricePending(forceCloud=false){if(_postosPricePendingPromise)return _postosPricePendingPromise;_postosPricePendingPromise=(async()=>{try{return await postosRefreshPricePending(forceCloud);}catch(e){console.warn('IGNIS postos: pendências de preço indisponíveis.',e);return null;}})();try{return await _postosPricePendingPromise;}finally{_postosPricePendingPromise=null;}}
+function postosAtualizarPendentesUI(){const btn=document.getElementById('postos-price-pending-btn'),count=document.getElementById('postos-price-pending-count'),n=_postosPricePendingCloudItems.length,can=postosPodeImportar();if(count)count.textContent=n.toLocaleString('pt-BR');if(btn){btn.hidden=!can;btn.classList.toggle('has-pending',n>0);btn.title=n?`${n} posto(s) aguardando vínculo manual`:'Nenhum posto aguardando vínculo manual';}}
 function postosBuildPrices(raw,meta={}){
   const next=new Map();
   (Array.isArray(raw)?raw:[]).forEach(item=>{
@@ -18597,11 +18684,16 @@ function postosPopularUF(){
   postosPopularCidades();
 }
 function postosPopularCidades(){
-  const uf=document.getElementById('postos-uf')?.value||'';const sel=document.getElementById('postos-cidade');if(!sel||!_postosBase)return;
-  const atual=sel.value;const cidades=[...new Set(_postosBase.filter(p=>!uf||p.uf===uf).map(p=>p.cidade).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
-  sel.innerHTML='<option value="">Selecione a cidade</option>'+cidades.map(c=>`<option value="${postosEsc(c)}">${postosEsc(c)}</option>`).join('');
-  if(cidades.includes(atual))sel.value=atual;
+  const uf=document.getElementById('postos-uf')?.value||'',input=document.getElementById('postos-cidade');if(!input||!_postosBase)return;const atual=String(input.value||'').trim(),valid=_postosBase.some(p=>(!uf||p.uf===uf)&&postosNorm(p.cidade)===postosNorm(atual));if(atual&&!valid)input.value='';postosAutocompleteClose('regiao');
 }
+function postosCityOptions(uf=''){const map=new Map();(_postosBase||[]).forEach(p=>{if(uf&&p.uf!==uf)return;const key=`${p.uf}|${postosNorm(p.cidade)}`;if(!map.has(key)&&p.cidade)map.set(key,{cidade:p.cidade,uf:p.uf});});return [...map.values()].sort((a,b)=>a.cidade.localeCompare(b.cidade,'pt-BR')||a.uf.localeCompare(b.uf,'pt-BR'));}
+function postosAutocompleteConfig(kind){if(kind==='regiao')return {input:document.getElementById('postos-cidade'),menu:document.getElementById('postos-cidade-sugestoes')};if(kind==='origem')return {input:document.getElementById('postos-origem'),menu:document.getElementById('postos-origem-sugestoes')};return {input:document.getElementById('postos-destino'),menu:document.getElementById('postos-destino-sugestoes')};}
+function postosAutocompleteInput(kind,value='',force=false){const {menu}=postosAutocompleteConfig(kind);if(!menu||!_postosBase)return;const q=postosNorm(value),uf=kind==='regiao'?(document.getElementById('postos-uf')?.value||''):'';let items=postosCityOptions(uf);if(q){const terms=q.split(' ').filter(Boolean);items=items.filter(x=>{const hay=postosNorm(`${x.cidade} ${x.uf}`);return terms.every(t=>hay.includes(t));});}else if(!force){postosAutocompleteClose(kind);return;}items=items.slice(0,35);_postosAutocompleteMatches[kind]=items;if(!items.length){menu.innerHTML='<div class="postos-autocomplete-empty">Nenhuma cidade encontrada. Você ainda pode digitar um endereço completo.</div>';menu.classList.add('open');return;}menu.innerHTML=items.map((x,i)=>`<button type="button" class="postos-autocomplete-option" onmousedown="event.preventDefault();postosAutocompleteSelect('${kind}',${i})"><span>${postosEsc(x.cidade)}</span><small>${postosEsc(x.uf)}</small></button>`).join('');menu.classList.add('open');}
+function postosAutocompleteSelect(kind,index){const item=_postosAutocompleteMatches[kind]?.[index],cfg=postosAutocompleteConfig(kind);if(!item||!cfg.input)return;cfg.input.value=kind==='regiao'?item.cidade:`${item.cidade} - ${item.uf}`;postosAutocompleteClose(kind);}
+function postosAutocompleteClose(kind){const {menu}=postosAutocompleteConfig(kind);menu?.classList.remove('open');}
+function postosAutocompleteBlur(kind){setTimeout(()=>postosAutocompleteClose(kind),140);}
+function postosResolveCidadeRegiao(uf,value){const q=postosNorm(value);return (_postosBase||[]).find(p=>p.uf===uf&&postosNorm(p.cidade)===q)?.cidade||'';}
+
 function postosFuelSvg(){return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V5a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v16"/><path d="M5 10h11M3 21h15"/><path d="M16 7h2l3 3v7a2 2 0 0 1-4 0v-3"/><path d="M8 6h5"/></svg>';}
 function postosMarkerIcon(){
   return L.divIcon({className:'postos-marker-wrap',html:`<div class="postos-pin"><div class="postos-pin-shell"><div class="postos-pin-core">${postosFuelSvg()}</div></div></div>`,iconSize:[38,46],iconAnchor:[19,44],popupAnchor:[0,-40]});
@@ -18638,7 +18730,7 @@ function postosSetMobileView(view,scroll=true){
   if(scroll&&window.innerWidth<=720)document.querySelector('.postos-mobile-switch')?.scrollIntoView({behavior:'smooth',block:'start'});
 }
 function postosPodeImportar(){const role=window._authUser?.role;return role==='adm'||role==='admin';}
-function postosAtualizarAcessoImportacao(){const can=postosPodeImportar(),btn=document.getElementById('postos-import-btn'),priceBtn=document.getElementById('postos-price-import-btn');if(btn)btn.hidden=!can;if(priceBtn)priceBtn.hidden=!can;}
+function postosAtualizarAcessoImportacao(){const can=postosPodeImportar(),btn=document.getElementById('postos-import-btn'),priceBtn=document.getElementById('postos-price-import-btn'),pendingBtn=document.getElementById('postos-price-pending-btn');if(btn)btn.hidden=!can;if(priceBtn)priceBtn.hidden=!can;if(pendingBtn)pendingBtn.hidden=!can;postosAtualizarPendentesUI();}
 function postosImportFeedback(text,type=''){
   const el=document.getElementById('postos-import-feedback');if(!el)return;
   el.textContent=text||'';el.className='postos-import-feedback'+(type?' '+type:'');
@@ -18821,7 +18913,8 @@ async function postosAbrirImportacaoPrecos(){
     const baseCloud=await postosRefreshCloudBase(true);if(baseCloud?.fromCache)throw new Error('Sem conexão com o Firebase. A importação foi bloqueada para não cruzar preços com uma rede desatualizada.');
     const priceCloud=await postosRefreshCloudPrices(true);if(priceCloud?.fromCache)throw new Error('Sem conexão com o Firebase. A importação foi bloqueada para evitar substituir preços mais novos sem conferência.');
     const linkCloud=await postosRefreshPriceLinks(true);if(linkCloud?.fromCache)throw new Error('Sem conexão com o Firebase. Não foi possível conferir os vínculos CNPJ já memorizados.');
-    if(drop)drop.disabled=false;postosPriceImportFeedback(`Pronto. ${_postosPriceLinksByCnpj.size.toLocaleString('pt-BR')} vínculo(s) CNPJ memorizado(s). Selecione a planilha de preços.`);setTimeout(()=>drop?.focus(),60);
+    const pendingCloud=await postosRefreshPricePending(true);if(pendingCloud?.fromCache)throw new Error('Sem conexão com o Firebase. Não foi possível conferir os postos que aguardam vínculo.');
+    if(drop)drop.disabled=false;postosPriceImportFeedback(`Pronto. ${_postosPriceLinksByCnpj.size.toLocaleString('pt-BR')} vínculo(s) CNPJ memorizado(s) · ${_postosPricePendingCloudItems.length.toLocaleString('pt-BR')} pendente(s). Selecione a planilha de preços.`);setTimeout(()=>drop?.focus(),60);
   }catch(e){console.error('IGNIS postos: preparação da importação de preços',e);postosPriceImportFeedback(e?.message||'Não foi possível preparar a importação de preços.','error');if(drop)drop.disabled=true;}
 }
 function postosFecharImportacaoPrecos(){
@@ -19019,7 +19112,9 @@ function postosMontarPreviewPrecos(extracted,fileName){
 
   const mergedLinks=new Map(_postosPriceLinksByCnpj);confirmedLinks.forEach((v,k)=>mergedLinks.set(k,v));
   const linkItems=[...mergedLinks.values()].sort((a,b)=>a.cnpj.localeCompare(b.cnpj)),linkSignature=postosPriceLinkSignature(linkItems),currentLinkSignature=_postosPriceLinkMeta?.signature||postosPriceLinkSignature([..._postosPriceLinksByCnpj.values()]),linksChanged=linkSignature!==currentLinkSignature;
-  return {items,unmatched,products:[...products],rawRows:extracted.rows.length,latestRows:reportLatest.size,matchedStations:items.length,priceCount:[...grouped.values()].reduce((n,x)=>n+x.precos.length,0),signature,fileName:String(fileName||''),sheetName:extracted.sheetName,expectedVersion:String(_postosPriceMeta?.version||''),sameSnapshot,linkedByStored:linkedByStored.size,linkedByLegacy:linkedByLegacy.size,linkedByExact:linkedByExact.size,linkedByManual:linkedByManual.size,warnings,linkItems,linkSignature,expectedLinkVersion:String(_postosPriceLinkMeta?.version||''),linksChanged};
+  const pendingItems=unmatched.map(x=>({key:x.key,nome:x.nome,endereco:x.endereco,cnpj:x.cnpj,products:x.products.map(r=>({produto:r.produto,produtoKey:r.produtoKey,preco:r.preco,inicio:r.inicio,fim:r.fim,cnpj:r.cnpj||x.cnpj}))}));
+  const pendingSignature=postosPricePendingSignature(pendingItems),currentPendingSignature=_postosPricePendingMeta?.signature||postosPricePendingSignature(_postosPricePendingCloudItems),pendingChanged=pendingSignature!==currentPendingSignature;
+  return {items,unmatched,pendingItems,pendingSignature,expectedPendingVersion:String(_postosPricePendingMeta?.version||''),pendingChanged,products:[...products],rawRows:extracted.rows.length,latestRows:reportLatest.size,matchedStations:items.length,priceCount:[...grouped.values()].reduce((n,x)=>n+x.precos.length,0),signature,fileName:String(fileName||''),sheetName:extracted.sheetName,expectedVersion:String(_postosPriceMeta?.version||''),sameSnapshot,linkedByStored:linkedByStored.size,linkedByLegacy:linkedByLegacy.size,linkedByExact:linkedByExact.size,linkedByManual:linkedByManual.size,warnings,linkItems,linkSignature,expectedLinkVersion:String(_postosPriceLinkMeta?.version||''),linksChanged};
 }
 function postosRenderPreviewPrecos(p){
   const fmt=n=>Number(n||0).toLocaleString('pt-BR'),preview=document.getElementById('postos-price-import-preview');if(preview)preview.hidden=false;
@@ -19032,7 +19127,7 @@ function postosRenderPreviewPrecos(p){
     examples.innerHTML=top+(p.unmatched.length>4?`<div>+ ${fmt(p.unmatched.length-4)} outro(s) posto(s) aguardando revisão.</div>`:'')+warning||'<div><b>Vínculos conferidos:</b> todos os postos da planilha foram reconhecidos.</div>';
   }
   const review=document.getElementById('postos-price-review-btn');if(review){review.hidden=!p.unmatched.length;review.textContent=p.unmatched.length?`Revisar ${fmt(p.unmatched.length)} posto(s) sem vínculo`:'Revisar postos sem vínculo';}
-  const nothingToSave=p.sameSnapshot&&!p.linksChanged,btn=document.getElementById('postos-price-import-confirm-btn');if(btn){btn.disabled=_postosPriceImportSaving||!p.items.length||nothingToSave;btn.textContent=_postosPriceImportSaving?'Enviando ao Firebase...':nothingToSave?'Tudo já está atualizado':p.sameSnapshot&&p.linksChanged?'Salvar vínculos CNPJ':'Salvar preços';}
+  const nothingToSave=p.sameSnapshot&&!p.linksChanged&&!p.pendingChanged,btn=document.getElementById('postos-price-import-confirm-btn');if(btn){btn.disabled=_postosPriceImportSaving||(!p.items.length&&!p.pendingItems?.length)||nothingToSave;btn.textContent=_postosPriceImportSaving?'Enviando ao Firebase...':nothingToSave?'Tudo já está atualizado':p.sameSnapshot&&!p.linksChanged&&p.pendingChanged?'Salvar pendências':p.sameSnapshot&&p.linksChanged?'Salvar vínculos CNPJ':'Salvar preços';}
   if(nothingToSave)postosPriceImportFeedback('Esta planilha gera os mesmos preços e os mesmos vínculos que já estão publicados.','success');
   else if(p.unmatched.length)postosPriceImportFeedback(`Planilha válida. ${p.unmatched.length} posto(s) ficaram sem vínculo. Você pode revisar agora; os não resolvidos continuarão sem preço.`,'loading');
   else if(p.linksChanged)postosPriceImportFeedback(`Planilha válida. Todos os postos foram reconhecidos e ${p.linkItems.length.toLocaleString('pt-BR')} vínculo(s) CNPJ ficarão memorizados.`,'success');
@@ -19058,26 +19153,35 @@ function postosPriceSelectOptions(item,query='',selected=''){
   const candidates=postosPriceFindCandidates(item,query),selectedPosto=selected?(_postosBase||[]).find(p=>p.codigo===selected):null;if(selectedPosto&&!candidates.some(p=>p.codigo===selectedPosto.codigo))candidates.unshift(selectedPosto);
   return '<option value="">Selecione o posto correto</option>'+candidates.map(p=>`<option value="${postosEsc(p.codigo)}"${p.codigo===selected?' selected':''}>EC ${postosEsc(p.codigo)} · ${postosEsc(p.nome)} · ${postosEsc(p.cidade)}/${postosEsc(p.uf)} · ${postosEsc(p.endereco)}</option>`).join('');
 }
-function postosAbrirRevisaoVinculos(){
-  const p=_postosPriceImportPreview;if(!p?.unmatched?.length){showToast('Não há postos sem vínculo nesta planilha.','success');return;}
-  _postosPriceReviewItems=p.unmatched.slice();const list=document.getElementById('postos-price-link-list'),summary=document.getElementById('postos-price-link-summary'),modal=document.getElementById('postos-price-link-modal');
-  if(summary)summary.textContent=`${p.unmatched.length.toLocaleString('pt-BR')} posto(s) não foram vinculados automaticamente. Pesquise pelo nome, cidade, endereço ou Código EC e escolha somente quando tiver certeza.`;
-  if(list)list.innerHTML=_postosPriceReviewItems.map((item,i)=>{
-    const products=(item.products||[]).slice(0,5).map(x=>`<span>${postosEsc(x.produto)}: <strong>${postosEsc(postosFmtPreco(x.preco))}</strong></span>`).join('');
-    const cnpj=item.cnpj?postosFmtCnpj(item.cnpj):'Sem CNPJ';
-    const note=item.cnpj?'Ao aplicar, este CNPJ será memorizado para as próximas importações.':'Este registro não possui CNPJ; o vínculo valerá nesta importação, mas não poderá ser memorizado por CNPJ.';
-    return `<div class="postos-link-card"><div class="postos-link-card-head"><div><b>${postosEsc(item.nome)}</b><small>${postosEsc(item.endereco)}</small></div><span class="postos-link-cnpj">${postosEsc(cnpj)}</span></div><div class="postos-link-products">${products}</div><div class="postos-link-controls"><input id="postos-price-link-search-${i}" type="search" placeholder="Buscar posto, cidade, EC..." oninput="postosPriceAtualizarSugestoes(${i},this.value)"><select id="postos-price-link-select-${i}">${postosPriceSelectOptions(item)}</select></div><div class="postos-link-note${item.cnpj?'':' warn'}">${postosEsc(note)}</div></div>`;
-  }).join('');
+function postosRenderRevisaoVinculos(items,mode='import'){
+  _postosPriceReviewMode=mode;_postosPriceReviewItems=(items||[]).slice();const list=document.getElementById('postos-price-link-list'),summary=document.getElementById('postos-price-link-summary'),modal=document.getElementById('postos-price-link-modal'),apply=document.getElementById('postos-price-link-apply');
+  if(summary)summary.textContent=`${_postosPriceReviewItems.length.toLocaleString('pt-BR')} posto(s) aguardando vínculo manual. Pesquise pelo nome, cidade, endereço ou Código EC e escolha somente quando tiver certeza.${mode==='cloud'?' Ao salvar, o preço é publicado e o CNPJ fica memorizado para as próximas importações.':''}`;
+  if(apply)apply.textContent=mode==='cloud'?'Salvar vínculos selecionados':'Aplicar vínculos selecionados';
+  if(list)list.innerHTML=_postosPriceReviewItems.map((item,i)=>{const products=(item.products||[]).slice(0,8).map(x=>`<span>${postosEsc(x.produto)}: <strong>${postosEsc(postosFmtPreco(x.preco))}</strong></span>`).join(''),cnpj=item.cnpj?postosFmtCnpj(item.cnpj):'Sem CNPJ',note=item.cnpj?'Ao salvar, este CNPJ será memorizado para as próximas importações.':'Este registro não possui CNPJ; o preço pode ser vinculado agora, mas em uma nova planilha talvez precise de revisão novamente.';return `<div class="postos-link-card"><div class="postos-link-card-head"><div><b>${postosEsc(item.nome)}</b><small>${postosEsc(item.endereco)}</small></div><span class="postos-link-cnpj">${postosEsc(cnpj)}</span></div><div class="postos-link-products">${products}</div><div class="postos-link-controls"><input id="postos-price-link-search-${i}" type="search" placeholder="Buscar posto, cidade, EC..." oninput="postosPriceAtualizarSugestoes(${i},this.value)"><select id="postos-price-link-select-${i}">${postosPriceSelectOptions(item)}</select></div><div class="postos-link-note${item.cnpj?'':' warn'}">${postosEsc(note)}</div></div>`;}).join('')||'<div class="postos-link-empty">Nenhum posto aguardando vínculo manual.</div>';
   if(modal){modal.classList.add('open');modal.setAttribute('aria-hidden','false');}ignisSyncModalScrollLock();
 }
-function postosPriceAtualizarSugestoes(index,query){
-  const item=_postosPriceReviewItems[index],sel=document.getElementById(`postos-price-link-select-${index}`);if(!item||!sel)return;const selected=sel.value;sel.innerHTML=postosPriceSelectOptions(item,query,selected);
+function postosAbrirRevisaoVinculos(){const p=_postosPriceImportPreview;if(!p?.unmatched?.length){showToast('Não há postos sem vínculo nesta planilha.','success');return;}postosRenderRevisaoVinculos(p.unmatched,'import');}
+async function postosAbrirPendentesVinculos(){
+  if(!postosPodeImportar()){showToast('Sem permissão para vincular preços.','error');return;}
+  try{postosSetStatus('Carregando postos que aguardam vínculo...','loading',20);await Promise.all([postosEnsureBase(),postosEnsurePrices(),postosEnsurePriceLinks(),postosEnsurePricePending(true)]);if(!_postosPricePendingCloudItems.length){postosSetStatus('Não há postos aguardando vínculo manual.','success');showToast('Nenhum posto pendente de vínculo.','success');postosAtualizarPendentesUI();return;}postosRenderRevisaoVinculos(_postosPricePendingCloudItems,'cloud');postosSetStatus(`${_postosPricePendingCloudItems.length} posto(s) aguardando vínculo manual.`,'info');}catch(e){console.error('IGNIS postos: abrir pendentes',e);showToast(e?.message||'Não foi possível carregar os postos pendentes.','error');}
 }
-function postosAplicarRevisaoVinculos(){
-  if(!_postosPriceImportSource||!_postosPriceReviewItems.length)return;let applied=0;
-  _postosPriceReviewItems.forEach((item,i)=>{const codigo=document.getElementById(`postos-price-link-select-${i}`)?.value||'';if(codigo){_postosPricePendingLinks.set(item.key,{codigo,source:'manual'});applied++;}});
-  if(!applied){showToast('Selecione pelo menos um posto para aplicar o vínculo.','error');return;}
-  postosFecharRevisaoVinculos(true);_postosPriceImportPreview=postosMontarPreviewPrecos(_postosPriceImportSource.extracted,_postosPriceImportSource.fileName);postosRenderPreviewPrecos(_postosPriceImportPreview);ignisSyncModalScrollLock();showToast(`${applied} vínculo(s) aplicado(s) à prévia. Confira e salve os preços.`,'success');
+function postosPriceAtualizarSugestoes(index,query){const item=_postosPriceReviewItems[index],sel=document.getElementById(`postos-price-link-select-${index}`);if(!item||!sel)return;const selected=sel.value;sel.innerHTML=postosPriceSelectOptions(item,query,selected);}
+async function postosAplicarRevisaoVinculos(){
+  if(!_postosPriceReviewItems.length)return;const chosen=[];_postosPriceReviewItems.forEach((item,i)=>{const codigo=document.getElementById(`postos-price-link-select-${i}`)?.value||'';if(codigo)chosen.push({item,codigo});});if(!chosen.length){showToast('Selecione pelo menos um posto para aplicar o vínculo.','error');return;}
+  if(_postosPriceReviewMode!=='cloud'){if(!_postosPriceImportSource)return;chosen.forEach(({item,codigo})=>_postosPricePendingLinks.set(item.key,{codigo,source:'manual'}));postosFecharRevisaoVinculos(true);_postosPriceImportPreview=postosMontarPreviewPrecos(_postosPriceImportSource.extracted,_postosPriceImportSource.fileName);postosRenderPreviewPrecos(_postosPriceImportPreview);ignisSyncModalScrollLock();showToast(`${chosen.length} vínculo(s) aplicado(s) à prévia. Confira e salve os preços.`,'success');return;}
+  const applyBtn=document.getElementById('postos-price-link-apply');if(applyBtn){applyBtn.disabled=true;applyBtn.textContent='Salvando...';}
+  try{
+    await Promise.all([postosRefreshCloudPrices(true),postosRefreshPriceLinks(true),postosRefreshPricePending(true)]);
+    const priceMap=new Map([..._postosPricesByCode.values()].map(x=>[String(x.codigo),{codigo:String(x.codigo),nome:String(x.nome||''),endereco:String(x.endereco||''),precos:(x.precos||[]).map(y=>({...y}))}])),linkMap=new Map(_postosPriceLinksByCnpj),resolvedKeys=new Set();
+    chosen.forEach(({item,codigo})=>{const posto=(_postosBase||[]).find(p=>String(p.codigo)===String(codigo));if(!posto)return;resolvedKeys.add(item.key);let target=priceMap.get(String(codigo));if(!target)target={codigo:String(codigo),nome:posto.nome,endereco:posto.endereco,precos:[]};const byProduct=new Map((target.precos||[]).map(x=>[x.produtoKey,x]));(item.products||[]).forEach(r=>{const next={produto:r.produto,produtoKey:r.produtoKey||postosNorm(r.produto)||'PRECO',preco:Number(r.preco),inicio:Number(r.inicio),fim:Number(r.fim||0),cnpj:item.cnpj||r.cnpj||''},prev=byProduct.get(next.produtoKey);if(!prev||Number(next.inicio)>=Number(prev.inicio||0))byProduct.set(next.produtoKey,next);});target.precos=[...byProduct.values()].sort((a,b)=>a.produto.localeCompare(b.produto,'pt-BR'));priceMap.set(String(codigo),target);if(item.cnpj)linkMap.set(item.cnpj,{cnpj:item.cnpj,codigo:String(codigo),nome:item.nome,endereco:item.endereco,source:'manual',updatedAt:Date.now()});});
+    if(!resolvedKeys.size)throw new Error('Nenhum dos postos selecionados existe mais na Rede de Postos atual.');
+    const updatedPrices=[...priceMap.values()].sort((a,b)=>a.nome.localeCompare(b.nome,'pt-BR')),updatedLinks=[...linkMap.values()].sort((a,b)=>a.cnpj.localeCompare(b.cnpj)),remaining=_postosPricePendingCloudItems.filter(x=>!resolvedKeys.has(x.key)),updatedBy=String(window._authUser?.email||window._authUser?.name||window._authUser?.username||'usuario');
+    const priceResult=await window.fbSavePostosPrices(updatedPrices,{expectedVersion:String(_postosPriceMeta?.version||''),signature:postosPriceSignature(updatedPrices),sourceFile:_postosPricePendingMeta?.sourceFile||_postosPriceMeta?.sourceFile||'vinculo-manual',updatedBy});
+    if(updatedLinks.length){const linkResult=await window.fbSavePostosPriceLinks(updatedLinks,{expectedVersion:String(_postosPriceLinkMeta?.version||''),signature:postosPriceLinkSignature(updatedLinks),updatedBy});postosBuildPriceLinks(updatedLinks,{source:'firebase',...linkResult,signature:postosPriceLinkSignature(updatedLinks)});_postosPriceLinkCloudCheckedAt=Date.now();}
+    const pendingResult=await window.fbSavePostosPricePending(remaining,{expectedVersion:String(_postosPricePendingMeta?.version||''),signature:postosPricePendingSignature(remaining),sourceFile:_postosPricePendingMeta?.sourceFile||'',updatedBy});
+    postosBuildPrices(updatedPrices,{source:'firebase',...priceResult,signature:postosPriceSignature(updatedPrices)});_postosPriceCloudCheckedAt=Date.now();postosBuildPricePending(remaining,{source:'firebase',...pendingResult,signature:postosPricePendingSignature(remaining)});_postosPricePendingCloudCheckedAt=Date.now();postosFecharRevisaoVinculos();postosSetStatus(`${resolvedKeys.size} posto(s) vinculado(s). ${remaining.length} pendente(s) continuam aguardando revisão.`,'success');showToast(`${resolvedKeys.size} vínculo(s) salvo(s) e preços publicados.`,'success');
+  }catch(e){console.error('IGNIS postos: salvar vínculos pendentes',e);showToast(e?.message||'Não foi possível salvar os vínculos.','error');try{await Promise.all([postosRefreshCloudPrices(true),postosRefreshPriceLinks(true),postosRefreshPricePending(true)]);}catch(_){}
+  }finally{if(applyBtn){applyBtn.disabled=false;applyBtn.textContent='Salvar vínculos selecionados';}}
 }
 async function postosLerPlanilhaPrecos(input){
   const file=input?.files?.[0];if(!file)return;const drop=document.getElementById('postos-price-import-drop');if(drop)drop.disabled=true;const preview=document.getElementById('postos-price-import-preview');if(preview)preview.hidden=true;_postosPriceImportPreview=null;_postosPriceImportSource=null;_postosPricePendingLinks=new Map();
@@ -19089,12 +19193,12 @@ async function postosLerPlanilhaPrecos(input){
   finally{if(drop)drop.disabled=false;if(input)input.value='';}
 }
 async function postosConfirmarImportacaoPrecos(){
-  const p=_postosPriceImportPreview;if(!p||_postosPriceImportSaving||!postosPodeImportar()||!p.items.length)return;const saveLinks=!!p.linksChanged&&p.linkItems.length>0,savePrices=!p.sameSnapshot;if(!saveLinks&&!savePrices)return;
+  const p=_postosPriceImportPreview;if(!p||_postosPriceImportSaving||!postosPodeImportar()||(!p.items.length&&!p.pendingItems?.length))return;const saveLinks=!!p.linksChanged&&p.linkItems.length>0,savePrices=!p.sameSnapshot&&p.items.length>0,savePending=!!p.pendingChanged;if(!saveLinks&&!savePrices&&!savePending)return;
   _postosPriceImportSaving=true;const btn=document.getElementById('postos-price-import-confirm-btn'),drop=document.getElementById('postos-price-import-drop');if(btn){btn.disabled=true;btn.textContent='Enviando ao Firebase...';}if(drop)drop.disabled=true;
-  postosPriceImportFeedback(`Confirmando ${savePrices?p.priceCount.toLocaleString('pt-BR')+' preço(s)':''}${savePrices&&saveLinks?' e ':''}${saveLinks?p.linkItems.length.toLocaleString('pt-BR')+' vínculo(s) CNPJ':''}...`,'loading');postosSetStatus('Atualizando preços da Rede de Postos no Firebase...','loading',45);
+  postosPriceImportFeedback(`Confirmando ${savePrices?p.priceCount.toLocaleString('pt-BR')+' preço(s)':''}${savePrices&&saveLinks?' e ':''}${saveLinks?p.linkItems.length.toLocaleString('pt-BR')+' vínculo(s) CNPJ':''}${savePending?`${(savePrices||saveLinks)?' · ':''}${p.pendingItems.length.toLocaleString('pt-BR')} pendente(s)`:''}...`,'loading');postosSetStatus('Atualizando preços da Rede de Postos no Firebase...','loading',45);
   let linksSaved=false;
   try{
-    if(!(await postosFirebaseBaseReady())||typeof window.fbSavePostosPrices!=='function'||typeof window.fbSavePostosPriceLinks!=='function')throw new Error('O Firebase não está disponível. Verifique a conexão e tente novamente.');
+    if(!(await postosFirebaseBaseReady())||typeof window.fbSavePostosPrices!=='function'||typeof window.fbSavePostosPriceLinks!=='function'||typeof window.fbSavePostosPricePending!=='function')throw new Error('O Firebase não está disponível. Verifique a conexão e tente novamente.');
     const updatedBy=window._authUser?.nome||window._authUser?.id||'Administrador';
     if(saveLinks){
       const linkResult=await window.fbSavePostosPriceLinks(p.linkItems,{expectedVersion:p.expectedLinkVersion,signature:p.linkSignature,updatedBy});
@@ -19104,16 +19208,17 @@ async function postosConfirmarImportacaoPrecos(){
       const result=await window.fbSavePostosPrices(p.items,{expectedVersion:p.expectedVersion,signature:p.signature,sourceFile:p.fileName,updatedBy});
       postosBuildPrices(p.items,{source:'firebase',version:result.version,updatedAt:result.updatedAt,updatedBy:result.updatedBy,sourceFile:result.sourceFile,signature:result.signature});_postosPriceCloudCheckedAt=Date.now();
     }
+    if(savePending){const pendingResult=await window.fbSavePostosPricePending(p.pendingItems,{expectedVersion:p.expectedPendingVersion,signature:p.pendingSignature,sourceFile:p.fileName,updatedBy});postosBuildPricePending(p.pendingItems,{source:'firebase',version:pendingResult.version,updatedAt:pendingResult.updatedAt,updatedBy:pendingResult.updatedBy,sourceFile:pendingResult.sourceFile,signature:pendingResult.signature});_postosPricePendingCloudCheckedAt=Date.now();p.expectedPendingVersion=pendingResult.version;p.pendingChanged=false;}
     const unresolved=p.unmatched.length;_postosPriceImportPreview=null;_postosPriceImportSource=null;_postosPricePendingLinks=new Map();_postosPriceImportSaving=false;postosFecharImportacaoPrecos();
-    postosSetStatus(`${savePrices?'Preços atualizados':'Vínculos CNPJ atualizados'} com sucesso.${unresolved?` ${unresolved} posto(s) não resolvido(s) permaneceram sem preço.`:''}`,'success');showToast(`${savePrices?`${p.priceCount} preço(s) publicados`:'Vínculos CNPJ salvos'}${saveLinks?' · vínculos memorizados':''}.`,'success');
+    const actionLabel=savePrices?'Preços atualizados':saveLinks?'Vínculos CNPJ atualizados':'Pendências atualizadas';postosSetStatus(`${actionLabel} com sucesso.${unresolved?` ${unresolved} posto(s) aguardam vínculo manual no botão Vincular pendentes.`:''}`,'success');showToast(`${savePrices?`${p.priceCount} preço(s) publicados`:saveLinks?'Vínculos CNPJ salvos':'Lista de pendentes salva'}${saveLinks?' · vínculos memorizados':''}.`,'success');
   }catch(e){
     console.error('IGNIS postos: gravação dos preços/vínculos',e);let msg=e?.message||'O Firebase não confirmou a atualização.';if(linksSaved&&!savePrices)msg='Os vínculos CNPJ foram salvos, mas a etapa seguinte não foi concluída. '+msg;postosPriceImportFeedback(msg,'error');postosSetStatus(msg,'error');showToast(msg,'error');
-    if(e?.code==='IGNIS_POSTOS_LINK_VERSION_CONFLICT'||e?.code==='IGNIS_POSTOS_PRICE_VERSION_CONFLICT'){
-      try{if(e?.code==='IGNIS_POSTOS_LINK_VERSION_CONFLICT')await postosRefreshPriceLinks(true);else await postosRefreshCloudPrices(true);}catch(refreshError){}
+    if(e?.code==='IGNIS_POSTOS_LINK_VERSION_CONFLICT'||e?.code==='IGNIS_POSTOS_PRICE_VERSION_CONFLICT'||e?.code==='IGNIS_POSTOS_PENDING_VERSION_CONFLICT'){
+      try{if(e?.code==='IGNIS_POSTOS_LINK_VERSION_CONFLICT')await postosRefreshPriceLinks(true);else if(e?.code==='IGNIS_POSTOS_PENDING_VERSION_CONFLICT')await postosRefreshPricePending(true);else await postosRefreshCloudPrices(true);}catch(refreshError){}
       postosResetImportacaoPrecos();postosPriceImportFeedback('A base mudou desde a sua prévia. Selecione a planilha novamente para recalcular os vínculos e preços.','error');
     }
   }finally{
-    _postosPriceImportSaving=false;if(drop)drop.disabled=false;if(btn&&!_postosPriceImportPreview){btn.disabled=true;btn.textContent='Salvar preços';}else if(btn&&_postosPriceImportPreview){const nothing=_postosPriceImportPreview.sameSnapshot&&!_postosPriceImportPreview.linksChanged;btn.disabled=nothing;btn.textContent=nothing?'Tudo já está atualizado':_postosPriceImportPreview.sameSnapshot?'Salvar vínculos CNPJ':'Salvar preços';}
+    _postosPriceImportSaving=false;if(drop)drop.disabled=false;if(btn&&!_postosPriceImportPreview){btn.disabled=true;btn.textContent='Salvar preços';}else if(btn&&_postosPriceImportPreview){const nothing=_postosPriceImportPreview.sameSnapshot&&!_postosPriceImportPreview.linksChanged&&!_postosPriceImportPreview.pendingChanged;btn.disabled=nothing;btn.textContent=nothing?'Tudo já está atualizado':_postosPriceImportPreview.sameSnapshot&&!_postosPriceImportPreview.linksChanged?'Salvar pendências':_postosPriceImportPreview.sameSnapshot?'Salvar vínculos CNPJ':'Salvar preços';}
   }
 }
 async function postosOnShow(){
@@ -19122,7 +19227,7 @@ async function postosOnShow(){
     postosSetStatus('Carregando mapa e base credenciada...','info',8);
     await Promise.all([postosEnsureLeaflet(),postosEnsureBase()]);
     await postosEnsureCluster();
-    try{await postosEnsurePrices();}catch(priceError){console.warn('IGNIS postos: preços não carregados.',priceError);}
+    try{await postosEnsurePrices();}catch(priceError){console.warn('IGNIS postos: preços não carregados.',priceError);}if(postosPodeImportar()){try{await postosEnsurePricePending();}catch(pendingError){console.warn('IGNIS postos: pendências não carregadas.',pendingError);}}
     postosInitMap();setTimeout(()=>_postosMap?.invalidateSize(),80);
     const origem=_postosBaseMeta?.source==='firebase'?'A lista oficial compartilhada está carregada.':'A base inicial do site está carregada; um administrador pode publicar uma planilha atualizada.';
     const priceInfo=_postosPricesByCode.size?` ${_postosPricesByCode.size} posto(s) já têm preços disponíveis.`:' Os preços ainda não foram importados.';
@@ -19268,8 +19373,8 @@ function postosAbrirRotaComParada(lat,lon){const o=document.getElementById('post
 
 async function postosBuscarRegiao(reset=true){
   try{
-    await postosOnShow();const uf=document.getElementById('postos-uf')?.value||'',cidade=document.getElementById('postos-cidade')?.value||'',radius=Number(document.getElementById('postos-raio')?.value||25);
-    if(!uf||!cidade){postosSetStatus('Selecione a UF e a cidade.','error');return;}
+    await postosOnShow();const uf=document.getElementById('postos-uf')?.value||'',cidadeInput=document.getElementById('postos-cidade')?.value||'',cidade=postosResolveCidadeRegiao(uf,cidadeInput),radius=Number(document.getElementById('postos-raio')?.value||25);
+    if(!uf||!cidade){postosSetStatus('Selecione a UF e pesquise uma cidade da lista.','error');postosAutocompleteInput('regiao',cidadeInput,true);return;}const cityInput=document.getElementById('postos-cidade');if(cityInput)cityInput.value=cidade;
     if(reset){
       const center=await postosGeocodeText(`${cidade}, ${uf}, Brasil`);if(!center)throw new Error('Não consegui localizar o centro da cidade selecionada.');
       const candidates=_postosBase.filter(p=>p.uf===uf&&p.cidade===cidade);
