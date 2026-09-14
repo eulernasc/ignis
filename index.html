@@ -1,11 +1,11 @@
 <!DOCTYPE html>
-<!-- IGNIS v57 · Importação segura e compartilhada da Rede de Postos -->
+<!-- IGNIS v58 · carregamento prioritário e cache persistente em todos os aparelhos -->
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <!-- IGNIS v46 · correção de travamento Motoristas PX + cache de nomes + renderização única -->
-<meta name="ignis-build" content="2026-09-14-postos-import-firebase-v3">
+<meta name="ignis-build" content="2026-09-14-loading-firebase-v4">
 <title>Ignis — Gestão Inteligente de Frotas e Equipamentos</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23ff6b2c'/%3E%3Cpath d='M36 9c1 8-4 11-7 15-3 4-5 8-2 14 2-4 5-6 9-8-1 8 5 11 5 17 6-4 9-10 8-17-1-10-7-17-13-21Z' fill='none' stroke='white' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -237,13 +237,14 @@ async function fbReadChunkSeries(prefix, version, total) {
     where(documentId(),'<=',baseId+'\uf8ff')
   );
 
-  if (isMobile) {
-    try {
-      const cached = await getDocsFromCache(makeQuery());
-      const ready = buildFromSnapshot(cached);
-      if (ready) { fbEmitProgress(prefix,total,total); return ready; }
-    } catch(e) { /* cache incompleto/indisponível: segue para rede */ }
-  }
+  // Os chunks são imutáveis e o cache persistente também existe no computador.
+  // Antes ele só era consultado no celular, fazendo o desktop baixar novamente
+  // dezenas de documentos que já estavam prontos no próprio navegador.
+  try {
+    const cached = await getDocsFromCache(makeQuery());
+    const ready = buildFromSnapshot(cached);
+    if (ready) { fbEmitProgress(prefix,total,total); return ready; }
+  } catch(e) { /* cache incompleto/indisponível: segue para rede */ }
 
   // Uma consulta por prefixo substitui dezenas/centenas de getDoc individuais.
   // No iPhone isso reduz muito o custo de round-trips HTTP e o tempo em Sincronizando.
@@ -599,14 +600,14 @@ window.fbLoad = async function() {
     const dados = snap.data();
     const storageV = Number(dados._storageVersion || 0);
     const seriesPrefix = usingV4 ? FB_SERIES_PREFIX : '';
-    const mobileLoad = fbIsMobileDevice();
 
-    // v38: no celular carregamos primeiro o cadastro de frota (pequeno), para que
-    // operações/placas apareçam nos filtros antes do histórico pesado terminar.
-    let mobileMaqPromise = null;
-    if (mobileLoad && storageV >= 3) {
-      mobileMaqPromise = fbReadChunkSeries(seriesPrefix+'maq', dados._maqVersion, dados._maqChunks);
-      mobileMaqPromise.then(maqs => {
+    // A frota é pequena e essencial para os filtros. Começamos sua leitura junto
+    // com os abastecimentos em qualquer aparelho, evitando que o desktop espere
+    // toda a base pesada para só então iniciar em "Carregando frota 0%".
+    let maqPromise = null;
+    if (storageV >= 3) {
+      maqPromise = fbReadChunkSeries(seriesPrefix+'maq', dados._maqVersion, dados._maqChunks);
+      maqPromise.then(maqs => {
         try {
           window.dispatchEvent(new CustomEvent('ignis:firebase-metadata',{
             detail:{maquinas:maqs,semanas:dados.semanas||{}}
@@ -643,51 +644,39 @@ window.fbLoad = async function() {
     }
     dados.abastecimentos = abastecimentos;
 
-    // Storage v3/v4: no mobile, dados essenciais primeiro; históricos secundários
-    // continuam em background. Assim Dashboard/Filtros não esperam Anomalias + Arla.
+    // Storage v3/v4: dados essenciais primeiro em celular e computador.
+    // Anomalias e Arla continuam em background e atualizam suas próprias telas
+    // quando terminam; o Dashboard não precisa esperar por esses históricos.
     if (storageV >= 3) {
-      if (mobileLoad) {
-        const maqs = await (mobileMaqPromise || fbReadChunkSeries(seriesPrefix+'maq', dados._maqVersion, dados._maqChunks));
-        dados.maquinas = maqs;
+      const maqs = await (maqPromise || fbReadChunkSeries(seriesPrefix+'maq', dados._maqVersion, dados._maqChunks));
+      dados.maquinas = maqs;
 
-        // Evita que eventuais campos inline antigos sobrescrevam o cache enquanto
-        // as séries oficiais são carregadas em segundo plano.
-        delete dados.medidorAnomalias;
-        delete dados.eficienciaAnomalias;
-        delete dados.arlaMeses;
-        delete dados.anomaliaRevisoes;
+      // Evita que eventuais campos inline antigos sobrescrevam o cache enquanto
+      // as séries oficiais são carregadas em segundo plano.
+      delete dados.medidorAnomalias;
+      delete dados.eficienciaAnomalias;
+      delete dados.arlaMeses;
+      delete dados.anomaliaRevisoes;
 
-        (async()=>{
-          try{
-            const [meds,efics,arla] = await Promise.all([
-              fbReadChunkSeries(seriesPrefix+'med',  dados._medVersion,  dados._medChunks),
-              fbReadChunkSeries(seriesPrefix+'efic', dados._eficVersion, dados._eficChunks),
-              fbReadChunkSeries(seriesPrefix+'arla', dados._arlaVersion, dados._arlaChunks)
-            ]);
-            let revisoes=[];
-            try{
-              const revSnap=await withTimeout(getDoc(doc(db,'fueltracker','anomalia_revisoes')),10000);
-              revisoes=revSnap.exists()&&Array.isArray(revSnap.data()?.items)?revSnap.data().items:[];
-            }catch(e){}
-            window.dispatchEvent(new CustomEvent('ignis:firebase-secondary',{
-              detail:{medidorAnomalias:meds,eficienciaAnomalias:efics,arlaMeses:arla,anomaliaRevisoes:revisoes}
-            }));
-          }catch(e){
-            console.warn('IGNIS: dados secundários serão tentados novamente ao abrir o sistema:',e);
-          }
-        })();
-      } else {
-        const [maqs, meds, efics, arla] = await Promise.all([
-          fbReadChunkSeries(seriesPrefix+'maq',  dados._maqVersion,  dados._maqChunks),
+      (async()=>{
+        try{
+          const [meds,efics,arla] = await Promise.all([
           fbReadChunkSeries(seriesPrefix+'med',  dados._medVersion,  dados._medChunks),
           fbReadChunkSeries(seriesPrefix+'efic', dados._eficVersion, dados._eficChunks),
           fbReadChunkSeries(seriesPrefix+'arla', dados._arlaVersion, dados._arlaChunks)
-        ]);
-        dados.maquinas = maqs;
-        dados.medidorAnomalias = meds;
-        dados.eficienciaAnomalias = efics;
-        dados.arlaMeses = arla;
-      }
+          ]);
+          let revisoes=[];
+          try{
+            const revSnap=await withTimeout(getDoc(doc(db,'fueltracker','anomalia_revisoes')),10000);
+            revisoes=revSnap.exists()&&Array.isArray(revSnap.data()?.items)?revSnap.data().items:[];
+          }catch(e){}
+          window.dispatchEvent(new CustomEvent('ignis:firebase-secondary',{
+            detail:{medidorAnomalias:meds,eficienciaAnomalias:efics,arlaMeses:arla,anomaliaRevisoes:revisoes}
+          }));
+        }catch(e){
+          console.warn('IGNIS: dados secundários serão tentados novamente ao abrir o sistema:',e);
+        }
+      })();
     }
     // Em storage v1/v2, esses campos continuam inline e são mantidos como vieram.
 
@@ -715,18 +704,8 @@ window.fbLoad = async function() {
       });
     }
 
-    // Histórico de anomalias revisadas: no mobile ele já está incluído no carregamento
-    // secundário e não bloqueia a abertura do Dashboard.
-    if (!mobileLoad) {
-      try {
-        const revSnap = await withTimeout(getDoc(doc(db, 'fueltracker', 'anomalia_revisoes')), 10000);
-        if (revSnap.exists() && Array.isArray(revSnap.data()?.items)) dados.anomaliaRevisoes = revSnap.data().items;
-        else if (!Array.isArray(dados.anomaliaRevisoes)) dados.anomaliaRevisoes = [];
-      } catch (e) {
-        console.warn('IGNIS: histórico de anomalias revisadas indisponível no momento.', e);
-        if (!Array.isArray(dados.anomaliaRevisoes)) dados.anomaliaRevisoes = [];
-      }
-    }
+    // O histórico de revisões também segue no carregamento secundário acima.
+    // Ele não é necessário para liberar Dashboard, filtros e abastecimentos.
 
     // A revisão viaja separada do state de negócio e é usada para impedir
     // sobrescrita por cache antigo em outro computador/usuário.
@@ -4827,10 +4806,16 @@ window.addEventListener('ignis:firebase-secondary', (ev)=>{
     if(Array.isArray(d.arlaMeses)) state.arlaMeses=d.arlaMeses;
     if(Array.isArray(d.anomaliaRevisoes)) state.anomaliaRevisoes=d.anomaliaRevisoes;
     markIgnisDataDirty('firebase-secondary');
+    try{if(typeof pendAtualizarBadge==='function')pendAtualizarBadge();}catch(e){}
     const activeId=document.querySelector('.page.active')?.id?.replace('page-','')||'';
     if(activeId==='anomalias'&&typeof renderAnomalias==='function') renderAnomalias(true);
     if(activeId==='pendencias'&&typeof renderPendencias==='function') renderPendencias(true);
-    if(activeId==='arla'&&typeof arlaInit==='function'){window._arlaState.meses=[];arlaInit();if(typeof arlaRenderRelatorio==='function')arlaRenderRelatorio();}
+    if(typeof arlaInit==='function'){
+      window._arlaState.meses=[];window._arlaState.processados=[];window._arlaState.mesAtual=null;
+      arlaInit();
+      if(typeof arlaChecarLembrete==='function')arlaChecarLembrete();
+      if(activeId==='arla'&&typeof arlaRenderRelatorio==='function')arlaRenderRelatorio();
+    }
   }catch(e){console.warn('secondary progressivo:',e);}
 });
 
