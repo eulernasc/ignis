@@ -3516,14 +3516,14 @@ input[type="checkbox"]:indeterminate{background:rgba(233,95,50,.2);border-color:
         <div id="postos-panel-regiao" class="postos-fields">
           <div class="postos-field span-2"><label>UF</label><select id="postos-uf" onchange="postosPopularCidades()"><option value="">Selecione a UF</option></select></div>
           <div class="postos-field span-4 postos-wide"><label>Cidade</label><div class="postos-autocomplete"><input id="postos-cidade" type="search" autocomplete="off" placeholder="Digite para pesquisar a cidade" onfocus="postosAutocompleteInput('regiao',this.value,true)" oninput="postosAutocompleteInput('regiao',this.value)" onblur="postosAutocompleteBlur('regiao')"><div id="postos-cidade-sugestoes" class="postos-autocomplete-menu"></div></div></div>
-          <div class="postos-field span-2"><label>Raio do centro</label><select id="postos-raio"><option value="5">5 km</option><option value="10">10 km</option><option value="25" selected>25 km</option><option value="50">50 km</option><option value="100">100 km</option></select></div>
+          <div class="postos-field span-2"><label>Área de busca</label><select id="postos-raio"><option value="cidade" selected>Toda a cidade</option><option value="10">Até 10 km do centro</option><option value="25">Até 25 km do centro</option><option value="50">Até 50 km do centro</option><option value="100">Até 100 km do centro</option></select></div>
           <div class="postos-field span-2"><label>&nbsp;</label><button class="postos-search-btn" onclick="postosBuscarRegiao(true)">Buscar postos</button></div>
         </div>
 
         <div id="postos-panel-rota" class="postos-fields" style="display:none">
           <div class="postos-field span-4 postos-wide"><label>Ponto de partida</label><div class="postos-autocomplete"><input id="postos-origem" type="search" autocomplete="off" placeholder="Digite uma cidade ou endereço" onfocus="postosAutocompleteInput('origem',this.value,true)" oninput="postosAutocompleteInput('origem',this.value)" onblur="postosAutocompleteBlur('origem')"><div id="postos-origem-sugestoes" class="postos-autocomplete-menu"></div></div></div>
           <div class="postos-field span-4 postos-wide"><label>Destino</label><div class="postos-autocomplete"><input id="postos-destino" type="search" autocomplete="off" placeholder="Digite uma cidade ou endereço" onfocus="postosAutocompleteInput('destino',this.value,true)" oninput="postosAutocompleteInput('destino',this.value)" onblur="postosAutocompleteBlur('destino')"><div id="postos-destino-sugestoes" class="postos-autocomplete-menu"></div></div></div>
-          <div class="postos-field span-2"><label>Máx. fora da rota</label><select id="postos-corredor"><option value="2">2 km</option><option value="5" selected>5 km</option><option value="10">10 km</option><option value="20">20 km</option></select></div>
+          <div class="postos-field span-2"><label>Desvio máximo até o posto</label><select id="postos-corredor"><option value="2">Até 2 km da rota</option><option value="5" selected>Até 5 km da rota</option><option value="10">Até 10 km da rota</option><option value="20">Até 20 km da rota</option></select></div>
           <div class="postos-field span-2"><label>&nbsp;</label><button class="postos-search-btn" onclick="postosBuscarRota(true)">Calcular rota</button></div>
         </div>
       </div>
@@ -18346,6 +18346,11 @@ async function fechExportarExcel(){
 const POSTOS_GEO_CACHE_KEY = 'ignis_postos_geo_v1';
 const POSTOS_PLACE_CACHE_KEY = 'ignis_postos_place_v1';
 const POSTOS_REVERSE_CACHE_KEY = 'ignis_postos_reverse_v1';
+const POSTOS_CEP_CACHE_KEY = 'ignis_postos_cep_v1';
+const POSTOS_MUNICIPIOS_CACHE_KEY = 'ignis_postos_municipios_v1';
+const POSTOS_MUNICIPIOS_URL = 'https://raw.githubusercontent.com/kelvins/municipios-brasileiros/main/json/municipios.json';
+const POSTOS_GEO_ALGO_VERSION = 2;
+const POSTOS_MISSING_TTL = 6 * 60 * 60 * 1000;
 const POSTOS_BATCH = 70;
 const POSTOS_PRICE_ALL = '__ALL__';
 let _postosBase = null;
@@ -18355,6 +18360,9 @@ let _postosRouteLayer = null;
 let _postosGeoCache = null;
 let _postosPlaceCache = null;
 let _postosReverseCache = null;
+let _postosCepCache = null;
+let _postosMunicipioCenters = null;
+let _postosMunicipioCentersPromise = null;
 let _postosCacheTimer = null;
 let _postosLastGeoAt = 0;
 let _postosCurrentSearch = null;
@@ -18398,6 +18406,7 @@ const POSTOS_UF_NOMES = {
   'RIO GRANDE DO SUL':'RS','RONDONIA':'RO','RORAIMA':'RR','SANTA CATARINA':'SC','SAO PAULO':'SP','SERGIPE':'SE','TOCANTINS':'TO'
 };
 const POSTOS_UFS_VALIDAS = new Set(['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO']);
+const POSTOS_UF_POR_CODIGO = {11:'RO',12:'AC',13:'AM',14:'RR',15:'PA',16:'AP',17:'TO',21:'MA',22:'PI',23:'CE',24:'RN',25:'PB',26:'PE',27:'AL',28:'SE',29:'BA',31:'MG',32:'ES',33:'RJ',35:'SP',41:'PR',42:'SC',43:'RS',50:'MS',51:'MT',52:'GO',53:'DF'};
 
 function postosEsc(v){return String(v??'').replace(/[&<>'\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','\"':'&quot;'}[c]));}
 function postosNorm(v){return String(v??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9]+/g,' ').trim().toUpperCase();}
@@ -18445,7 +18454,16 @@ function postosSignature(items){
   (Array.isArray(items)?items:[]).forEach(p=>fields.forEach(k=>{const s=String(p?.[k]||'')+'\u001f';for(let i=0;i<s.length;i++){hash^=s.charCodeAt(i);hash=Math.imul(hash,16777619);}}));
   return `p${(hash>>>0).toString(16)}-${Array.isArray(items)?items.length:0}`;
 }
-function postosGeoFresh(p,g){const reset=Math.max(0,Number(p?.geoResetAt||0)),at=Math.max(0,Number(g?.at||0));return !!g&&(!reset||at>=reset);}
+function postosGeoFresh(p,g){
+  if(!g)return false;
+  const reset=Math.max(0,Number(p?.geoResetAt||0)),at=Math.max(0,Number(g?.at||0));
+  if(reset&&at<reset)return false;
+  if(g?.missing){
+    if(Number(g?.algo||0)!==POSTOS_GEO_ALGO_VERSION)return false;
+    return !!at&&(Date.now()-at)<POSTOS_MISSING_TTL;
+  }
+  return Number.isFinite(Number(g?.lat))&&Number.isFinite(Number(g?.lon));
+}
 function postosSetStatus(text,type='info',progress=null){
   const box=document.getElementById('postos-status'); if(!box)return;
   box.className='postos-status '+type;
@@ -18468,6 +18486,7 @@ function postosScheduleCacheSave(){
     try{localStorage.setItem(POSTOS_GEO_CACHE_KEY,JSON.stringify(_postosGeoCache||{}));}catch(e){console.warn('IGNIS postos cache EC',e);}
     try{localStorage.setItem(POSTOS_PLACE_CACHE_KEY,JSON.stringify(_postosPlaceCache||{}));}catch(e){console.warn('IGNIS postos cache locais',e);}
     try{localStorage.setItem(POSTOS_REVERSE_CACHE_KEY,JSON.stringify(_postosReverseCache||{}));}catch(e){console.warn('IGNIS postos cache reverso',e);}
+    try{localStorage.setItem(POSTOS_CEP_CACHE_KEY,JSON.stringify(_postosCepCache||{}));}catch(e){console.warn('IGNIS postos cache CEP',e);}
     postosUpdateSummary();
   },450);
 }
@@ -18669,7 +18688,7 @@ function postosBuildBase(raw=window.IGNIS_POSTOS_BASE,meta={}){
   const seen=new Set();
   _postosBase=(Array.isArray(raw)?raw:[]).map(postosPlainRecord).filter(p=>p&&!seen.has(p.codigo)&&seen.add(p.codigo)).map(p=>({...p,cityNorm:postosNorm(p.cidade)}));
   _postosBaseMeta={source:meta.source||'arquivo',version:String(meta.version||''),updatedAt:Number(meta.updatedAt||0),updatedBy:String(meta.updatedBy||''),sourceFile:String(meta.sourceFile||''),signature:String(meta.signature||postosSignature(_postosBase)),fromCache:!!meta.fromCache};
-  _postosGeoCache=_postosGeoCache||postosLoadCache(POSTOS_GEO_CACHE_KEY);_postosPlaceCache=_postosPlaceCache||postosLoadCache(POSTOS_PLACE_CACHE_KEY);_postosReverseCache=_postosReverseCache||postosLoadCache(POSTOS_REVERSE_CACHE_KEY);
+  _postosGeoCache=_postosGeoCache||postosLoadCache(POSTOS_GEO_CACHE_KEY);_postosPlaceCache=_postosPlaceCache||postosLoadCache(POSTOS_PLACE_CACHE_KEY);_postosReverseCache=_postosReverseCache||postosLoadCache(POSTOS_REVERSE_CACHE_KEY);_postosCepCache=_postosCepCache||postosLoadCache(POSTOS_CEP_CACHE_KEY);
   const byCode=new Map(_postosBase.map(p=>[p.codigo,p]));let cacheChanged=false;
   Object.keys(_postosGeoCache||{}).forEach(codigo=>{const p=byCode.get(codigo);if(!p||!postosGeoFresh(p,_postosGeoCache[codigo])){delete _postosGeoCache[codigo];_postosCloudPending.delete(codigo);cacheChanged=true;}});
   postosPopularUF();postosUpdateSummary();if(cacheChanged)postosScheduleCacheSave();
@@ -18718,7 +18737,7 @@ function postosSetMode(mode){
   document.querySelectorAll('.postos-mode-btn').forEach(b=>b.classList.toggle('active',b.dataset.mode===mode));
   const r=document.getElementById('postos-panel-regiao'),rt=document.getElementById('postos-panel-rota');if(r)r.style.display=mode==='regiao'?'grid':'none';if(rt)rt.style.display=mode==='rota'?'grid':'none';
   const title=document.getElementById('postos-results-title');if(title)title.textContent=mode==='rota'?'Postos encontrados na rota':'Postos encontrados';
-  _postosCurrentSearch=null;postosClearMap(false);postosRenderResults([]);postosSetMobileView('mapa',false);postosSetStatus(mode==='rota'?'Informe origem e destino para calcular a rota.':'Selecione UF, cidade e raio para iniciar.','info');
+  _postosCurrentSearch=null;postosClearMap(false);postosRenderResults([]);postosSetMobileView('mapa',false);postosSetStatus(mode==='rota'?'Informe origem e destino para calcular a rota.':'Selecione UF, cidade e a área que deseja pesquisar.','info');
 }
 function postosSetMobileView(view,scroll=true){
   const lista=view==='lista',grid=document.getElementById('postos-main-grid');
@@ -19299,25 +19318,97 @@ function postosUfFromAddress(a){
   const iso=a['ISO3166-2-lvl4']||a['ISO3166-2-lvl3']||'';const m=String(iso).match(/BR-([A-Z]{2})/i);if(m)return m[1].toUpperCase();
   return POSTOS_UF_NOMES[postosNorm(a.state||'')]||'';
 }
+function postosMunicipioCacheLoad(){
+  try{
+    const raw=JSON.parse(localStorage.getItem(POSTOS_MUNICIPIOS_CACHE_KEY)||'null'),sig=_postosBase?postosSignature(_postosBase):'';
+    if(!raw||typeof raw!=='object'||!raw.items||typeof raw.items!=='object'||String(raw.baseSignature||'')!==sig)return null;
+    return raw.items;
+  }catch(e){return null;}
+}
+function postosMunicipioCacheSave(items){
+  try{localStorage.setItem(POSTOS_MUNICIPIOS_CACHE_KEY,JSON.stringify({at:Date.now(),baseSignature:_postosBase?postosSignature(_postosBase):'',items:items||{}}));}catch(e){}
+}
+async function postosEnsureMunicipioCenters(){
+  if(_postosMunicipioCenters)return _postosMunicipioCenters;
+  const cached=postosMunicipioCacheLoad();
+  if(cached&&Object.keys(cached).length){_postosMunicipioCenters=cached;return _postosMunicipioCenters;}
+  if(_postosMunicipioCentersPromise)return _postosMunicipioCentersPromise;
+  _postosMunicipioCentersPromise=(async()=>{
+    try{
+      const r=await fetch(POSTOS_MUNICIPIOS_URL,{cache:'force-cache',headers:{'Accept':'application/json'}});
+      if(!r.ok)throw new Error('Municípios '+r.status);
+      const rows=await r.json(),wanted=new Set((_postosBase||[]).map(p=>`${p.uf}|${p.cityNorm}`)),out={};
+      (Array.isArray(rows)?rows:[]).forEach(x=>{
+        const uf=POSTOS_UF_POR_CODIGO[Number(x?.codigo_uf)]||'',city=postosNorm(x?.nome||''),lat=Number(x?.latitude),lon=Number(x?.longitude),key=`${uf}|${city}`;
+        if(uf&&city&&wanted.has(key)&&Number.isFinite(lat)&&Number.isFinite(lon))out[key]={lat,lon,uf,nome:String(x?.nome||'')};
+      });
+      if(Object.keys(out).length){_postosMunicipioCenters=out;postosMunicipioCacheSave(out);return out;}
+    }catch(e){console.warn('IGNIS postos: centros municipais indisponíveis.',e);}
+    _postosMunicipioCenters={};return _postosMunicipioCenters;
+  })().finally(()=>{_postosMunicipioCentersPromise=null;});
+  return _postosMunicipioCentersPromise;
+}
+function postosMunicipioCenter(uf,cidade){return _postosMunicipioCenters?.[`${String(uf||'').toUpperCase()}|${postosNorm(cidade)}`]||null;}
 async function postosGeocodeText(text){
   const key=postosNorm(text);if(_postosPlaceCache?.[key])return _postosPlaceCache[key];
-  const url='https://nominatim.openstreetmap.org/search?format=jsonv2&countrycodes=br&limit=1&addressdetails=1&q='+encodeURIComponent(text);
+  const url='https://nominatim.openstreetmap.org/search?format=jsonv2&countrycodes=br&limit=3&addressdetails=1&q='+encodeURIComponent(text);
   const data=await postosNominatim(url);const x=data?.[0];if(!x)return null;
   const out={lat:Number(x.lat),lon:Number(x.lon),display:x.display_name||text,address:x.address||{}};_postosPlaceCache[key]=out;postosScheduleCacheSave();return out;
 }
+async function postosGeocodeRoutePoint(text){
+  const clean=String(text||'').trim();
+  const m=clean.match(/^(.+?)\s*(?:-|,|\/)\s*([A-Za-z]{2})$/);
+  if(m){
+    try{await postosEnsureMunicipioCenters();const c=postosMunicipioCenter(m[2],m[1]);if(c)return {lat:Number(c.lat),lon:Number(c.lon),display:`${m[1]} - ${m[2].toUpperCase()}`,address:{city:m[1],state:m[2].toUpperCase()}};}catch(e){}
+  }
+  return postosGeocodeText(clean);
+}
+async function postosLookupCep(cep){
+  const digits=String(cep||'').replace(/\D/g,'').padStart(8,'0').slice(-8);if(digits.length!==8)return null;
+  const cached=_postosCepCache?.[digits];if(cached&&Number(cached.at||0)&&(Date.now()-Number(cached.at))<90*24*60*60*1000)return cached.data||null;
+  try{
+    const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),7000);
+    const r=await fetch(`https://brasilapi.com.br/api/cep/v2/${digits}`,{signal:ctrl.signal,headers:{'Accept':'application/json'}});clearTimeout(timer);
+    if(!r.ok)throw new Error('CEP '+r.status);
+    const data=await r.json();_postosCepCache=_postosCepCache||{};_postosCepCache[digits]={at:Date.now(),data};postosScheduleCacheSave();return data;
+  }catch(e){console.warn('IGNIS postos: CEP não localizado',digits,e);return null;}
+}
+function postosNominatimResultOk(x,p){
+  if(!x)return false;const a=x.address||{},uf=postosUfFromAddress(a);if(uf&&p?.uf&&uf!==p.uf)return false;return Number.isFinite(Number(x.lat))&&Number.isFinite(Number(x.lon));
+}
+async function postosNominatimFirst(url,p){
+  const data=await postosNominatim(url);if(!Array.isArray(data))return null;return data.find(x=>postosNominatimResultOk(x,p))||null;
+}
+function postosAddressQuery(parts){return parts.map(x=>String(x||'').trim()).filter(Boolean).join(', ');}
 async function postosGeocodeStation(p){
   if(_postosGeoCache?.[p.codigo]){
     const cached=_postosGeoCache[p.codigo];
     if(postosGeoFresh(p,cached)){if(!cached.missing&&!cached.shared)postosQueueSharedGeo(p.codigo,cached);return cached;}
     delete _postosGeoCache[p.codigo];postosScheduleCacheSave();
   }
-  const cep=postosFmtCep(p.cep);
-  const street=encodeURIComponent(p.endereco);const city=encodeURIComponent(p.cidade);const state=encodeURIComponent(p.uf);const postal=encodeURIComponent(cep);const country=encodeURIComponent('Brasil');
-  let url=`https://nominatim.openstreetmap.org/search?format=jsonv2&countrycodes=br&limit=1&addressdetails=1&street=${street}&city=${city}&state=${state}&postalcode=${postal}&country=${country}`;
-  let data=await postosNominatim(url);let x=data?.[0];
-  if(!x){const q=[p.endereco,p.bairro,p.cidade,p.uf,cep,'Brasil'].filter(Boolean).join(', ');url='https://nominatim.openstreetmap.org/search?format=jsonv2&countrycodes=br&limit=1&addressdetails=1&q='+encodeURIComponent(q);data=await postosNominatim(url);x=data?.[0];}
-  if(!x){_postosGeoCache[p.codigo]={missing:true,at:Date.now()};postosScheduleCacheSave();return null;}
-  const out={lat:Number(x.lat),lon:Number(x.lon),at:Date.now(),shared:false};_postosGeoCache[p.codigo]=out;postosQueueSharedGeo(p.codigo,out);postosScheduleCacheSave();return out;
+  const cep=postosFmtCep(p.cep),digits=String(p.cep||'').replace(/\D/g,'').padStart(8,'0').slice(-8);
+  let cepData=null;
+  if(digits.length===8){
+    cepData=await postosLookupCep(digits);
+    const coords=cepData?.location?.coordinates||{},lat=Number(coords.latitude),lon=Number(coords.longitude);
+    if(Number.isFinite(lat)&&Number.isFinite(lon)&&Math.abs(lat)<=90&&Math.abs(lon)<=180){
+      const out={lat,lon,at:Date.now(),shared:false,algo:POSTOS_GEO_ALGO_VERSION,source:'cep'};_postosGeoCache[p.codigo]=out;postosQueueSharedGeo(p.codigo,out);postosScheduleCacheSave();return out;
+    }
+  }
+  const stdStreet=String(cepData?.street||'').trim(),stdBairro=String(cepData?.neighborhood||'').trim(),stdCity=String(cepData?.city||p.cidade||'').trim(),stdUf=String(cepData?.state||p.uf||'').trim().toUpperCase();
+  const attempts=[];
+  if(stdStreet)attempts.push(postosAddressQuery([stdStreet,stdBairro,stdCity,stdUf,cep,'Brasil']));
+  attempts.push(postosAddressQuery([p.endereco,p.bairro,p.cidade,p.uf,cep,'Brasil']));
+  attempts.push(postosAddressQuery([p.nome,p.cidade,p.uf,'Brasil']));
+  const seen=new Set();
+  for(const q of attempts){
+    const k=postosNorm(q);if(!q||seen.has(k))continue;seen.add(k);
+    try{
+      const url='https://nominatim.openstreetmap.org/search?format=jsonv2&countrycodes=br&limit=3&addressdetails=1&q='+encodeURIComponent(q),x=await postosNominatimFirst(url,p);
+      if(x){const out={lat:Number(x.lat),lon:Number(x.lon),at:Date.now(),shared:false,algo:POSTOS_GEO_ALGO_VERSION,source:'nominatim'};_postosGeoCache[p.codigo]=out;postosQueueSharedGeo(p.codigo,out);postosScheduleCacheSave();return out;}
+    }catch(e){console.warn('IGNIS postos: tentativa de geocodificação',p.codigo,e);}
+  }
+  _postosGeoCache[p.codigo]={missing:true,at:Date.now(),algo:POSTOS_GEO_ALGO_VERSION};postosScheduleCacheSave();return null;
 }
 async function postosReverse(lat,lon){
   const key=`${Number(lat).toFixed(3)},${Number(lon).toFixed(3)}`;if(_postosReverseCache?.[key])return _postosReverseCache[key];
@@ -19373,56 +19464,84 @@ function postosAbrirRotaComParada(lat,lon){const o=document.getElementById('post
 
 async function postosBuscarRegiao(reset=true){
   try{
-    await postosOnShow();const uf=document.getElementById('postos-uf')?.value||'',cidadeInput=document.getElementById('postos-cidade')?.value||'',cidade=postosResolveCidadeRegiao(uf,cidadeInput),radius=Number(document.getElementById('postos-raio')?.value||25);
+    await postosOnShow();
+    const uf=document.getElementById('postos-uf')?.value||'',cidadeInput=document.getElementById('postos-cidade')?.value||'',cidade=postosResolveCidadeRegiao(uf,cidadeInput),areaValue=document.getElementById('postos-raio')?.value||'cidade',cityOnly=areaValue==='cidade',radius=cityOnly?null:Number(areaValue||25);
     if(!uf||!cidade){postosSetStatus('Selecione a UF e pesquise uma cidade da lista.','error');postosAutocompleteInput('regiao',cidadeInput,true);return;}const cityInput=document.getElementById('postos-cidade');if(cityInput)cityInput.value=cidade;
     if(reset){
-      const center=await postosGeocodeText(`${cidade}, ${uf}, Brasil`);if(!center)throw new Error('Não consegui localizar o centro da cidade selecionada.');
-      const candidates=_postosBase.filter(p=>p.uf===uf&&p.cidade===cidade);
-      _postosCurrentSearch={mode:'regiao',center,candidates,index:0,results:[],radius,fail:0};postosClearMap(false);_postosMap.setView([center.lat,center.lon],11);postosRenderResults([]);
+      postosSetStatus(cityOnly?'Preparando os postos da cidade...':'Calculando as cidades dentro da área escolhida...','loading',7);
+      let centers={};try{centers=await postosEnsureMunicipioCenters();}catch(e){}
+      let center=postosMunicipioCenter(uf,cidade);if(!center)center=await postosGeocodeText(`${cidade}, ${uf}, Brasil`);if(!center)throw new Error('Não consegui localizar a cidade selecionada.');
+      let candidates=[],cityKeys=new Set([`${uf}|${postosNorm(cidade)}`]);
+      if(cityOnly){
+        candidates=_postosBase.filter(p=>p.uf===uf&&p.cityNorm===postosNorm(cidade));
+      }else{
+        const margin=radius<=10?18:radius<=25?24:radius<=50?30:38;
+        Object.entries(centers||{}).forEach(([key,c])=>{const d=postosHaversine(center.lat,center.lon,Number(c.lat),Number(c.lon));if(d<=radius+margin)cityKeys.add(key);});
+        candidates=_postosBase.filter(p=>cityKeys.has(`${p.uf}|${p.cityNorm}`));
+        if(!candidates.length)candidates=_postosBase.filter(p=>p.uf===uf&&p.cityNorm===postosNorm(cidade));
+      }
+      candidates.sort((a,b)=>{const ac=a.uf===uf&&a.cityNorm===postosNorm(cidade)?0:1,bc=b.uf===uf&&b.cityNorm===postosNorm(cidade)?0:1;return ac-bc||a.cidade.localeCompare(b.cidade,'pt-BR')||a.nome.localeCompare(b.nome,'pt-BR');});
+      _postosCurrentSearch={mode:'regiao',center:{lat:Number(center.lat),lon:Number(center.lon)},candidates,index:0,results:[],radius,cityOnly,fail:0,cidade,uf,cityCount:cityKeys.size};postosClearMap(false);_postosMap.setView([Number(center.lat),Number(center.lon)],cityOnly?12:(radius>=100?8:radius>=50?9:10));postosRenderResults([]);
     }
     const s=_postosCurrentSearch;if(!s||s.mode!=='regiao')return;
     const start=s.index,end=Math.min(s.candidates.length,start+POSTOS_BATCH);
-    postosSetStatus('Buscando coordenadas já compartilhadas no Firebase...','loading',12);
+    postosSetStatus('Buscando coordenadas já compartilhadas e conferindo os endereços...','loading',12);
     const sharedFound=await postosHydrateSharedGeo(s.candidates.slice(start,end));
     for(let i=start;i<end;i++){
-      const p=s.candidates[i];const pct=s.candidates.length?((i+1)/s.candidates.length*100):100;postosSetStatus(`Localizando postos de ${cidade}: ${i+1} de ${s.candidates.length}...`,'loading',pct);
+      const p=s.candidates[i];const pct=s.candidates.length?12+((i+1)/s.candidates.length*84):96;postosSetStatus(`Localizando ${p.nome || 'posto'}: ${i+1} de ${s.candidates.length}...`,'loading',pct);
       let g=null;try{g=await postosGeocodeStation(p);}catch(e){console.warn('Geocode posto',p.codigo,e);}
-      if(!g||g.missing){s.fail++;continue;}const dist=postosHaversine(s.center.lat,s.center.lon,g.lat,g.lon);if(dist<=s.radius)s.results.push({posto:p,lat:g.lat,lon:g.lon,distKm:dist});
+      if(!g||g.missing){s.fail++;continue;}const dist=postosHaversine(s.center.lat,s.center.lon,g.lat,g.lon);if(s.cityOnly||dist<=s.radius)s.results.push({posto:p,lat:g.lat,lon:g.lon,distKm:dist});
     }
     const cloudSaved=await postosFlushSharedGeo();
     s.index=end;postosSortResultsForDisplay(s.results);postosRenderResults(s.results);postosPlotResults(s.results,{fit:true,center:[s.center.lat,s.center.lon]});
     const remain=s.candidates.length-s.index,sharedNote=sharedFound?` · ${sharedFound} recuperada(s) do Firebase`:'';
-    postosSetStatus(`${s.results.length} posto(s) dentro de ${s.radius} km do centro de ${cidade}. ${s.index} de ${s.candidates.length} processados${sharedNote}${s.fail?` · ${s.fail} sem coordenada`:''}${cloudSaved?'':' · novas coordenadas salvas somente neste aparelho por enquanto'}.`,'success');postosUpdateSummary(`${cidade}/${uf}`);postosToggleMore(remain>0,`Processar mais ${Math.min(POSTOS_BATCH,remain)} postos`,()=>postosBuscarRegiao(false));
+    const areaText=s.cityOnly?`na cidade de ${s.cidade}`:`até ${s.radius} km do centro de ${s.cidade}`;
+    const cityNote=!s.cityOnly&&s.cityCount>1?` · ${s.cityCount} cidade(s) consideradas`:'';
+    postosSetStatus(`${s.results.length} posto(s) ${areaText}. ${s.index} de ${s.candidates.length} candidatos processados${cityNote}${sharedNote}${s.fail?` · ${s.fail} endereço(s) ainda sem coordenada`:''}${cloudSaved?'':' · novas coordenadas salvas somente neste aparelho por enquanto'}.`,'success');postosUpdateSummary(`${s.cidade}/${s.uf}`);postosToggleMore(remain>0,`Processar mais ${Math.min(POSTOS_BATCH,remain)} postos`,()=>postosBuscarRegiao(false));
   }catch(e){console.error('Busca regional:',e);postosSetStatus(e.message||'Erro ao buscar postos.','error');}
 }
 function postosRouteCum(coords){const cum=[0];for(let i=1;i<coords.length;i++)cum[i]=cum[i-1]+postosHaversine(coords[i-1][0],coords[i-1][1],coords[i][0],coords[i][1]);return cum;}
 function postosSampleRoute(coords,cum,step=60,max=20){
   if(!coords.length)return[];const total=cum[cum.length-1]||0;if(total<=0)return[coords[0]];const effective=Math.max(step,total/Math.max(1,max-1));const out=[];let target=0,idx=0;while(target<=total&&out.length<max){while(idx<cum.length-1&&cum[idx]<target)idx++;out.push(coords[idx]);target+=effective;}const last=coords[coords.length-1];if(out.length<max&&(out.at(-1)?.[0]!==last[0]||out.at(-1)?.[1]!==last[1]))out.push(last);return out;
 }
-function postosNearestRoute(lat,lon,coords,cum){let best=Infinity,bestI=0;for(let i=0;i<coords.length;i++){const d=postosHaversine(lat,lon,coords[i][0],coords[i][1]);if(d<best){best=d;bestI=i;}}return{offKm:best,alongKm:cum[bestI]||0};}
+function postosNearestRoute(lat,lon,coords,cum){
+  if(!Array.isArray(coords)||!coords.length)return{offKm:Infinity,alongKm:0};
+  if(coords.length===1)return{offKm:postosHaversine(lat,lon,coords[0][0],coords[0][1]),alongKm:0};
+  const R=6371,rad=Math.PI/180,lat0=Number(lat)*rad,cos=Math.max(.15,Math.cos(lat0));let best=Infinity,bestAlong=0;
+  for(let i=0;i<coords.length-1;i++){
+    const a=coords[i],b=coords[i+1],ax=(Number(a[1])-lon)*rad*R*cos,ay=(Number(a[0])-lat)*rad*R,bx=(Number(b[1])-lon)*rad*R*cos,by=(Number(b[0])-lat)*rad*R;
+    const dx=bx-ax,dy=by-ay,den=dx*dx+dy*dy,t=den?Math.max(0,Math.min(1,-(ax*dx+ay*dy)/den)):0,px=ax+t*dx,py=ay+t*dy,d=Math.hypot(px,py);
+    if(d<best){best=d;const seg=Math.max(0,Number(cum?.[i+1]||0)-Number(cum?.[i]||0));bestAlong=Number(cum?.[i]||0)+seg*t;}
+  }
+  return{offKm:best,alongKm:bestAlong};
+}
 async function postosBuscarRota(reset=true){
   try{
     await postosOnShow();const origem=document.getElementById('postos-origem')?.value.trim()||'',destino=document.getElementById('postos-destino')?.value.trim()||'',corridor=Number(document.getElementById('postos-corredor')?.value||5);
     if(!origem||!destino){postosSetStatus('Informe o ponto de partida e o destino.','error');return;}
     if(reset){
       postosClearMap(false);postosRenderResults([]);postosToggleMore(false);postosSetStatus('Localizando origem e destino...','loading',5);
-      const [o,d]=await Promise.all([postosGeocodeText(origem),postosGeocodeText(destino)]);if(!o||!d)throw new Error('Não consegui localizar a origem ou o destino. Tente informar cidade/UF ou endereço mais completo.');
+      const [o,d]=await Promise.all([postosGeocodeRoutePoint(origem),postosGeocodeRoutePoint(destino)]);if(!o||!d)throw new Error('Não consegui localizar a origem ou o destino. Tente selecionar uma cidade sugerida ou informar um endereço mais completo.');
       postosSetStatus('Calculando rota rodoviária gratuita...','loading',12);
       const routeUrl=`https://router.project-osrm.org/route/v1/driving/${o.lon},${o.lat};${d.lon},${d.lat}?overview=full&geometries=geojson&steps=false`;
       const rr=await fetch(routeUrl);if(!rr.ok)throw new Error('Serviço gratuito de rotas indisponível ('+rr.status+').');const routeJson=await rr.json();const route=routeJson?.routes?.[0];if(!route)throw new Error('Não foi possível calcular uma rota entre os pontos informados.');
       const coords=route.geometry.coordinates.map(c=>[Number(c[1]),Number(c[0])]);const cum=postosRouteCum(coords);const distanceKm=Number(route.distance||0)/1000;
       _postosRouteLayer=L.polyline(coords,{color:'#ff6b2c',weight:5,opacity:.78}).addTo(_postosMap);_postosMap.fitBounds(_postosRouteLayer.getBounds(),{padding:[30,30]});
-      const sample=postosSampleRoute(coords,cum,60,20);const keys=[],seen=new Set();
-      for(let i=0;i<sample.length;i++){
-        postosSetStatus(`Identificando cidades ao longo da rota: ${i+1} de ${sample.length}...`,'loading',15+(i+1)/sample.length*25);
-        try{const x=await postosReverse(sample[i][0],sample[i][1]);if(x?.city){const city=postosNorm(x.city),uf=x.uf||'';const key=(uf?uf+'|':'')+city;if(!seen.has(key)){seen.add(key);keys.push({city,uf});}}}catch(e){console.warn('Reverse route sample',e);}
+      postosSetStatus('Identificando cidades realmente próximas do caminho...','loading',22);
+      let centers={};try{centers=await postosEnsureMunicipioCenters();}catch(e){}
+      const cityRouteSample=postosSampleRoute(coords,cum,12,260),citySampleCum=postosRouteCum(cityRouteSample),keys=[],order=new Map(),cityBuffer=Math.max(50,corridor+42);
+      Object.entries(centers||{}).forEach(([key,c])=>{const near=postosNearestRoute(Number(c.lat),Number(c.lon),cityRouteSample,citySampleCum);if(near.offKm<=cityBuffer){const [uf,city]=key.split('|');keys.push({city,uf,key,alongKm:near.alongKm});order.set(key,near.alongKm);}});
+      if(!keys.length){
+        const sample=postosSampleRoute(coords,cum,60,20),seen=new Set();
+        for(let i=0;i<sample.length;i++){
+          postosSetStatus(`Identificando cidades ao longo da rota: ${i+1} de ${sample.length}...`,'loading',24+(i+1)/sample.length*18);
+          try{const x=await postosReverse(sample[i][0],sample[i][1]);if(x?.city){const city=postosNorm(x.city),uf=x.uf||'',key=(uf?uf+'|':'')+city;if(!seen.has(key)){seen.add(key);keys.push({city,uf,key,alongKm:i});order.set(key,i);}}}catch(e){console.warn('Reverse route sample',e);}
+        }
       }
-      [o,d].forEach(x=>{const a=x.address||{},city=postosNorm(a.city||a.town||a.village||a.municipality||a.county||''),uf=postosUfFromAddress(a);if(city){const key=(uf?uf+'|':'')+city;if(!seen.has(key)){seen.add(key);keys.push({city,uf});}}});
-      const order=new Map();keys.forEach((k,i)=>order.set((k.uf?k.uf+'|':'')+k.city,i));
-      let candidates=_postosBase.filter(p=>keys.some(k=>p.cityNorm===k.city&&(!k.uf||p.uf===k.uf)));
-      candidates.sort((a,b)=>{const ak=(order.get(a.uf+'|'+a.cityNorm)??order.get(a.cityNorm)??999),bk=(order.get(b.uf+'|'+b.cityNorm)??order.get(b.cityNorm)??999);return ak-bk||a.nome.localeCompare(b.nome,'pt-BR');});
+      let candidates=_postosBase.filter(p=>order.has(`${p.uf}|${p.cityNorm}`));
+      candidates.sort((a,b)=>(order.get(`${a.uf}|${a.cityNorm}`)??999999)-(order.get(`${b.uf}|${b.cityNorm}`)??999999)||a.nome.localeCompare(b.nome,'pt-BR'));
       _postosCurrentSearch={mode:'rota',coords,cum,distanceKm,corridor,candidates,index:0,results:[],fail:0,cities:keys};
-      if(!candidates.length){postosSetStatus('A rota foi calculada, mas não encontrei cidades da base credenciada nos pontos amostrados. Vamos ajustar esse reconhecimento na próxima etapa.','error');return;}
+      if(!candidates.length){postosSetStatus('A rota foi calculada, mas não encontrei postos credenciados próximos do caminho informado.','error');return;}
     }
     const s=_postosCurrentSearch;if(!s||s.mode!=='rota')return;const start=s.index,end=Math.min(s.candidates.length,start+POSTOS_BATCH);
     postosSetStatus('Buscando coordenadas já compartilhadas no Firebase...','loading',43);
@@ -19435,11 +19554,11 @@ async function postosBuscarRota(reset=true){
     const cloudSaved=await postosFlushSharedGeo();
     s.index=end;postosSortResultsForDisplay(s.results);postosRenderResults(s.results);postosPlotResults(s.results,{fit:false,keepRoute:true});
     const remain=s.candidates.length-s.index,sharedNote=sharedFound?` · ${sharedFound} recuperada(s) do Firebase`:'';
-    postosSetStatus(`Rota de ${postosFmtNum(s.distanceKm,0)} km · ${s.results.length} posto(s) até ${s.corridor} km da rota · ${s.index} de ${s.candidates.length} candidatos processados${sharedNote}${s.fail?` · ${s.fail} sem coordenada`:''}${cloudSaved?'':' · novas coordenadas salvas somente neste aparelho por enquanto'}.`,'success');postosUpdateSummary(`${s.cities.length} cidade(s) detectada(s) na rota`);postosToggleMore(remain>0,`Processar mais ${Math.min(POSTOS_BATCH,remain)} postos`,()=>postosBuscarRota(false));
+    postosSetStatus(`Rota de ${postosFmtNum(s.distanceKm,0)} km · ${s.results.length} posto(s) com desvio de até ${s.corridor} km · ${s.index} de ${s.candidates.length} candidatos processados${sharedNote}${s.fail?` · ${s.fail} endereço(s) ainda sem coordenada`:''}${cloudSaved?'':' · novas coordenadas salvas somente neste aparelho por enquanto'}.`,'success');postosUpdateSummary(`${s.cities.length} cidade(s) detectada(s) na rota`);postosToggleMore(remain>0,`Processar mais ${Math.min(POSTOS_BATCH,remain)} postos`,()=>postosBuscarRota(false));
   }catch(e){console.error('Roteirizador postos:',e);postosSetStatus(e.message||'Erro ao calcular rota.','error');}
 }
 function postosToggleMore(show,label='',fn=null){const b=document.getElementById('postos-load-more');if(!b)return;b.style.display=show?'inline-flex':'none';b.textContent=label||'Processar mais';b.onclick=fn||null;}
-function postosLimparCache(){if(!confirm('Limpar somente os dados de localização guardados neste aparelho? As coordenadas compartilhadas no Firebase serão mantidas.'))return;_postosGeoCache={};_postosPlaceCache={};_postosReverseCache={};try{localStorage.removeItem(POSTOS_GEO_CACHE_KEY);localStorage.removeItem(POSTOS_PLACE_CACHE_KEY);localStorage.removeItem(POSTOS_REVERSE_CACHE_KEY);}catch(e){}postosUpdateSummary();postosSetStatus('Dados locais limpos. Na próxima pesquisa, o IGNIS baixará novamente as coordenadas compartilhadas no Firebase.','success');}
+function postosLimparCache(){if(!confirm('Limpar somente os dados de localização guardados neste aparelho? As coordenadas compartilhadas no Firebase serão mantidas.'))return;_postosGeoCache={};_postosPlaceCache={};_postosReverseCache={};_postosCepCache={};_postosMunicipioCenters=null;try{localStorage.removeItem(POSTOS_GEO_CACHE_KEY);localStorage.removeItem(POSTOS_PLACE_CACHE_KEY);localStorage.removeItem(POSTOS_REVERSE_CACHE_KEY);localStorage.removeItem(POSTOS_CEP_CACHE_KEY);localStorage.removeItem(POSTOS_MUNICIPIOS_CACHE_KEY);}catch(e){}postosUpdateSummary();postosSetStatus('Dados locais limpos. Na próxima pesquisa, o IGNIS baixará novamente as coordenadas compartilhadas no Firebase e refará as localizações necessárias.','success');}
 
 </script>
 
