@@ -1,11 +1,11 @@
 <!DOCTYPE html>
-<!-- IGNIS v59 · Rede de Postos com importação e comparação de preços -->
+<!-- IGNIS v60 · Rede de Postos: preços + vínculos CNPJ persistentes -->
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <!-- IGNIS v46 · correção de travamento Motoristas PX + cache de nomes + renderização única -->
-<meta name="ignis-build" content="2026-09-14-postos-precos-v1">
+<meta name="ignis-build" content="2026-09-14-postos-precos-v3-relatorio-cesar-vinculos-cnpj">
 <title>Ignis — Gestão Inteligente de Frotas e Equipamentos</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23ff6b2c'/%3E%3Cpath d='M36 9c1 8-4 11-7 15-3 4-5 8-2 14 2-4 5-6 9-8-1 8 5 11 5 17 6-4 9-10 8-17-1-10-7-17-13-21Z' fill='none' stroke='white' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -90,7 +90,7 @@ async function fbRetry(task, attempts=3, baseDelay=450) {
     catch(e) {
       lastErr=e;
       // Conflito de revisão é regra de segurança, não falha de rede: não repetir.
-      if (e?.code === 'IGNIS_REVISION_CONFLICT' || e?.code === 'IGNIS_POSTOS_VERSION_CONFLICT' || e?.code === 'IGNIS_POSTOS_PRICE_VERSION_CONFLICT') throw e;
+      if (e?.code === 'IGNIS_REVISION_CONFLICT' || e?.code === 'IGNIS_POSTOS_VERSION_CONFLICT' || e?.code === 'IGNIS_POSTOS_PRICE_VERSION_CONFLICT' || e?.code === 'IGNIS_POSTOS_LINK_VERSION_CONFLICT') throw e;
       if (tentativa < attempts) await fbSleep(baseDelay * tentativa);
     }
   }
@@ -1099,6 +1099,113 @@ window.fbSavePostosPrices = async function(items, meta = {}) {
     return manifest;
   } catch (e) {
     fbDeleteChunkSeries(FB_POSTOS_PRICE_PREFIX, version, chunks || predictedChunks);
+    throw e;
+  }
+};
+
+
+// ── REDE DE POSTOS: vínculos persistentes CNPJ → posto ────────────────────
+// O vínculo fica separado dos preços. Assim, uma troca de relatório/preço não
+// apaga o aprendizado já confirmado pelo administrador.
+const FB_POSTOS_LINK_DOC = 'postos_preco_vinculos_manifest';
+const FB_POSTOS_LINK_PREFIX = 'postos_preco_vinculos';
+function fbNormalizePostoPriceLink(item) {
+  if (!item || typeof item !== 'object' || Array.isArray(item)) return null;
+  const cnpj = String(item.cnpj || '').replace(/\D/g,'').slice(0,14);
+  const codigo = String(item.codigo || '').trim();
+  if (cnpj.length !== 14 || !codigo) return null;
+  return {
+    cnpj,
+    codigo,
+    nome: String(item.nome || '').trim().slice(0,180),
+    endereco: String(item.endereco || '').trim().slice(0,240),
+    source: String(item.source || '').trim().slice(0,24),
+    updatedAt: Math.max(0, Number(item.updatedAt || 0))
+  };
+}
+window.fbLoadPostosPriceLinks = async function(currentVersion = '') {
+  const manifestRef = doc(db, 'fueltracker', FB_POSTOS_LINK_DOC);
+  let snap, fromCache = false;
+  try {
+    snap = await withTimeout(getDoc(manifestRef), 12000);
+  } catch (networkError) {
+    try {
+      snap = await withTimeout(getDocFromCache(manifestRef), 3500);
+      fromCache = true;
+    } catch (cacheError) {
+      throw networkError;
+    }
+  }
+  fromCache = fromCache || !!snap?.metadata?.fromCache;
+  if (!snap.exists()) return {version:'',chunks:0,total:0,signature:'',updatedAt:0,updatedBy:'',fromCache,items:[],unchanged:true};
+  const manifest = snap.data() || {};
+  const version = String(manifest.version || '');
+  const chunks = Number(manifest.chunks || 0);
+  const total = Number(manifest.total || 0);
+  if (!version || !Number.isInteger(chunks) || chunks < 1 || !Number.isInteger(total) || total < 1) {
+    throw new Error('Manifesto de vínculos CNPJ da Rede de Postos inválido.');
+  }
+  const metadata = {
+    version,
+    chunks,
+    total,
+    signature: String(manifest.signature || ''),
+    updatedAt: Number(manifest.updatedAt || 0),
+    updatedBy: String(manifest.updatedBy || ''),
+    fromCache
+  };
+  if (String(currentVersion || '') === version) return {...metadata,items:null,unchanged:true};
+  const items = (await fbReadChunkSeries(FB_POSTOS_LINK_PREFIX, version, chunks)).map(fbNormalizePostoPriceLink);
+  if (items.some(x => !x) || items.length !== total) throw new Error(`Base de vínculos CNPJ incompleta (${items.filter(Boolean).length}/${total}).`);
+  const cnpjs = new Set(items.map(x => x.cnpj));
+  if (cnpjs.size !== items.length) throw new Error('Base de vínculos CNPJ contém CNPJ duplicado.');
+  return {...metadata,items,unchanged:false};
+};
+window.fbSavePostosPriceLinks = async function(items, meta = {}) {
+  const input = Array.isArray(items) ? items : [];
+  const safe = input.map(fbNormalizePostoPriceLink).filter(Boolean);
+  if (!safe.length) return {version:String(meta.expectedVersion||''),chunks:0,total:0,signature:String(meta.signature||''),updatedAt:Date.now(),updatedBy:String(meta.updatedBy||'')};
+  const unique = new Set(safe.map(x => x.cnpj));
+  if (unique.size !== safe.length) throw new Error('Os vínculos CNPJ possuem CNPJ duplicado.');
+
+  const manifestRef = doc(db, 'fueltracker', FB_POSTOS_LINK_DOC);
+  const oldSnap = await withTimeout(getDoc(manifestRef), 12000);
+  const old = oldSnap.exists() ? (oldSnap.data() || {}) : {};
+  const currentVersion = String(old.version || '');
+  if (Object.prototype.hasOwnProperty.call(meta, 'expectedVersion') && String(meta.expectedVersion || '') !== currentVersion) {
+    const conflict = new Error('Os vínculos CNPJ foram alterados por outro usuário. Reabra a importação para usar a versão mais recente.');
+    conflict.code = 'IGNIS_POSTOS_LINK_VERSION_CONFLICT';
+    throw conflict;
+  }
+
+  const version = fbVersion();
+  const predictedChunks = fbBuildAdaptiveChunks(safe, 220).length;
+  let chunks = 0;
+  try {
+    chunks = await fbWriteChunkSeries(FB_POSTOS_LINK_PREFIX, version, safe, 220);
+    const manifest = {
+      schema: 1,
+      version,
+      chunks,
+      total: safe.length,
+      signature: String(meta.signature || ''),
+      updatedAt: Date.now(),
+      updatedBy: String(meta.updatedBy || '').slice(0,100)
+    };
+    await fbRetry(() => withTimeout(runTransaction(db, async tx => {
+      const latestSnap = await tx.get(manifestRef);
+      const latest = latestSnap.exists() ? (latestSnap.data() || {}) : {};
+      if (String(latest.version || '') !== currentVersion) {
+        const conflict = new Error('Os vínculos CNPJ mudaram enquanto você revisava os postos. Reabra a importação.');
+        conflict.code = 'IGNIS_POSTOS_LINK_VERSION_CONFLICT';
+        throw conflict;
+      }
+      tx.set(manifestRef, manifest);
+    }), 25000), 3, 650);
+    fbDeleteChunkSeries(FB_POSTOS_LINK_PREFIX, String(old.version || ''), Number(old.chunks || 0));
+    return manifest;
+  } catch (e) {
+    fbDeleteChunkSeries(FB_POSTOS_LINK_PREFIX, version, chunks || predictedChunks);
     throw e;
   }
 };
@@ -2297,6 +2404,21 @@ input[type="checkbox"]:indeterminate{background:rgba(233,95,50,.2);border-color:
 .postos-price-unmatched>div{padding:7px 8px;border-radius:8px;background:#0e151d;border:1px solid rgba(148,163,184,.1);font-size:9.5px;color:var(--text2);line-height:1.35}
 .postos-price-unmatched b{color:var(--text);font-weight:700}
 
+.postos-price-review-btn{width:100%;margin-top:7px;min-height:38px;border:1px solid rgba(246,173,117,.22);border-radius:9px;background:rgba(246,173,117,.06);color:#f6bd91;font:800 9.5px 'DM Sans',sans-serif;letter-spacing:.02em;cursor:pointer}
+.postos-price-review-btn:hover{background:rgba(246,173,117,.11)}
+.postos-link-modal-card{width:min(860px,calc(100vw - 28px));max-height:min(88vh,840px);overflow:hidden;display:flex;flex-direction:column}
+.postos-link-summary{margin:10px 0 8px;padding:10px 11px;border:1px solid rgba(246,173,117,.15);border-radius:10px;background:rgba(246,173,117,.04);font-size:10px;line-height:1.45;color:var(--text2)}
+.postos-link-list{display:grid;gap:9px;overflow:auto;min-height:0;padding:2px 3px 4px;margin:0 -3px}
+.postos-link-card{padding:11px;border:1px solid rgba(148,163,184,.12);border-radius:12px;background:#0d141c;display:grid;gap:9px}
+.postos-link-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
+.postos-link-card-head>div{min-width:0}.postos-link-card-head b{display:block;color:var(--text);font-size:11px;line-height:1.35}.postos-link-card-head small{display:block;margin-top:3px;color:var(--text3);font-size:8.8px;line-height:1.35}
+.postos-link-cnpj{white-space:nowrap;padding:4px 7px;border-radius:7px;background:rgba(52,201,139,.07);color:#72d9b1;font-size:8.5px;font-weight:800}
+.postos-link-products{display:flex;flex-wrap:wrap;gap:5px}.postos-link-products span{padding:4px 6px;border-radius:6px;background:#111b25;color:#9eabb8;font-size:8.5px}.postos-link-products strong{color:#76ddb6;font-weight:800}
+.postos-link-controls{display:grid;grid-template-columns:minmax(180px,.75fr) minmax(260px,1.25fr);gap:7px}
+.postos-link-controls input,.postos-link-controls select{width:100%;height:39px;border:1px solid rgba(148,163,184,.15);border-radius:9px;background:#0a1118;color:var(--text);padding:0 9px;font:600 9.5px 'DM Sans',sans-serif;outline:none}.postos-link-controls input:focus,.postos-link-controls select:focus{border-color:rgba(233,95,50,.55)}
+.postos-link-empty{padding:22px 12px;text-align:center;color:var(--text3);font-size:10px}
+.postos-link-note{font-size:8.8px;color:#788795;line-height:1.4}.postos-link-note.warn{color:#eeb180}
+
 @media(max-width:720px){
   #page-postos .postos-shell{gap:10px!important}
   #page-postos .postos-hero{gap:10px!important;margin-bottom:2px!important}
@@ -2305,6 +2427,7 @@ input[type="checkbox"]:indeterminate{background:rgba(233,95,50,.2);border-color:
   #page-postos .postos-beta,#page-postos .postos-import-btn{flex:1 1 0;min-width:0;justify-content:center;min-height:44px;padding:8px 9px;font-size:9.5px;white-space:normal;text-align:center;line-height:1.2}
   #page-postos .postos-toolbar{padding:10px!important;border-radius:15px;box-shadow:0 12px 30px rgba(0,0,0,.16)}
   #page-postos .postos-price-bar{grid-template-columns:1fr 1fr;margin-bottom:9px;padding:9px;gap:7px}#page-postos .postos-price-info{grid-column:1/-1;text-align:left;font-size:9px}
+  .postos-link-modal-card{width:calc(100vw - 16px);max-height:92vh}.postos-link-controls{grid-template-columns:1fr}.postos-link-card{padding:9px}.postos-link-card-head{display:grid;gap:6px}.postos-link-cnpj{justify-self:start}
   #page-postos .postos-modes{display:grid;grid-template-columns:1fr 1fr;width:100%;padding:4px;margin-bottom:10px}
   #page-postos .postos-mode-btn{min-height:42px!important;padding:8px!important;font-size:11px!important;line-height:1.25;touch-action:manipulation}
   #page-postos .postos-fields{gap:8px!important}
@@ -3406,7 +3529,7 @@ input[type="checkbox"]:indeterminate{background:rgba(233,95,50,.2);border-color:
       <div class="postos-import-head">
         <div>
           <div class="modal-title" id="postos-price-import-title">Atualizar preços dos postos</div>
-          <div class="postos-import-sub">O IGNIS cruza nome + endereço com a rede credenciada e usa sempre o Preço Final da maior data de Início de Vigência para cada produto.</div>
+          <div class="postos-import-sub">O IGNIS usa vínculos CNPJ já confirmados, tenta nome + endereço exatos e deixa os casos duvidosos para revisão manual. Para cada produto, sempre vale o Preço Final da maior data de Início de Vigência.</div>
         </div>
         <button class="pend-close" type="button" aria-label="Fechar" onclick="postosFecharImportacaoPrecos()">×</button>
       </div>
@@ -3414,7 +3537,7 @@ input[type="checkbox"]:indeterminate{background:rgba(233,95,50,.2);border-color:
       <input id="postos-price-import-file" type="file" accept=".xlsx,.xls" hidden onchange="postosLerPlanilhaPrecos(this)">
       <button class="postos-import-drop" id="postos-price-import-drop" type="button" onclick="document.getElementById('postos-price-import-file').click()">
         <span class="postos-import-drop-icon"><svg class="ui-icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg></span>
-        <span><strong id="postos-price-import-drop-title">Selecionar planilha de preços</strong><small>Procura Nome EC, Endereço, Produto/Combustível, Início de Vigência e Preço Final. CNPJ é usado para reaproveitar vínculos já confirmados em importações anteriores.</small></span>
+        <span><strong id="postos-price-import-drop-title">Selecionar planilha de preços</strong><small>Compatível com o relatório de preços enviado: Abastecimento, CNPJ, Endereço, Serviço, Preço Final, Início de Vigência e Fim de Vigência. CNPJ é usado para reaproveitar vínculos já confirmados em importações anteriores.</small></span>
       </button>
 
       <div class="postos-import-feedback" id="postos-price-import-feedback" aria-live="polite">O arquivo será conferido antes de qualquer preço ser publicado.</div>
@@ -3429,11 +3552,30 @@ input[type="checkbox"]:indeterminate{background:rgba(233,95,50,.2);border-color:
         </div>
         <div class="postos-price-preview-note" id="postos-price-import-rule">Para cada posto + produto, somente o registro com a data de Início de Vigência mais recente será salvo. Produtos diferentes nunca são misturados.</div>
         <div id="postos-price-import-examples" class="postos-price-unmatched"></div>
+        <button id="postos-price-review-btn" class="postos-price-review-btn" type="button" hidden onclick="postosAbrirRevisaoVinculos()">Revisar postos sem vínculo</button>
       </div>
 
       <div class="modal-actions postos-import-actions">
         <button class="btn btn-secondary" type="button" onclick="postosFecharImportacaoPrecos()">Cancelar</button>
         <button class="btn btn-primary" id="postos-price-import-confirm-btn" type="button" disabled onclick="postosConfirmarImportacaoPrecos()">Salvar preços</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="postos-price-link-modal" aria-hidden="true">
+    <div class="modal postos-link-modal-card" role="dialog" aria-modal="true" aria-labelledby="postos-price-link-title">
+      <div class="postos-import-head">
+        <div>
+          <div class="modal-title" id="postos-price-link-title">Vincular postos sem preço</div>
+          <div class="postos-import-sub">Escolha o posto correto da Rede de Postos. Quando houver CNPJ, o IGNIS memoriza esse vínculo no Firebase para as próximas importações.</div>
+        </div>
+        <button class="pend-close" type="button" aria-label="Fechar" onclick="postosFecharRevisaoVinculos()">×</button>
+      </div>
+      <div class="postos-link-summary" id="postos-price-link-summary">Nenhum posto aguardando revisão.</div>
+      <div class="postos-link-list" id="postos-price-link-list"></div>
+      <div class="modal-actions postos-import-actions">
+        <button class="btn btn-secondary" type="button" onclick="postosFecharRevisaoVinculos()">Voltar</button>
+        <button class="btn btn-primary" id="postos-price-link-apply" type="button" onclick="postosAplicarRevisaoVinculos()">Aplicar vínculos selecionados</button>
       </div>
     </div>
   </div>
@@ -18159,6 +18301,14 @@ let _postosPriceCloudCheckPromise = null;
 let _postosPriceCloudCheckedAt = 0;
 let _postosPriceImportPreview = null;
 let _postosPriceImportSaving = false;
+let _postosPriceImportSource = null;
+let _postosPricePendingLinks = new Map();
+let _postosPriceReviewItems = [];
+let _postosPriceLinksByCnpj = new Map();
+let _postosPriceLinkMeta = {source:'nenhuma',version:'',updatedAt:0,updatedBy:'',signature:'',fromCache:false};
+let _postosPriceLinkPromise = null;
+let _postosPriceLinkCloudCheckPromise = null;
+let _postosPriceLinkCloudCheckedAt = 0;
 
 const POSTOS_UF_NOMES = {
   'ACRE':'AC','ALAGOAS':'AL','AMAPA':'AP','AMAZONAS':'AM','BAHIA':'BA','CEARA':'CE','DISTRITO FEDERAL':'DF',
@@ -18175,6 +18325,13 @@ function postosFmtNum(v,n=1){return Number(v||0).toLocaleString('pt-BR',{minimum
 function postosFmtPreco(v){return Number(v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL',minimumFractionDigits:2,maximumFractionDigits:3});}
 function postosFmtDate(ms){const n=Number(ms||0);if(!n)return '';try{return new Date(n).toLocaleDateString('pt-BR');}catch(e){return '';}}
 function postosPriceKey(nome,endereco){return postosNorm(nome)+'|'+postosNorm(endereco);}
+function postosFmtCnpj(v){const d=String(v||'').replace(/\D/g,'');return d.length===14?`${d.slice(0,2)}.${d.slice(2,5)}.${d.slice(5,8)}/${d.slice(8,12)}-${d.slice(12)}`:d;}
+function postosPriceStationIdentity(row){return row?.cnpj?`CNPJ:${row.cnpj}`:`TXT:${postosPriceKey(row?.nome,row?.endereco)}`;}
+function postosPriceLinkSignature(items){
+  let hash=2166136261;const list=(Array.isArray(items)?items:[]).slice().sort((a,b)=>String(a.cnpj||'').localeCompare(String(b.cnpj||'')));
+  list.forEach(x=>{const txt=`${x.cnpj||''}|${x.codigo||''}\u001e`;for(let i=0;i<txt.length;i++){hash^=txt.charCodeAt(i);hash=Math.imul(hash,16777619);}});
+  return `pl${(hash>>>0).toString(16)}-${list.length}`;
+}
 function postosNormalizePriceEntry(x){
   if(!x||typeof x!=='object')return null;
   const produto=postosCellText(x.produto||''),produtoKey=postosNorm(x.produtoKey||produto),preco=Number(x.preco),inicio=Math.max(0,Number(x.inicio||0)),fim=Math.max(0,Number(x.fim||0));
@@ -18301,6 +18458,38 @@ async function postosEnsurePrices(forceCloud=false){
   })();
   try{return await _postosPricePromise;}finally{_postosPricePromise=null;}
 }
+
+function postosBuildPriceLinks(raw,meta={}){
+  const next=new Map();
+  (Array.isArray(raw)?raw:[]).forEach(item=>{
+    const cnpj=postosPriceCnpj(item?.cnpj),codigo=String(item?.codigo||'').trim();
+    if(cnpj.length!==14||!codigo)return;
+    next.set(cnpj,{cnpj,codigo,nome:String(item?.nome||'').trim(),endereco:String(item?.endereco||'').trim(),source:String(item?.source||'').trim(),updatedAt:Number(item?.updatedAt||0)});
+  });
+  _postosPriceLinksByCnpj=next;
+  _postosPriceLinkMeta={source:meta.source||'firebase',version:String(meta.version||''),updatedAt:Number(meta.updatedAt||0),updatedBy:String(meta.updatedBy||''),signature:String(meta.signature||postosPriceLinkSignature([...next.values()])),fromCache:!!meta.fromCache};
+}
+async function postosRefreshPriceLinks(force=false){
+  if(!force&&_postosPriceLinkCloudCheckedAt&&Date.now()-_postosPriceLinkCloudCheckedAt<60000)return _postosPriceLinkMeta?.source==='firebase'?_postosPriceLinkMeta:null;
+  if(_postosPriceLinkCloudCheckPromise)return _postosPriceLinkCloudCheckPromise;
+  _postosPriceLinkCloudCheckPromise=(async()=>{
+    if(!(await postosFirebaseBaseReady())||typeof window.fbLoadPostosPriceLinks!=='function')throw new Error('O Firebase ainda não está disponível para consultar os vínculos CNPJ.');
+    const cloud=await window.fbLoadPostosPriceLinks(String(_postosPriceLinkMeta?.version||''));
+    _postosPriceLinkCloudCheckedAt=Date.now();
+    if(cloud&&cloud.version!==_postosPriceLinkMeta?.version){
+      postosBuildPriceLinks(cloud.items,{source:'firebase',version:cloud.version,updatedAt:cloud.updatedAt,updatedBy:cloud.updatedBy,signature:cloud.signature,fromCache:cloud.fromCache});
+    }else if(cloud&&!cloud.version&&!_postosPriceLinkMeta?.version&&Array.isArray(cloud.items)){
+      postosBuildPriceLinks(cloud.items,{source:'firebase',version:'',updatedAt:0,updatedBy:'',signature:'',fromCache:cloud.fromCache});
+    }
+    return cloud;
+  })();
+  try{return await _postosPriceLinkCloudCheckPromise;}catch(e){_postosPriceLinkCloudCheckedAt=Date.now();throw e;}finally{_postosPriceLinkCloudCheckPromise=null;}
+}
+async function postosEnsurePriceLinks(forceCloud=false){
+  if(_postosPriceLinkPromise)return _postosPriceLinkPromise;
+  _postosPriceLinkPromise=(async()=>{try{return await postosRefreshPriceLinks(forceCloud);}catch(e){console.warn('IGNIS postos: vínculos CNPJ indisponíveis.',e);return null;}})();
+  try{return await _postosPriceLinkPromise;}finally{_postosPriceLinkPromise=null;}
+}
 function postosBuildPrices(raw,meta={}){
   const next=new Map();
   (Array.isArray(raw)?raw:[]).forEach(item=>{
@@ -18329,7 +18518,6 @@ function postosPopularPriceProducts(){
 function postosGetSelectedPrice(p){
   const key=document.getElementById('postos-price-product')?.value||'';if(!key||!p)return null;
   const item=_postosPricesByCode.get(String(p.codigo||''));if(!item)return null;
-  if(postosPriceKey(item.nome,item.endereco)!==postosPriceKey(p.nome,p.endereco))return null;
   return (item.precos||[]).find(x=>x.produtoKey===key)||null;
 }
 function postosSortResultsForDisplay(results){
@@ -18592,35 +18780,42 @@ function postosPriceImportFeedback(text,type=''){
   const el=document.getElementById('postos-price-import-feedback');if(!el)return;el.textContent=text||'';el.className='postos-import-feedback'+(type?' '+type:'');
 }
 function postosResetImportacaoPrecos(){
-  _postosPriceImportPreview=null;
-  const preview=document.getElementById('postos-price-import-preview'),confirmBtn=document.getElementById('postos-price-import-confirm-btn'),drop=document.getElementById('postos-price-import-drop'),input=document.getElementById('postos-price-import-file');
-  if(preview)preview.hidden=true;if(confirmBtn){confirmBtn.disabled=true;confirmBtn.textContent='Salvar preços';}if(drop)drop.disabled=false;if(input)input.value='';
+  _postosPriceImportPreview=null;_postosPriceImportSource=null;_postosPricePendingLinks=new Map();_postosPriceReviewItems=[];
+  const preview=document.getElementById('postos-price-import-preview'),confirmBtn=document.getElementById('postos-price-import-confirm-btn'),drop=document.getElementById('postos-price-import-drop'),input=document.getElementById('postos-price-import-file'),review=document.getElementById('postos-price-review-btn');
+  if(preview)preview.hidden=true;if(review)review.hidden=true;if(confirmBtn){confirmBtn.disabled=true;confirmBtn.textContent='Salvar preços';}if(drop)drop.disabled=false;if(input)input.value='';
   const title=document.getElementById('postos-price-import-drop-title');if(title)title.textContent='Selecionar planilha de preços';
   postosPriceImportFeedback('O arquivo será conferido antes de qualquer preço ser publicado.');
+  postosFecharRevisaoVinculos(true);
 }
 async function postosAbrirImportacaoPrecos(){
   if(!postosPodeImportar()){showToast('Sem permissão. Apenas ADM Master e Admin podem atualizar os preços da Rede de Postos.','error');return;}
   postosResetImportacaoPrecos();const modal=document.getElementById('postos-price-import-modal'),drop=document.getElementById('postos-price-import-drop');
   if(modal){modal.classList.add('open');modal.setAttribute('aria-hidden','false');}if(drop)drop.disabled=true;
-  postosPriceImportFeedback('Conferindo a rede e os preços mais recentes no Firebase...','loading');
+  postosPriceImportFeedback('Conferindo a rede, os preços e os vínculos CNPJ mais recentes no Firebase...','loading');
   try{
     await postosEnsureBase();if(!(await postosFirebaseBaseReady()))throw new Error('O Firebase ainda não está disponível. Verifique a internet e tente novamente.');
     const baseCloud=await postosRefreshCloudBase(true);if(baseCloud?.fromCache)throw new Error('Sem conexão com o Firebase. A importação foi bloqueada para não cruzar preços com uma rede desatualizada.');
     const priceCloud=await postosRefreshCloudPrices(true);if(priceCloud?.fromCache)throw new Error('Sem conexão com o Firebase. A importação foi bloqueada para evitar substituir preços mais novos sem conferência.');
-    if(drop)drop.disabled=false;postosPriceImportFeedback('Pronto. Selecione a planilha de preços; o IGNIS mostrará quantos postos foram vinculados antes de salvar.');setTimeout(()=>drop?.focus(),60);
+    const linkCloud=await postosRefreshPriceLinks(true);if(linkCloud?.fromCache)throw new Error('Sem conexão com o Firebase. Não foi possível conferir os vínculos CNPJ já memorizados.');
+    if(drop)drop.disabled=false;postosPriceImportFeedback(`Pronto. ${_postosPriceLinksByCnpj.size.toLocaleString('pt-BR')} vínculo(s) CNPJ memorizado(s). Selecione a planilha de preços.`);setTimeout(()=>drop?.focus(),60);
   }catch(e){console.error('IGNIS postos: preparação da importação de preços',e);postosPriceImportFeedback(e?.message||'Não foi possível preparar a importação de preços.','error');if(drop)drop.disabled=true;}
 }
 function postosFecharImportacaoPrecos(){
   if(_postosPriceImportSaving){postosPriceImportFeedback('Aguarde: os preços ainda estão sendo confirmados no Firebase.','loading');return;}
-  const modal=document.getElementById('postos-price-import-modal');if(modal){modal.classList.remove('open');modal.setAttribute('aria-hidden','true');}ignisSyncModalScrollLock();
+  postosFecharRevisaoVinculos(true);const modal=document.getElementById('postos-price-import-modal');if(modal){modal.classList.remove('open');modal.setAttribute('aria-hidden','true');}ignisSyncModalScrollLock();
+}
+function postosFecharRevisaoVinculos(silent=false){
+  const modal=document.getElementById('postos-price-link-modal');if(modal){modal.classList.remove('open');modal.setAttribute('aria-hidden','true');}if(!silent)ignisSyncModalScrollLock();
 }
 function postosPriceHeaderField(v){
   const k=postosNorm(v).replace(/\s/g,'');if(!k)return '';
   const aliases={
-    NOMEEC:'nome',NOMEDOEC:'nome',NOMEPOSTO:'nome',NOMEDOPOSTO:'nome',RAZAOSOCIAL:'nome',ESTABELECIMENTO:'nome',
+    // O relatório real enviado usa "Abastecimento" como nome do estabelecimento.
+    ABASTECIMENTO:'nome',NOMEABASTECIMENTO:'nome',NOMEDOABASTECIMENTO:'nome',LOCALABASTECIMENTO:'nome',LOCALDEABASTECIMENTO:'nome',
+    NOMEEC:'nome',NOMEDOEC:'nome',NOMEPOSTO:'nome',NOMEDOPOSTO:'nome',POSTO:'nome',RAZAOSOCIAL:'nome',ESTABELECIMENTO:'nome',
     ENDERECO:'endereco',ENDERECOEC:'endereco',ENDERECODOEC:'endereco',LOGRADOURO:'endereco',
     CNPJ:'cnpj',CNPJEC:'cnpj',CNPJDOEC:'cnpj',CNPJESTABELECIMENTO:'cnpj',
-    PRODUTO:'produto',COMBUSTIVEL:'produto',TIPODECOMBUSTIVEL:'produto',NOMEDOPRODUTO:'produto',DESCRICAODOPRODUTO:'produto',SERVICO:'produto',PRODUTOSERVICO:'produto',
+    PRODUTO:'produto',COMBUSTIVEL:'produto',TIPODECOMBUSTIVEL:'produto',TIPODESERVICO:'produto',NOMEDOSERVICO:'produto',NOMEDOPRODUTO:'produto',DESCRICAODOPRODUTO:'produto',SERVICO:'produto',PRODUTOSERVICO:'produto',
     INICIODEVIGENCIA:'inicio',DATAINICIODEVIGENCIA:'inicio',DATADEINICIODEVIGENCIA:'inicio',VIGENCIAINICIAL:'inicio',INICIOVIGENCIA:'inicio',
     FIMDEVIGENCIA:'fim',DATAFIMDEVIGENCIA:'fim',DATADEFIMDEVIGENCIA:'fim',VIGENCIAFINAL:'fim',FIMVIGENCIA:'fim',
     PRECOFINAL:'preco',VALORFINAL:'preco',PRECOLIQUIDO:'preco',VALORLIQUIDO:'preco'
@@ -18632,7 +18827,8 @@ function postosPriceHeaderField(v){
   if(k.includes('VIGENCIA')&&k.includes('FIM'))return 'fim';
   if(k.includes('ENDERECO')||k==='LOGRADOURO')return 'endereco';
   if(k.includes('COMBUSTIVEL')||k.includes('PRODUTO')||k==='SERVICO')return 'produto';
-  if(k.includes('NOME')&&(k.includes('EC')||k.includes('POSTO')||k.includes('ESTABELECIMENTO')))return 'nome';
+  if(k==='ABASTECIMENTO'||k.includes('LOCALDEABASTECIMENTO'))return 'nome';
+  if(k.includes('NOME')&&(k.includes('EC')||k.includes('POSTO')||k.includes('ESTABELECIMENTO')||k.includes('ABASTECIMENTO')))return 'nome';
   return '';
 }
 function postosPriceParseNumber(v){
@@ -18650,31 +18846,65 @@ function postosPriceParseDate(v){
   if(br){let y=Number(br[3]);if(y<100)y+=2000;const d=new Date(y,Number(br[2])-1,Number(br[1]),Number(br[4]||0),Number(br[5]||0),Number(br[6]||0));return Number.isNaN(d.getTime())?0:d.getTime();}
   const parsed=Date.parse(s);return Number.isNaN(parsed)?0:parsed;
 }
-function postosPriceCnpj(v){const d=String(v??'').replace(/\.0+$/,'').replace(/\D/g,'');return d&&d.length<=14?d.padStart(14,'0'):d.slice(0,14);}
+function postosPriceCnpj(v){
+  const d=String(v??'').replace(/\.0+$/,'').replace(/\D/g,'');
+  // Excel pode remover apenas o zero inicial quando o CNPJ veio como número.
+  // Aceitamos 13 dígitos nesse caso e completamos com um zero. Qualquer tamanho
+  // menor é tratado como sem CNPJ para evitar memorizar um vínculo incorreto.
+  if(d.length===14)return d;
+  if(d.length===13)return '0'+d;
+  return '';
+}
 function postosExtrairPlanilhaPrecos(wb){
   let found=null;
   for(const sheetName of wb.SheetNames||[]){
     const matrix=XLSX.utils.sheet_to_json(wb.Sheets[sheetName],{header:1,defval:'',raw:true,blankrows:false});
-    for(let rowIndex=0;rowIndex<Math.min(40,matrix.length);rowIndex++){
+    // Alguns relatórios trazem título, período e filtro antes do cabeçalho real.
+    for(let rowIndex=0;rowIndex<Math.min(80,matrix.length);rowIndex++){
       const indexes={};(matrix[rowIndex]||[]).forEach((v,i)=>{const f=postosPriceHeaderField(v);if(f&&!Object.prototype.hasOwnProperty.call(indexes,f))indexes[f]=i;});
-      if(['nome','endereco','inicio','preco'].every(k=>Number.isInteger(indexes[k]))){found={sheetName,matrix,rowIndex,indexes};break;}
+      if(['nome','endereco','produto','inicio','preco'].every(k=>Number.isInteger(indexes[k]))){found={sheetName,matrix,rowIndex,indexes};break;}
     }
     if(found)break;
   }
-  if(!found)throw new Error('Não encontrei as colunas necessárias: Nome EC/Posto, Endereço, Início de Vigência e Preço Final.');
-  const rows=[],errors=[];
+  if(!found)throw new Error('Não encontrei o cabeçalho do relatório. No arquivo enviado ele deve conter Abastecimento, Endereço, Preço Final e Início de Vigência.');
+
+  const rows=[],ignored=[];
+  let carry={nome:'',endereco:'',cnpj:''};
   for(let ri=found.rowIndex+1;ri<found.matrix.length;ri++){
     const row=found.matrix[ri]||[],idx=found.indexes,get=k=>Number.isInteger(idx[k])?row[idx[k]]:'';
-    const nome=postosCellText(get('nome')),endereco=postosCellText(get('endereco')),produto=postosCellText(get('produto'))||'Preço',cnpj=postosPriceCnpj(get('cnpj')),inicio=postosPriceParseDate(get('inicio')),fim=postosPriceParseDate(get('fim')),preco=postosPriceParseNumber(get('preco'));
-    if(!nome&&!endereco&&!inicio&&!Number.isFinite(preco))continue;
-    const line=ri+1;if(!nome||!endereco){errors.push(`linha ${line}: nome ou endereço vazio`);if(errors.length>=8)break;continue;}
-    if(!inicio){errors.push(`linha ${line}: Início de Vigência inválido`);if(errors.length>=8)break;continue;}
-    if(!Number.isFinite(preco)||preco<=0){errors.push(`linha ${line}: Preço Final inválido`);if(errors.length>=8)break;continue;}
-    rows.push({nome,endereco,produto,produtoKey:postosNorm(produto),cnpj,inicio,fim,preco,line});
+    const rawNome=postosCellText(get('nome')),rawEndereco=postosCellText(get('endereco')),rawCnpj=postosPriceCnpj(get('cnpj'));
+    const produto=postosCellText(get('produto'))||'Preço',inicio=postosPriceParseDate(get('inicio')),fim=postosPriceParseDate(get('fim')),preco=postosPriceParseNumber(get('preco'));
+
+    // Relatórios .xls podem usar células mescladas para nome/CNPJ/endereço. O
+    // SheetJS devolve valor somente na primeira linha do grupo, então mantemos
+    // a identidade do estabelecimento para as linhas seguintes de combustível.
+    if(rawNome||rawCnpj){
+      const newStation=(rawCnpj&&carry.cnpj&&rawCnpj!==carry.cnpj)||(rawNome&&carry.nome&&postosNorm(rawNome)!==postosNorm(carry.nome));
+      if(newStation)carry={nome:'',endereco:'',cnpj:''};
+      if(rawNome)carry.nome=rawNome;
+      if(rawCnpj)carry.cnpj=rawCnpj;
+      if(rawEndereco)carry.endereco=rawEndereco;
+    }else if(rawEndereco){
+      carry.endereco=rawEndereco;
+    }
+
+    const nome=rawNome||carry.nome,endereco=rawEndereco||carry.endereco,cnpj=rawCnpj||carry.cnpj;
+    const hasPrice=Number.isFinite(preco)&&preco>0,hasStart=!!inicio;
+
+    // Títulos, subtotais, rodapés e linhas vazias não devem invalidar toda a importação.
+    if(!hasPrice&&!hasStart){continue;}
+    if(!nome||!endereco||!hasPrice||!hasStart){
+      ignored.push({line:ri+1,nome,endereco,hasPrice,hasStart});
+      continue;
+    }
+    rows.push({nome,endereco,produto,produtoKey:postosNorm(produto)||'PRECO',cnpj,inicio,fim,preco,line:ri+1});
   }
-  if(errors.length)throw new Error('Revise a planilha — '+errors.join('; ')+'.');
-  if(!rows.length)throw new Error('A planilha não possui preços válidos.');
-  return {rows,sheetName:found.sheetName};
+
+  if(!rows.length){
+    const detail=ignored.length?` ${ignored.length} linha(s) pareciam conter preço/data, mas estavam incompletas.`:'';
+    throw new Error('Nenhum preço válido foi encontrado no relatório.'+detail+' Confira as colunas Abastecimento, Endereço, Serviço, Preço Final e Início de Vigência.');
+  }
+  return {rows,sheetName:found.sheetName,ignoredRows:ignored.length};
 }
 function postosPriceIsActive(row,now=Date.now()){return !Number(row?.fim||0)||Number(row.fim)>=now;}
 function postosPricePickLatest(a,b){
@@ -18683,60 +18913,147 @@ function postosPricePickLatest(a,b){
   if(Number(a.fim||0)!==Number(b.fim||0))return Number(a.fim||0)>Number(b.fim||0)?a:b;
   return Number(a.line||0)>=Number(b.line||0)?a:b;
 }
+function postosPriceLegacyCnpjMap(){
+  const map=new Map(),ambiguous=new Set();
+  _postosPricesByCode.forEach(item=>(item.precos||[]).forEach(x=>{if(!x.cnpj||ambiguous.has(x.cnpj))return;if(map.has(x.cnpj)&&map.get(x.cnpj)!==item.codigo){map.delete(x.cnpj);ambiguous.add(x.cnpj);}else if(!map.has(x.cnpj))map.set(x.cnpj,item.codigo);}));
+  return map;
+}
 function postosMontarPreviewPrecos(extracted,fileName){
   const reportLatest=new Map();
-  extracted.rows.forEach(row=>{const textKey=postosPriceKey(row.nome,row.endereco),stationIdentity=row.cnpj?`CNPJ:${row.cnpj}|TXT:${textKey}`:`TXT:${textKey}`,key=stationIdentity+'|'+row.produtoKey;reportLatest.set(key,postosPricePickLatest(reportLatest.get(key),row));});
-  const baseByExact=new Map(),ambiguousExact=new Set();
+  extracted.rows.forEach(row=>{const identity=postosPriceStationIdentity(row),key=identity+'|'+row.produtoKey;reportLatest.set(key,postosPricePickLatest(reportLatest.get(key),row));});
+  const groups=new Map();[...reportLatest.values()].forEach(row=>{const key=postosPriceStationIdentity(row);if(!groups.has(key))groups.set(key,[]);groups.get(key).push(row);});
+  const baseByCode=new Map((_postosBase||[]).map(p=>[String(p.codigo||''),p])),baseByExact=new Map(),ambiguousExact=new Set();
   (_postosBase||[]).forEach(p=>{const key=postosPriceKey(p.nome,p.endereco);if(baseByExact.has(key)){ambiguousExact.add(key);baseByExact.delete(key);}else if(!ambiguousExact.has(key))baseByExact.set(key,p);});
-  const priorCnpj=new Map(),ambiguousCnpj=new Set();_postosPricesByCode.forEach(item=>(item.precos||[]).forEach(x=>{if(!x.cnpj||ambiguousCnpj.has(x.cnpj))return;if(priorCnpj.has(x.cnpj)&&priorCnpj.get(x.cnpj)!==item.codigo){priorCnpj.delete(x.cnpj);ambiguousCnpj.add(x.cnpj);}else if(!priorCnpj.has(x.cnpj))priorCnpj.set(x.cnpj,item.codigo);}));
-  const latestPerCodeProduct=new Map(),unmatched=new Map(),linkedByPrior=new Set(),linkedByExact=new Set();
-  [...reportLatest.values()].forEach(row=>{
-    let posto=null;
-    if(row.cnpj&&priorCnpj.has(row.cnpj)){const code=priorCnpj.get(row.cnpj);posto=(_postosBase||[]).find(p=>p.codigo===code)||null;if(posto)linkedByPrior.add(posto.codigo);}
-    if(!posto){const key=postosPriceKey(row.nome,row.endereco);posto=baseByExact.get(key)||null;if(posto)linkedByExact.add(posto.codigo);}
-    if(!posto){const uk=row.cnpj||postosPriceKey(row.nome,row.endereco);if(!unmatched.has(uk))unmatched.set(uk,{nome:row.nome,endereco:row.endereco,cnpj:row.cnpj});return;}
-    const pk=posto.codigo+'|'+row.produtoKey;latestPerCodeProduct.set(pk,{posto,row:postosPricePickLatest(latestPerCodeProduct.get(pk)?.row,row)});
+  const legacyCnpj=postosPriceLegacyCnpjMap();
+  const latestPerCodeProduct=new Map(),unmatched=[],confirmedLinks=new Map(),linkedByStored=new Set(),linkedByLegacy=new Set(),linkedByExact=new Set(),linkedByManual=new Set(),warnings=[];
+
+  groups.forEach((rows,identity)=>{
+    const rep=rows[0],manual=_postosPricePendingLinks.get(identity),stored=rep.cnpj?_postosPriceLinksByCnpj.get(rep.cnpj):null;
+    let posto=null,method='';
+    const take=(code,label)=>{const p=baseByCode.get(String(code||''));if(p){posto=p;method=label;return true;}return false;};
+    if(manual?.codigo)take(manual.codigo,'manual');
+    if(!posto&&stored?.codigo)take(stored.codigo,'cnpj');
+    if(!posto&&rep.cnpj&&legacyCnpj.has(rep.cnpj))take(legacyCnpj.get(rep.cnpj),'legacy');
+    if(!posto){
+      const exactCodes=new Set();rows.forEach(row=>{const p=baseByExact.get(postosPriceKey(row.nome,row.endereco));if(p)exactCodes.add(p.codigo);});
+      if(exactCodes.size===1)take([...exactCodes][0],'exact');
+    }
+    if(!posto){
+      unmatched.push({key:identity,nome:rep.nome,endereco:rep.endereco,cnpj:rep.cnpj,products:rows.slice().sort((a,b)=>a.produto.localeCompare(b.produto,'pt-BR'))});return;
+    }
+    if(method==='manual')linkedByManual.add(posto.codigo);else if(method==='cnpj')linkedByStored.add(posto.codigo);else if(method==='legacy')linkedByLegacy.add(posto.codigo);else if(method==='exact')linkedByExact.add(posto.codigo);
+    if(method==='cnpj'&&rows.every(row=>postosPriceKey(row.nome,row.endereco)!==postosPriceKey(posto.nome,posto.endereco))){warnings.push({cnpj:rep.cnpj,codigo:posto.codigo,nome:rep.nome,postoNome:posto.nome});}
+    rows.forEach(row=>{const pk=posto.codigo+'|'+row.produtoKey;latestPerCodeProduct.set(pk,{posto,row:postosPricePickLatest(latestPerCodeProduct.get(pk)?.row,row)});});
+    if(rep.cnpj){
+      const previous=_postosPriceLinksByCnpj.get(rep.cnpj);confirmedLinks.set(rep.cnpj,{cnpj:rep.cnpj,codigo:posto.codigo,nome:rep.nome,endereco:rep.endereco,source:method==='manual'?'manual':method==='exact'?'exact':method==='legacy'?'legacy':(previous?.source||'cnpj'),updatedAt:method==='cnpj'?(previous?.updatedAt||Date.now()):Date.now()});
+    }
   });
+
   const grouped=new Map();
   latestPerCodeProduct.forEach(({posto,row})=>{if(!grouped.has(posto.codigo))grouped.set(posto.codigo,{codigo:posto.codigo,nome:posto.nome,endereco:posto.endereco,precos:[]});grouped.get(posto.codigo).precos.push({produto:row.produto,produtoKey:row.produtoKey,preco:row.preco,inicio:row.inicio,fim:row.fim,cnpj:row.cnpj});});
   const items=[...grouped.values()].map(item=>({...item,precos:item.precos.sort((a,b)=>a.produto.localeCompare(b.produto,'pt-BR'))})).sort((a,b)=>a.nome.localeCompare(b.nome,'pt-BR'));
   const products=new Set();items.forEach(x=>x.precos.forEach(p=>products.add(p.produtoKey)));
   const signature=postosPriceSignature(items),sameSnapshot=!!_postosPriceMeta?.signature&&signature===_postosPriceMeta.signature;
-  return {items,unmatched:[...unmatched.values()],products:[...products],rawRows:extracted.rows.length,latestRows:reportLatest.size,matchedStations:items.length,priceCount:[...grouped.values()].reduce((n,x)=>n+x.precos.length,0),signature,fileName:String(fileName||''),sheetName:extracted.sheetName,expectedVersion:String(_postosPriceMeta?.version||''),sameSnapshot,linkedByPrior:linkedByPrior.size,linkedByExact:linkedByExact.size};
+
+  const mergedLinks=new Map(_postosPriceLinksByCnpj);confirmedLinks.forEach((v,k)=>mergedLinks.set(k,v));
+  const linkItems=[...mergedLinks.values()].sort((a,b)=>a.cnpj.localeCompare(b.cnpj)),linkSignature=postosPriceLinkSignature(linkItems),currentLinkSignature=_postosPriceLinkMeta?.signature||postosPriceLinkSignature([..._postosPriceLinksByCnpj.values()]),linksChanged=linkSignature!==currentLinkSignature;
+  return {items,unmatched,products:[...products],rawRows:extracted.rows.length,latestRows:reportLatest.size,matchedStations:items.length,priceCount:[...grouped.values()].reduce((n,x)=>n+x.precos.length,0),signature,fileName:String(fileName||''),sheetName:extracted.sheetName,expectedVersion:String(_postosPriceMeta?.version||''),sameSnapshot,linkedByStored:linkedByStored.size,linkedByLegacy:linkedByLegacy.size,linkedByExact:linkedByExact.size,linkedByManual:linkedByManual.size,warnings,linkItems,linkSignature,expectedLinkVersion:String(_postosPriceLinkMeta?.version||''),linksChanged};
 }
 function postosRenderPreviewPrecos(p){
   const fmt=n=>Number(n||0).toLocaleString('pt-BR'),preview=document.getElementById('postos-price-import-preview');if(preview)preview.hidden=false;
   document.getElementById('postos-price-import-file-name').textContent=p.fileName+(p.sheetName?` · aba ${p.sheetName}`:'');document.getElementById('postos-price-import-total').textContent=`${fmt(p.priceCount)} preço(s) atual(is)`;
   document.getElementById('postos-price-import-matched').textContent=fmt(p.matchedStations);document.getElementById('postos-price-import-prices').textContent=fmt(p.priceCount);document.getElementById('postos-price-import-unmatched').textContent=fmt(p.unmatched.length);document.getElementById('postos-price-import-products').textContent=fmt(p.products.length);
-  const rule=document.getElementById('postos-price-import-rule');if(rule)rule.textContent=`${fmt(p.rawRows)} linha(s) histórica(s) lida(s). O IGNIS reduziu para ${fmt(p.latestRows)} combinação(ões) atuais usando a maior data de Início de Vigência. Produtos diferentes nunca são misturados.`;
-  const examples=document.getElementById('postos-price-import-examples');if(examples){const top=p.unmatched.slice(0,6).map(x=>`<div><b>Sem vínculo:</b> ${postosEsc(x.nome)} — ${postosEsc(x.endereco)}${x.cnpj?` · CNPJ ${postosEsc(x.cnpj)}`:''}</div>`).join('');examples.innerHTML=top+(p.unmatched.length>6?`<div>+ ${(p.unmatched.length-6).toLocaleString('pt-BR')} outro(s) posto(s) sem vínculo. Nenhum deles receberá preço.</div>`:'')||'<div><b>Vínculos conferidos:</b> todos os postos da planilha foram reconhecidos pela rede atual.</div>';}
-  const btn=document.getElementById('postos-price-import-confirm-btn');if(btn){btn.disabled=_postosPriceImportSaving||!p.items.length||p.sameSnapshot;btn.textContent=_postosPriceImportSaving?'Enviando ao Firebase...':p.sameSnapshot?'Preços já estão atualizados':'Salvar preços';}
-  if(p.sameSnapshot)postosPriceImportFeedback('Esta planilha gera exatamente os mesmos preços que já estão publicados.','success');
-  else if(p.unmatched.length)postosPriceImportFeedback(`Planilha válida. ${p.unmatched.length} posto(s) não tiveram vínculo exato e ficarão sem preço; confira os exemplos abaixo.`,'loading');
+  const rule=document.getElementById('postos-price-import-rule');if(rule){const ignored=Number(_postosPriceImportSource?.extracted?.ignoredRows||0);rule.textContent=`${fmt(p.rawRows)} linha(s) histórica(s) → ${fmt(p.latestRows)} preço(s) mais recente(s). Vínculos: ${fmt(p.linkedByStored)} por CNPJ memorizado, ${fmt(p.linkedByLegacy)} reaproveitado(s), ${fmt(p.linkedByExact)} por nome + endereço exatos e ${fmt(p.linkedByManual)} manual(is).${ignored?` ${fmt(ignored)} linha(s) incompleta(s) foram ignoradas sem bloquear o restante.`:''}`;}
+  const examples=document.getElementById('postos-price-import-examples');if(examples){
+    const top=p.unmatched.slice(0,4).map(x=>`<div><b>Sem vínculo:</b> ${postosEsc(x.nome)} — ${postosEsc(x.endereco)}${x.cnpj?` · CNPJ ${postosEsc(postosFmtCnpj(x.cnpj))}`:' · sem CNPJ'}</div>`).join('');
+    const warning=p.warnings.slice(0,2).map(x=>`<div><b>Atenção:</b> CNPJ ${postosEsc(postosFmtCnpj(x.cnpj))} já está memorizado no EC ${postosEsc(x.codigo)} (${postosEsc(x.postoNome)}), embora nome/endereço do relatório tenham mudado. O vínculo por CNPJ foi mantido.</div>`).join('');
+    examples.innerHTML=top+(p.unmatched.length>4?`<div>+ ${fmt(p.unmatched.length-4)} outro(s) posto(s) aguardando revisão.</div>`:'')+warning||'<div><b>Vínculos conferidos:</b> todos os postos da planilha foram reconhecidos.</div>';
+  }
+  const review=document.getElementById('postos-price-review-btn');if(review){review.hidden=!p.unmatched.length;review.textContent=p.unmatched.length?`Revisar ${fmt(p.unmatched.length)} posto(s) sem vínculo`:'Revisar postos sem vínculo';}
+  const nothingToSave=p.sameSnapshot&&!p.linksChanged,btn=document.getElementById('postos-price-import-confirm-btn');if(btn){btn.disabled=_postosPriceImportSaving||!p.items.length||nothingToSave;btn.textContent=_postosPriceImportSaving?'Enviando ao Firebase...':nothingToSave?'Tudo já está atualizado':p.sameSnapshot&&p.linksChanged?'Salvar vínculos CNPJ':'Salvar preços';}
+  if(nothingToSave)postosPriceImportFeedback('Esta planilha gera os mesmos preços e os mesmos vínculos que já estão publicados.','success');
+  else if(p.unmatched.length)postosPriceImportFeedback(`Planilha válida. ${p.unmatched.length} posto(s) ficaram sem vínculo. Você pode revisar agora; os não resolvidos continuarão sem preço.`,'loading');
+  else if(p.linksChanged)postosPriceImportFeedback(`Planilha válida. Todos os postos foram reconhecidos e ${p.linkItems.length.toLocaleString('pt-BR')} vínculo(s) CNPJ ficarão memorizados.`,'success');
   else postosPriceImportFeedback(`Planilha válida. ${p.matchedStations} posto(s) vinculados e ${p.priceCount} preço(s) prontos para publicar.`,'success');
   const title=document.getElementById('postos-price-import-drop-title');if(title)title.textContent='Escolher outra planilha de preços';
 }
+function postosPriceTokenSimilarity(a,b){
+  const aa=new Set(postosNorm(a).split(' ').filter(x=>x.length>1)),bb=new Set(postosNorm(b).split(' ').filter(x=>x.length>1));if(!aa.size||!bb.size)return 0;let hit=0;aa.forEach(x=>{if(bb.has(x))hit++;});return hit/Math.max(aa.size,bb.size);
+}
+function postosPriceCandidateScore(item,p){
+  const iname=postosNorm(item?.nome),pname=postosNorm(p?.nome),iaddr=postosNorm(item?.endereco),paddr=postosNorm(p?.endereco);let score=0;
+  if(iname&&iname===pname)score+=120;else score+=postosPriceTokenSimilarity(iname,pname)*55;
+  if(iaddr&&iaddr===paddr)score+=120;else score+=postosPriceTokenSimilarity(iaddr,paddr)*70;
+  if(iname&&pname&&(iname.includes(pname)||pname.includes(iname)))score+=18;if(iaddr&&paddr&&(iaddr.includes(paddr)||paddr.includes(iaddr)))score+=22;
+  return score;
+}
+function postosPriceFindCandidates(item,query=''){
+  const q=postosNorm(query),all=Array.isArray(_postosBase)?_postosBase:[];let pool=all;
+  if(q){const terms=q.split(' ').filter(Boolean);pool=all.filter(p=>{const hay=postosNorm(`${p.codigo} ${p.nome} ${p.endereco} ${p.bairro} ${p.cidade} ${p.uf}`);return terms.every(t=>hay.includes(t));});}
+  return pool.map(p=>({p,score:postosPriceCandidateScore(item,p)})).sort((a,b)=>b.score-a.score||a.p.nome.localeCompare(b.p.nome,'pt-BR')).slice(0,q?30:8).map(x=>x.p);
+}
+function postosPriceSelectOptions(item,query='',selected=''){
+  const candidates=postosPriceFindCandidates(item,query),selectedPosto=selected?(_postosBase||[]).find(p=>p.codigo===selected):null;if(selectedPosto&&!candidates.some(p=>p.codigo===selectedPosto.codigo))candidates.unshift(selectedPosto);
+  return '<option value="">Selecione o posto correto</option>'+candidates.map(p=>`<option value="${postosEsc(p.codigo)}"${p.codigo===selected?' selected':''}>EC ${postosEsc(p.codigo)} · ${postosEsc(p.nome)} · ${postosEsc(p.cidade)}/${postosEsc(p.uf)} · ${postosEsc(p.endereco)}</option>`).join('');
+}
+function postosAbrirRevisaoVinculos(){
+  const p=_postosPriceImportPreview;if(!p?.unmatched?.length){showToast('Não há postos sem vínculo nesta planilha.','success');return;}
+  _postosPriceReviewItems=p.unmatched.slice();const list=document.getElementById('postos-price-link-list'),summary=document.getElementById('postos-price-link-summary'),modal=document.getElementById('postos-price-link-modal');
+  if(summary)summary.textContent=`${p.unmatched.length.toLocaleString('pt-BR')} posto(s) não foram vinculados automaticamente. Pesquise pelo nome, cidade, endereço ou Código EC e escolha somente quando tiver certeza.`;
+  if(list)list.innerHTML=_postosPriceReviewItems.map((item,i)=>{
+    const products=(item.products||[]).slice(0,5).map(x=>`<span>${postosEsc(x.produto)}: <strong>${postosEsc(postosFmtPreco(x.preco))}</strong></span>`).join('');
+    const cnpj=item.cnpj?postosFmtCnpj(item.cnpj):'Sem CNPJ';
+    const note=item.cnpj?'Ao aplicar, este CNPJ será memorizado para as próximas importações.':'Este registro não possui CNPJ; o vínculo valerá nesta importação, mas não poderá ser memorizado por CNPJ.';
+    return `<div class="postos-link-card"><div class="postos-link-card-head"><div><b>${postosEsc(item.nome)}</b><small>${postosEsc(item.endereco)}</small></div><span class="postos-link-cnpj">${postosEsc(cnpj)}</span></div><div class="postos-link-products">${products}</div><div class="postos-link-controls"><input id="postos-price-link-search-${i}" type="search" placeholder="Buscar posto, cidade, EC..." oninput="postosPriceAtualizarSugestoes(${i},this.value)"><select id="postos-price-link-select-${i}">${postosPriceSelectOptions(item)}</select></div><div class="postos-link-note${item.cnpj?'':' warn'}">${postosEsc(note)}</div></div>`;
+  }).join('');
+  if(modal){modal.classList.add('open');modal.setAttribute('aria-hidden','false');}ignisSyncModalScrollLock();
+}
+function postosPriceAtualizarSugestoes(index,query){
+  const item=_postosPriceReviewItems[index],sel=document.getElementById(`postos-price-link-select-${index}`);if(!item||!sel)return;const selected=sel.value;sel.innerHTML=postosPriceSelectOptions(item,query,selected);
+}
+function postosAplicarRevisaoVinculos(){
+  if(!_postosPriceImportSource||!_postosPriceReviewItems.length)return;let applied=0;
+  _postosPriceReviewItems.forEach((item,i)=>{const codigo=document.getElementById(`postos-price-link-select-${i}`)?.value||'';if(codigo){_postosPricePendingLinks.set(item.key,{codigo,source:'manual'});applied++;}});
+  if(!applied){showToast('Selecione pelo menos um posto para aplicar o vínculo.','error');return;}
+  postosFecharRevisaoVinculos(true);_postosPriceImportPreview=postosMontarPreviewPrecos(_postosPriceImportSource.extracted,_postosPriceImportSource.fileName);postosRenderPreviewPrecos(_postosPriceImportPreview);ignisSyncModalScrollLock();showToast(`${applied} vínculo(s) aplicado(s) à prévia. Confira e salve os preços.`,'success');
+}
 async function postosLerPlanilhaPrecos(input){
-  const file=input?.files?.[0];if(!file)return;const drop=document.getElementById('postos-price-import-drop');if(drop)drop.disabled=true;const preview=document.getElementById('postos-price-import-preview');if(preview)preview.hidden=true;_postosPriceImportPreview=null;
-  const btn=document.getElementById('postos-price-import-confirm-btn');if(btn)btn.disabled=true;postosPriceImportFeedback(`Lendo ${file.name} e escolhendo o preço mais recente de cada produto...`,'loading');
+  const file=input?.files?.[0];if(!file)return;const drop=document.getElementById('postos-price-import-drop');if(drop)drop.disabled=true;const preview=document.getElementById('postos-price-import-preview');if(preview)preview.hidden=true;_postosPriceImportPreview=null;_postosPriceImportSource=null;_postosPricePendingLinks=new Map();
+  const btn=document.getElementById('postos-price-import-confirm-btn'),review=document.getElementById('postos-price-review-btn');if(btn)btn.disabled=true;if(review)review.hidden=true;postosPriceImportFeedback(`Lendo ${file.name} e escolhendo o preço mais recente de cada produto...`,'loading');
   try{
     if(file.size>25*1024*1024)throw new Error('A planilha ultrapassa 25 MB. Confirme se selecionou o arquivo correto.');if(!await ensureXLSXReady())throw new Error('O leitor de Excel não foi carregado. Verifique a internet e tente novamente.');
-    const buffer=await file.arrayBuffer(),wb=XLSX.read(buffer,{type:'array',cellDates:true});const extracted=postosExtrairPlanilhaPrecos(wb);_postosPriceImportPreview=postosMontarPreviewPrecos(extracted,file.name);postosRenderPreviewPrecos(_postosPriceImportPreview);
+    const buffer=await file.arrayBuffer(),wb=XLSX.read(buffer,{type:'array',cellDates:true}),extracted=postosExtrairPlanilhaPrecos(wb);_postosPriceImportSource={extracted,fileName:file.name};_postosPriceImportPreview=postosMontarPreviewPrecos(extracted,file.name);postosRenderPreviewPrecos(_postosPriceImportPreview);
   }catch(e){console.error('IGNIS postos: leitura da planilha de preços',e);postosPriceImportFeedback(e?.message||'Não foi possível ler a planilha de preços.','error');showToast(e?.message||'Não foi possível ler a planilha de preços.','error');}
   finally{if(drop)drop.disabled=false;if(input)input.value='';}
 }
 async function postosConfirmarImportacaoPrecos(){
-  const p=_postosPriceImportPreview;if(!p||_postosPriceImportSaving||!postosPodeImportar()||!p.items.length||p.sameSnapshot)return;_postosPriceImportSaving=true;const btn=document.getElementById('postos-price-import-confirm-btn'),drop=document.getElementById('postos-price-import-drop');if(btn){btn.disabled=true;btn.textContent='Enviando ao Firebase...';}if(drop)drop.disabled=true;
-  postosPriceImportFeedback(`Publicando ${p.priceCount.toLocaleString('pt-BR')} preço(s) em ${p.matchedStations.toLocaleString('pt-BR')} posto(s)...`,'loading');postosSetStatus('Atualizando preços da Rede de Postos no Firebase...','loading',45);
+  const p=_postosPriceImportPreview;if(!p||_postosPriceImportSaving||!postosPodeImportar()||!p.items.length)return;const saveLinks=!!p.linksChanged&&p.linkItems.length>0,savePrices=!p.sameSnapshot;if(!saveLinks&&!savePrices)return;
+  _postosPriceImportSaving=true;const btn=document.getElementById('postos-price-import-confirm-btn'),drop=document.getElementById('postos-price-import-drop');if(btn){btn.disabled=true;btn.textContent='Enviando ao Firebase...';}if(drop)drop.disabled=true;
+  postosPriceImportFeedback(`Confirmando ${savePrices?p.priceCount.toLocaleString('pt-BR')+' preço(s)':''}${savePrices&&saveLinks?' e ':''}${saveLinks?p.linkItems.length.toLocaleString('pt-BR')+' vínculo(s) CNPJ':''}...`,'loading');postosSetStatus('Atualizando preços da Rede de Postos no Firebase...','loading',45);
+  let linksSaved=false;
   try{
-    if(!(await postosFirebaseBaseReady())||typeof window.fbSavePostosPrices!=='function')throw new Error('O Firebase não está disponível. Verifique a conexão e tente novamente.');
-    const result=await window.fbSavePostosPrices(p.items,{expectedVersion:p.expectedVersion,signature:p.signature,sourceFile:p.fileName,updatedBy:window._authUser?.nome||window._authUser?.id||'Administrador'});
-    postosBuildPrices(p.items,{source:'firebase',version:result.version,updatedAt:result.updatedAt,updatedBy:result.updatedBy,sourceFile:result.sourceFile,signature:result.signature});_postosPriceCloudCheckedAt=Date.now();_postosPriceImportPreview=null;_postosPriceImportSaving=false;postosFecharImportacaoPrecos();
-    postosSetStatus(`Preços atualizados: ${p.matchedStations} posto(s), ${p.priceCount} preço(s) e ${p.products.length} produto(s). ${p.unmatched.length?p.unmatched.length+' posto(s) sem vínculo ficaram sem preço.':''}`,'success');showToast(`Preços da Rede de Postos atualizados: ${p.priceCount} preço(s).`,'success');
-  }catch(e){console.error('IGNIS postos: gravação dos preços',e);const msg=e?.message||'O Firebase não confirmou os novos preços. Nenhuma versão incompleta foi publicada.';postosPriceImportFeedback(msg,'error');postosSetStatus(msg,'error');showToast(msg,'error');if(e?.code==='IGNIS_POSTOS_PRICE_VERSION_CONFLICT'){try{await postosRefreshCloudPrices(true);}catch(refreshError){}postosResetImportacaoPrecos();postosPriceImportFeedback('Os preços mudaram desde a sua prévia. Selecione a planilha novamente para comparar com a versão mais recente.','error');}}
-  finally{_postosPriceImportSaving=false;if(drop)drop.disabled=false;if(btn&&!_postosPriceImportPreview){btn.disabled=true;btn.textContent='Salvar preços';}else if(btn&&_postosPriceImportPreview){btn.disabled=_postosPriceImportPreview.sameSnapshot;btn.textContent=_postosPriceImportPreview.sameSnapshot?'Preços já estão atualizados':'Salvar preços';}}
+    if(!(await postosFirebaseBaseReady())||typeof window.fbSavePostosPrices!=='function'||typeof window.fbSavePostosPriceLinks!=='function')throw new Error('O Firebase não está disponível. Verifique a conexão e tente novamente.');
+    const updatedBy=window._authUser?.nome||window._authUser?.id||'Administrador';
+    if(saveLinks){
+      const linkResult=await window.fbSavePostosPriceLinks(p.linkItems,{expectedVersion:p.expectedLinkVersion,signature:p.linkSignature,updatedBy});
+      postosBuildPriceLinks(p.linkItems,{source:'firebase',version:linkResult.version,updatedAt:linkResult.updatedAt,updatedBy:linkResult.updatedBy,signature:linkResult.signature});_postosPriceLinkCloudCheckedAt=Date.now();p.expectedLinkVersion=linkResult.version;p.linksChanged=false;linksSaved=true;
+    }
+    if(savePrices){
+      const result=await window.fbSavePostosPrices(p.items,{expectedVersion:p.expectedVersion,signature:p.signature,sourceFile:p.fileName,updatedBy});
+      postosBuildPrices(p.items,{source:'firebase',version:result.version,updatedAt:result.updatedAt,updatedBy:result.updatedBy,sourceFile:result.sourceFile,signature:result.signature});_postosPriceCloudCheckedAt=Date.now();
+    }
+    const unresolved=p.unmatched.length;_postosPriceImportPreview=null;_postosPriceImportSource=null;_postosPricePendingLinks=new Map();_postosPriceImportSaving=false;postosFecharImportacaoPrecos();
+    postosSetStatus(`${savePrices?'Preços atualizados':'Vínculos CNPJ atualizados'} com sucesso.${unresolved?` ${unresolved} posto(s) não resolvido(s) permaneceram sem preço.`:''}`,'success');showToast(`${savePrices?`${p.priceCount} preço(s) publicados`:'Vínculos CNPJ salvos'}${saveLinks?' · vínculos memorizados':''}.`,'success');
+  }catch(e){
+    console.error('IGNIS postos: gravação dos preços/vínculos',e);let msg=e?.message||'O Firebase não confirmou a atualização.';if(linksSaved&&!savePrices)msg='Os vínculos CNPJ foram salvos, mas a etapa seguinte não foi concluída. '+msg;postosPriceImportFeedback(msg,'error');postosSetStatus(msg,'error');showToast(msg,'error');
+    if(e?.code==='IGNIS_POSTOS_LINK_VERSION_CONFLICT'||e?.code==='IGNIS_POSTOS_PRICE_VERSION_CONFLICT'){
+      try{if(e?.code==='IGNIS_POSTOS_LINK_VERSION_CONFLICT')await postosRefreshPriceLinks(true);else await postosRefreshCloudPrices(true);}catch(refreshError){}
+      postosResetImportacaoPrecos();postosPriceImportFeedback('A base mudou desde a sua prévia. Selecione a planilha novamente para recalcular os vínculos e preços.','error');
+    }
+  }finally{
+    _postosPriceImportSaving=false;if(drop)drop.disabled=false;if(btn&&!_postosPriceImportPreview){btn.disabled=true;btn.textContent='Salvar preços';}else if(btn&&_postosPriceImportPreview){const nothing=_postosPriceImportPreview.sameSnapshot&&!_postosPriceImportPreview.linksChanged;btn.disabled=nothing;btn.textContent=nothing?'Tudo já está atualizado':_postosPriceImportPreview.sameSnapshot?'Salvar vínculos CNPJ':'Salvar preços';}
+  }
 }
-
 async function postosOnShow(){
   try{
     postosAtualizarAcessoImportacao();
