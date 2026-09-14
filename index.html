@@ -822,7 +822,7 @@ window.fbLoadPostosGeo = async function(codigos) {
         const codigo = String(d.codigo || snap.id.slice(FB_POSTOS_GEO_PREFIX.length));
         const lat = Number(d.lat), lon = Number(d.lon);
         if (codigo && Number.isFinite(lat) && Number.isFinite(lon)) {
-          out[codigo] = { lat, lon, at:Number(d.updatedAt || 0), shared:true };
+          out[codigo] = { lat, lon, at:Number(d.updatedAt || 0), shared:true, algo:Number(d.algo||0), source:String(d.source||''), quality:String(d.quality||'') };
         }
       });
     });
@@ -840,7 +840,7 @@ window.fbSavePostosGeo = async function(items) {
     const codigo = String(x?.codigo || '').trim();
     const lat = Number(x?.lat), lon = Number(x?.lon);
     if (fbPostoGeoDocId(codigo) && Number.isFinite(lat) && Number.isFinite(lon)) {
-      unique.set(codigo, { codigo, lat, lon, updatedAt:Date.now(), source:'nominatim' });
+      unique.set(codigo, { codigo, lat, lon, updatedAt:Date.now(), source:String(x?.source||'geocoder'), algo:Number(x?.algo||0), quality:String(x?.quality||'exact') });
     }
   });
   const entries = [...unique.values()];
@@ -18349,9 +18349,10 @@ const POSTOS_REVERSE_CACHE_KEY = 'ignis_postos_reverse_v1';
 const POSTOS_CEP_CACHE_KEY = 'ignis_postos_cep_v1';
 const POSTOS_MUNICIPIOS_CACHE_KEY = 'ignis_postos_municipios_v1';
 const POSTOS_MUNICIPIOS_URL = 'https://raw.githubusercontent.com/kelvins/municipios-brasileiros/main/json/municipios.json';
-const POSTOS_GEO_ALGO_VERSION = 2;
+const POSTOS_GEO_ALGO_VERSION = 3;
 const POSTOS_MISSING_TTL = 6 * 60 * 60 * 1000;
 const POSTOS_BATCH = 70;
+const POSTOS_ROUTE_DEEP_BATCH = 60;
 const POSTOS_PRICE_ALL = '__ALL__';
 let _postosBase = null;
 let _postosMap = null;
@@ -18462,6 +18463,7 @@ function postosGeoFresh(p,g){
     if(Number(g?.algo||0)!==POSTOS_GEO_ALGO_VERSION)return false;
     return !!at&&(Date.now()-at)<POSTOS_MISSING_TTL;
   }
+  if(postosNeedsPreciseGeo(p)&&Number(g?.algo||0)<POSTOS_GEO_ALGO_VERSION)return false;
   return Number.isFinite(Number(g?.lat))&&Number.isFinite(Number(g?.lon));
 }
 function postosSetStatus(text,type='info',progress=null){
@@ -19280,7 +19282,7 @@ async function postosHydrateSharedGeo(candidates){
     Object.entries(shared).forEach(([codigo,g])=>{
       const lat=Number(g?.lat),lon=Number(g?.lon);
       if(postosGeoFresh(byCode.get(codigo),g)&&Number.isFinite(lat)&&Number.isFinite(lon)){
-        _postosGeoCache[codigo]={lat,lon,at:Number(g?.at||0),shared:true};found++;
+        _postosGeoCache[codigo]={lat,lon,at:Number(g?.at||0),shared:true,algo:Number(g?.algo||0),source:String(g?.source||''),quality:String(g?.quality||'')};found++;
       }
     });
     if(found)postosScheduleCacheSave();
@@ -19297,7 +19299,7 @@ async function postosShareExistingLocalGeo(){
 function postosQueueSharedGeo(codigo,geo){
   const lat=Number(geo?.lat),lon=Number(geo?.lon),code=String(codigo||'').trim();
   if(!code||!Number.isFinite(lat)||!Number.isFinite(lon))return;
-  _postosCloudPending.set(code,{codigo:code,lat,lon});
+  _postosCloudPending.set(code,{codigo:code,lat,lon,algo:Number(geo?.algo||POSTOS_GEO_ALGO_VERSION),source:String(geo?.source||'geocoder'),quality:String(geo?.quality||'exact')});
   clearTimeout(_postosCloudFlushTimer);
   _postosCloudFlushTimer=setTimeout(()=>postosFlushSharedGeo(),4200);
 }
@@ -19373,11 +19375,53 @@ async function postosLookupCep(cep){
     const data=await r.json();_postosCepCache=_postosCepCache||{};_postosCepCache[digits]={at:Date.now(),data};postosScheduleCacheSave();return data;
   }catch(e){console.warn('IGNIS postos: CEP não localizado',digits,e);return null;}
 }
+function postosNeedsPreciseGeo(p){
+  const txt=postosNorm(`${p?.endereco||''} ${p?.bairro||''}`);
+  return /\b(RODOVIA|BR|KM|ESTRADA|RURAL|RST|ERS|PR|SC|SP|MG|RJ|ES|BA|GO|PE|CE|RN|PB|AL|SE|PI|MA|PA|MT|MS|TO|RO)\b/.test(txt);
+}
+function postosIsHighwayStation(p){
+  const raw=String(p?.endereco||'').toUpperCase();
+  return /\b(RODOVIA|ROD\.?|BR\s*[- ]?\d|KM\s*\d|RST\s*[- ]?\d|ERS\s*[- ]?\d|(?:MG|SP|RJ|ES|PR|SC|RS|BA|GO|PE|CE|RN|PB|AL|SE|PI|MA|PA|MT|MS|TO|RO)\s*[- ]?\d{2,4})\b/.test(raw);
+}
+function postosCepIsPrecise(data){
+  return !!String(data?.street||'').trim();
+}
+function postosGeoPlausible(lat,lon,p,maxKm=140){
+  if(!Number.isFinite(Number(lat))||!Number.isFinite(Number(lon)))return false;
+  const c=postosMunicipioCenter(p?.uf,p?.cidade);if(!c)return true;
+  return postosHaversine(Number(lat),Number(lon),Number(c.lat),Number(c.lon))<=maxKm;
+}
+function postosHighwayQueries(p){
+  const raw=String(p?.endereco||'').replace(/\s+/g,' ').trim(),out=[];
+  const ref=raw.match(/\b(BR|RST|ERS|RS|PR|SC|SP|MG|RJ|ES|BA|GO|PE|CE|RN|PB|AL|SE|PI|MA|PA|MT|MS|TO|RO)\s*[- ]?\s*(\d{2,4})\b/i);
+  const km=raw.match(/\bKM\s*([0-9]+(?:[.,][0-9]+)?)\b/i);
+  if(ref){
+    const road=`${ref[1].toUpperCase()}-${ref[2]}`;
+    if(km)out.push(postosAddressQuery([`${road} KM ${km[1]}`,p.cidade,p.uf,'Brasil']));
+    out.push(postosAddressQuery([road,p.cidade,p.uf,'Brasil']));
+    out.push(postosAddressQuery([`Rodovia ${road}`,p.cidade,p.uf,'Brasil']));
+  }
+  const named=raw.replace(/\b(?:S\/?N|SN|N\.?\s*0|0)\b/gi,' ').replace(/\bKM\s*[0-9]+(?:[.,][0-9]+)?\b/gi,' ').replace(/\s+/g,' ').trim();
+  if(named&&named!==raw)out.push(postosAddressQuery([named,p.cidade,p.uf,'Brasil']));
+  return [...new Set(out.filter(Boolean))];
+}
 function postosNominatimResultOk(x,p){
-  if(!x)return false;const a=x.address||{},uf=postosUfFromAddress(a);if(uf&&p?.uf&&uf!==p.uf)return false;return Number.isFinite(Number(x.lat))&&Number.isFinite(Number(x.lon));
+  if(!x)return false;const a=x.address||{},uf=postosUfFromAddress(a);if(uf&&p?.uf&&uf!==p.uf)return false;
+  const lat=Number(x.lat),lon=Number(x.lon);return postosGeoPlausible(lat,lon,p);
 }
 async function postosNominatimFirst(url,p){
   const data=await postosNominatim(url);if(!Array.isArray(data))return null;return data.find(x=>postosNominatimResultOk(x,p))||null;
+}
+function postosPhotonUf(props){
+  const raw=String(props?.state||props?.statecode||'').trim();if(/^[A-Za-z]{2}$/.test(raw))return raw.toUpperCase();return POSTOS_UF_NOMES[postosNorm(raw)]||'';
+}
+async function postosPhotonFirst(q,p,bias=null){
+  try{
+    let url='https://photon.komoot.io/api/?limit=5&lang=pt&countrycode=BR&q='+encodeURIComponent(q);
+    if(bias&&Number.isFinite(Number(bias.lat))&&Number.isFinite(Number(bias.lon)))url+=`&lat=${encodeURIComponent(bias.lat)}&lon=${encodeURIComponent(bias.lon)}&zoom=11&location_bias_scale=0.15`;
+    const ctrl=new AbortController(),timer=setTimeout(()=>ctrl.abort(),7000),r=await fetch(url,{signal:ctrl.signal,headers:{'Accept':'application/json','Accept-Language':'pt-BR,pt;q=0.9'}});clearTimeout(timer);if(!r.ok)return null;
+    const data=await r.json();for(const f of (data?.features||[])){const c=f?.geometry?.coordinates||[],lon=Number(c[0]),lat=Number(c[1]),uf=postosPhotonUf(f?.properties||{});if(uf&&p?.uf&&uf!==p.uf)continue;if(postosGeoPlausible(lat,lon,p))return{lat,lon,props:f?.properties||{}};}
+  }catch(e){console.warn('IGNIS postos: Photon indisponível',e);}return null;
 }
 function postosAddressQuery(parts){return parts.map(x=>String(x||'').trim()).filter(Boolean).join(', ');}
 async function postosGeocodeStation(p){
@@ -19386,27 +19430,39 @@ async function postosGeocodeStation(p){
     if(postosGeoFresh(p,cached)){if(!cached.missing&&!cached.shared)postosQueueSharedGeo(p.codigo,cached);return cached;}
     delete _postosGeoCache[p.codigo];postosScheduleCacheSave();
   }
+  await postosEnsureMunicipioCenters().catch(()=>{});
   const cep=postosFmtCep(p.cep),digits=String(p.cep||'').replace(/\D/g,'').padStart(8,'0').slice(-8);
-  let cepData=null;
+  let cepData=null,cepBias=null;
   if(digits.length===8){
     cepData=await postosLookupCep(digits);
     const coords=cepData?.location?.coordinates||{},lat=Number(coords.latitude),lon=Number(coords.longitude);
-    if(Number.isFinite(lat)&&Number.isFinite(lon)&&Math.abs(lat)<=90&&Math.abs(lon)<=180){
-      const out={lat,lon,at:Date.now(),shared:false,algo:POSTOS_GEO_ALGO_VERSION,source:'cep'};_postosGeoCache[p.codigo]=out;postosQueueSharedGeo(p.codigo,out);postosScheduleCacheSave();return out;
+    if(Number.isFinite(lat)&&Number.isFinite(lon)&&Math.abs(lat)<=90&&Math.abs(lon)<=180&&postosGeoPlausible(lat,lon,p)){
+      cepBias={lat,lon};
+      if(postosCepIsPrecise(cepData)){
+        const out={lat,lon,at:Date.now(),shared:false,algo:POSTOS_GEO_ALGO_VERSION,source:'cep-endereco',quality:'exact'};_postosGeoCache[p.codigo]=out;postosQueueSharedGeo(p.codigo,out);postosScheduleCacheSave();return out;
+      }
     }
   }
+  const cityBias=postosMunicipioCenter(p.uf,p.cidade),bias=cepBias||cityBias||null;
   const stdStreet=String(cepData?.street||'').trim(),stdBairro=String(cepData?.neighborhood||'').trim(),stdCity=String(cepData?.city||p.cidade||'').trim(),stdUf=String(cepData?.state||p.uf||'').trim().toUpperCase();
   const attempts=[];
   if(stdStreet)attempts.push(postosAddressQuery([stdStreet,stdBairro,stdCity,stdUf,cep,'Brasil']));
   attempts.push(postosAddressQuery([p.endereco,p.bairro,p.cidade,p.uf,cep,'Brasil']));
+  if(postosIsHighwayStation(p))attempts.push(...postosHighwayQueries(p));
+  attempts.push(postosAddressQuery([p.nome,p.endereco,p.cidade,p.uf,'Brasil']));
   attempts.push(postosAddressQuery([p.nome,p.cidade,p.uf,'Brasil']));
   const seen=new Set();
   for(const q of attempts){
     const k=postosNorm(q);if(!q||seen.has(k))continue;seen.add(k);
     try{
-      const url='https://nominatim.openstreetmap.org/search?format=jsonv2&countrycodes=br&limit=3&addressdetails=1&q='+encodeURIComponent(q),x=await postosNominatimFirst(url,p);
-      if(x){const out={lat:Number(x.lat),lon:Number(x.lon),at:Date.now(),shared:false,algo:POSTOS_GEO_ALGO_VERSION,source:'nominatim'};_postosGeoCache[p.codigo]=out;postosQueueSharedGeo(p.codigo,out);postosScheduleCacheSave();return out;}
+      const url='https://nominatim.openstreetmap.org/search?format=jsonv2&countrycodes=br&limit=4&addressdetails=1&q='+encodeURIComponent(q),x=await postosNominatimFirst(url,p);
+      if(x){const out={lat:Number(x.lat),lon:Number(x.lon),at:Date.now(),shared:false,algo:POSTOS_GEO_ALGO_VERSION,source:'nominatim',quality:'exact'};_postosGeoCache[p.codigo]=out;postosQueueSharedGeo(p.codigo,out);postosScheduleCacheSave();return out;}
     }catch(e){console.warn('IGNIS postos: tentativa de geocodificação',p.codigo,e);}
+  }
+  if(postosNeedsPreciseGeo(p)){
+    const photonQueries=[...postosHighwayQueries(p),postosAddressQuery([p.endereco,p.cidade,p.uf]),postosAddressQuery([p.nome,p.cidade,p.uf])];
+    const pseen=new Set();
+    for(const q of photonQueries){const k=postosNorm(q);if(!q||pseen.has(k))continue;pseen.add(k);const x=await postosPhotonFirst(q,p,bias);if(x){const out={lat:Number(x.lat),lon:Number(x.lon),at:Date.now(),shared:false,algo:POSTOS_GEO_ALGO_VERSION,source:'photon',quality:'exact'};_postosGeoCache[p.codigo]=out;postosQueueSharedGeo(p.codigo,out);postosScheduleCacheSave();return out;}}
   }
   _postosGeoCache[p.codigo]={missing:true,at:Date.now(),algo:POSTOS_GEO_ALGO_VERSION};postosScheduleCacheSave();return null;
 }
@@ -19515,6 +19571,21 @@ function postosNearestRoute(lat,lon,coords,cum){
   }
   return{offKm:best,alongKm:bestAlong};
 }
+function postosRouteSmartOrder(candidates,cityMeta,distanceKm){
+  const bins=Math.max(8,Math.min(18,Math.round(Math.max(1,distanceKm)/170))),groups=Array.from({length:bins},()=>[]);
+  (candidates||[]).forEach(p=>{const meta=cityMeta.get(`${p.uf}|${p.cityNorm}`)||{alongKm:0,offKm:999},pos=Math.max(0,Math.min(.999999,Number(meta.alongKm||0)/Math.max(1,distanceKm))),bin=Math.floor(pos*bins);groups[bin].push({p,meta});});
+  groups.forEach(g=>g.sort((a,b)=>{const ah=postosIsHighwayStation(a.p)?0:1,bh=postosIsHighwayStation(b.p)?0:1;return ah-bh||Number(a.meta.offKm||999)-Number(b.meta.offKm||999)||(a.p.cep?0:1)-(b.p.cep?0:1)||a.p.nome.localeCompare(b.p.nome,'pt-BR');}));
+  const out=[];let left=true;while(left){left=false;for(const g of groups){if(g.length){out.push(g.shift().p);left=true;}}}return out;
+}
+function postosRouteInvalidateSuspiciousGeo(candidates){
+  const groups=new Map();
+  for(const p of (candidates||[])){const code=String(p?.codigo||''),g=_postosGeoCache?.[code];if(!g||g?.missing||Number(g?.algo||0)>=POSTOS_GEO_ALGO_VERSION)continue;const lat=Number(g.lat),lon=Number(g.lon);if(!Number.isFinite(lat)||!Number.isFinite(lon))continue;const key=`${lat.toFixed(5)}|${lon.toFixed(5)}`;if(!groups.has(key))groups.set(key,[]);groups.get(key).push(p);}
+  let invalidated=0;for(const items of groups.values()){if(items.length<4)continue;const addresses=new Set(items.map(x=>postosNorm(x.endereco)));if(addresses.size<3)continue;items.forEach(p=>{const code=String(p.codigo||'');if(_postosGeoCache?.[code]){delete _postosGeoCache[code];invalidated++;}});}
+  if(invalidated)postosScheduleCacheSave();return invalidated;
+}
+function postosRouteKnownGeo(candidates,coords,cum,corridor){
+  const results=[],unresolved=[];for(const p of (candidates||[])){const g=_postosGeoCache?.[String(p.codigo||'')];if(postosGeoFresh(p,g)&&!g?.missing){const near=postosNearestRoute(Number(g.lat),Number(g.lon),coords,cum);if(near.offKm<=corridor)results.push({posto:p,lat:Number(g.lat),lon:Number(g.lon),offKm:near.offKm,alongKm:near.alongKm});}else unresolved.push(p);}return{results,unresolved};
+}
 async function postosBuscarRota(reset=true){
   try{
     await postosOnShow();const origem=document.getElementById('postos-origem')?.value.trim()||'',destino=document.getElementById('postos-destino')?.value.trim()||'',corridor=Number(document.getElementById('postos-corredor')?.value||5);
@@ -19527,34 +19598,40 @@ async function postosBuscarRota(reset=true){
       const rr=await fetch(routeUrl);if(!rr.ok)throw new Error('Serviço gratuito de rotas indisponível ('+rr.status+').');const routeJson=await rr.json();const route=routeJson?.routes?.[0];if(!route)throw new Error('Não foi possível calcular uma rota entre os pontos informados.');
       const coords=route.geometry.coordinates.map(c=>[Number(c[1]),Number(c[0])]);const cum=postosRouteCum(coords);const distanceKm=Number(route.distance||0)/1000;
       _postosRouteLayer=L.polyline(coords,{color:'#ff6b2c',weight:5,opacity:.78}).addTo(_postosMap);_postosMap.fitBounds(_postosRouteLayer.getBounds(),{padding:[30,30]});
-      postosSetStatus('Identificando cidades realmente próximas do caminho...','loading',22);
+      postosSetStatus('Mapeando municípios e postos de rodovia próximos do corredor...','loading',22);
       let centers={};try{centers=await postosEnsureMunicipioCenters();}catch(e){}
-      const cityRouteSample=postosSampleRoute(coords,cum,12,260),citySampleCum=postosRouteCum(cityRouteSample),keys=[],order=new Map(),cityBuffer=Math.max(50,corridor+42);
-      Object.entries(centers||{}).forEach(([key,c])=>{const near=postosNearestRoute(Number(c.lat),Number(c.lon),cityRouteSample,citySampleCum);if(near.offKm<=cityBuffer){const [uf,city]=key.split('|');keys.push({city,uf,key,alongKm:near.alongKm});order.set(key,near.alongKm);}});
+      const cityRouteSample=postosSampleRoute(coords,cum,10,320),citySampleCum=postosRouteCum(cityRouteSample),keys=[],cityMeta=new Map(),tightBuffer=Math.max(45,corridor+35),highwayBuffer=Math.max(90,corridor+75);
+      Object.entries(centers||{}).forEach(([key,c])=>{const near=postosNearestRoute(Number(c.lat),Number(c.lon),cityRouteSample,citySampleCum);if(near.offKm<=highwayBuffer){const [uf,city]=key.split('|'),meta={city,uf,key,alongKm:near.alongKm,offKm:near.offKm};keys.push(meta);cityMeta.set(key,meta);}});
       if(!keys.length){
-        const sample=postosSampleRoute(coords,cum,60,20),seen=new Set();
+        const sample=postosSampleRoute(coords,cum,55,28),seen=new Set();
         for(let i=0;i<sample.length;i++){
           postosSetStatus(`Identificando cidades ao longo da rota: ${i+1} de ${sample.length}...`,'loading',24+(i+1)/sample.length*18);
-          try{const x=await postosReverse(sample[i][0],sample[i][1]);if(x?.city){const city=postosNorm(x.city),uf=x.uf||'',key=(uf?uf+'|':'')+city;if(!seen.has(key)){seen.add(key);keys.push({city,uf,key,alongKm:i});order.set(key,i);}}}catch(e){console.warn('Reverse route sample',e);}
+          try{const x=await postosReverse(sample[i][0],sample[i][1]);if(x?.city){const city=postosNorm(x.city),uf=x.uf||'',key=(uf?uf+'|':'')+city;if(!seen.has(key)){seen.add(key);const meta={city,uf,key,alongKm:i*(distanceKm/Math.max(1,sample.length-1)),offKm:0};keys.push(meta);cityMeta.set(key,meta);}}}catch(e){console.warn('Reverse route sample',e);}
         }
       }
-      let candidates=_postosBase.filter(p=>order.has(`${p.uf}|${p.cityNorm}`));
-      candidates.sort((a,b)=>(order.get(`${a.uf}|${a.cityNorm}`)??999999)-(order.get(`${b.uf}|${b.cityNorm}`)??999999)||a.nome.localeCompare(b.nome,'pt-BR'));
-      _postosCurrentSearch={mode:'rota',coords,cum,distanceKm,corridor,candidates,index:0,results:[],fail:0,cities:keys};
+      let candidates=_postosBase.filter(p=>{const meta=cityMeta.get(`${p.uf}|${p.cityNorm}`);if(!meta)return false;return Number(meta.offKm)<=tightBuffer||(postosIsHighwayStation(p)&&Number(meta.offKm)<=highwayBuffer);});
       if(!candidates.length){postosSetStatus('A rota foi calculada, mas não encontrei postos credenciados próximos do caminho informado.','error');return;}
+      postosSetStatus(`Encontrados ${candidates.length} candidatos. Conferindo de uma vez todas as coordenadas já compartilhadas...`,'loading',35);
+      const sharedFound=await postosHydrateSharedGeo(candidates),discardedApprox=postosRouteInvalidateSuspiciousGeo(candidates);
+      const known=postosRouteKnownGeo(candidates,coords,cum,corridor),unresolved=postosRouteSmartOrder(known.unresolved,cityMeta,distanceKm);
+      _postosCurrentSearch={mode:'rota',coords,cum,distanceKm,corridor,candidates:unresolved,index:0,results:known.results,fail:0,cities:keys,totalCandidates:candidates.length,knownChecked:candidates.length-unresolved.length,sharedFoundTotal:sharedFound,discardedApprox,cityMeta};
+      postosSortResultsForDisplay(_postosCurrentSearch.results);postosRenderResults(_postosCurrentSearch.results);postosPlotResults(_postosCurrentSearch.results,{fit:false,keepRoute:true});
+      if(!unresolved.length){postosSetStatus(`Rota de ${postosFmtNum(distanceKm,0)} km · ${known.results.length} posto(s) confirmados no corredor de até ${corridor} km · todos os ${candidates.length} candidatos tinham coordenadas confiáveis.`,'success');postosUpdateSummary(`${keys.length} cidade(s) consideradas`);return;}
     }
-    const s=_postosCurrentSearch;if(!s||s.mode!=='rota')return;const start=s.index,end=Math.min(s.candidates.length,start+POSTOS_BATCH);
-    postosSetStatus('Buscando coordenadas já compartilhadas no Firebase...','loading',43);
+    const s=_postosCurrentSearch;if(!s||s.mode!=='rota')return;
+    const start=s.index,end=Math.min(s.candidates.length,start+POSTOS_ROUTE_DEEP_BATCH);
+    postosSetStatus(`Aprofundando endereços sem coordenada confiável em toda a extensão da rota: ${start+1} a ${end} de ${s.candidates.length}...`,'loading',45);
     const sharedFound=await postosHydrateSharedGeo(s.candidates.slice(start,end));
     for(let i=start;i<end;i++){
-      const p=s.candidates[i],pct=45+(i+1)/Math.max(1,s.candidates.length)*50;postosSetStatus(`Conferindo credenciados próximos da rota: ${i+1} de ${s.candidates.length}...`,'loading',pct);
+      const p=s.candidates[i],pct=45+((i-start+1)/Math.max(1,end-start))*48;postosSetStatus(`Localizando ${p.nome||'posto'} · ${i-start+1} de ${end-start} nesta etapa...`,'loading',pct);
       let g=null;try{g=await postosGeocodeStation(p);}catch(e){console.warn('Geocode route posto',p.codigo,e);}
       if(!g||g.missing){s.fail++;continue;}const near=postosNearestRoute(g.lat,g.lon,s.coords,s.cum);if(near.offKm<=s.corridor)s.results.push({posto:p,lat:g.lat,lon:g.lon,offKm:near.offKm,alongKm:near.alongKm});
     }
-    const cloudSaved=await postosFlushSharedGeo();
-    s.index=end;postosSortResultsForDisplay(s.results);postosRenderResults(s.results);postosPlotResults(s.results,{fit:false,keepRoute:true});
-    const remain=s.candidates.length-s.index,sharedNote=sharedFound?` · ${sharedFound} recuperada(s) do Firebase`:'';
-    postosSetStatus(`Rota de ${postosFmtNum(s.distanceKm,0)} km · ${s.results.length} posto(s) com desvio de até ${s.corridor} km · ${s.index} de ${s.candidates.length} candidatos processados${sharedNote}${s.fail?` · ${s.fail} endereço(s) ainda sem coordenada`:''}${cloudSaved?'':' · novas coordenadas salvas somente neste aparelho por enquanto'}.`,'success');postosUpdateSummary(`${s.cities.length} cidade(s) detectada(s) na rota`);postosToggleMore(remain>0,`Processar mais ${Math.min(POSTOS_BATCH,remain)} postos`,()=>postosBuscarRota(false));
+    const cloudSaved=await postosFlushSharedGeo();s.index=end;postosSortResultsForDisplay(s.results);postosRenderResults(s.results);postosPlotResults(s.results,{fit:false,keepRoute:true});
+    const remain=s.candidates.length-s.index,known=s.knownChecked||0,deep=s.index,total=s.totalCandidates||known+s.candidates.length,sharedTotal=(s.sharedFoundTotal||0)+sharedFound,discardedApprox=Number(s.discardedApprox||0);
+    const pendingText=remain?` · ${remain} ainda aguardam localização detalhada`:' · cobertura detalhada concluída';
+    postosSetStatus(`Rota de ${postosFmtNum(s.distanceKm,0)} km · ${s.results.length} posto(s) confirmados com desvio de até ${s.corridor} km · ${total} candidatos na faixa ampliada · ${known} já tinham coordenada confiável · ${deep} endereço(s) aprofundado(s)${pendingText}${discardedApprox?` · ${discardedApprox} coordenada(s) antigas imprecisas descartadas`:''}${s.fail?` · ${s.fail} tentativa(s) sem coordenada exata`:''}${sharedTotal?` · ${sharedTotal} coordenada(s) recuperada(s) do Firebase`:''}${cloudSaved?'':' · novas coordenadas salvas somente neste aparelho por enquanto'}.`,'success');
+    postosUpdateSummary(`${s.cities.length} cidade(s) consideradas no corredor`);postosToggleMore(remain>0,`Aprofundar mais ${Math.min(POSTOS_ROUTE_DEEP_BATCH,remain)} postos`,()=>postosBuscarRota(false));
   }catch(e){console.error('Roteirizador postos:',e);postosSetStatus(e.message||'Erro ao calcular rota.','error');}
 }
 function postosToggleMore(show,label='',fn=null){const b=document.getElementById('postos-load-more');if(!b)return;b.style.display=show?'inline-flex':'none';b.textContent=label||'Processar mais';b.onclick=fn||null;}
