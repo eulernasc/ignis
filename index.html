@@ -3537,7 +3537,7 @@ input[type="checkbox"]:indeterminate{background:rgba(233,95,50,.2);border-color:
       <input id="postos-price-import-file" type="file" accept=".xlsx,.xls" hidden onchange="postosLerPlanilhaPrecos(this)">
       <button class="postos-import-drop" id="postos-price-import-drop" type="button" onclick="document.getElementById('postos-price-import-file').click()">
         <span class="postos-import-drop-icon"><svg class="ui-icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg></span>
-        <span><strong id="postos-price-import-drop-title">Selecionar planilha de preços</strong><small>Compatível com o relatório de preços enviado: Abastecimento, CNPJ, Endereço, Serviço, Preço Final, Início de Vigência e Fim de Vigência. CNPJ é usado para reaproveitar vínculos já confirmados em importações anteriores.</small></span>
+        <span><strong id="postos-price-import-drop-title">Selecionar planilha de preços</strong><small>Compatível com o relatório enviado: o nome do posto vem em uma linha própria e, abaixo, aparecem CNPJ/Endereço e as linhas de Serviço, Preço Final e Vigência. O CNPJ é memorizado para reconhecer o posto nas próximas importações.</small></span>
       </button>
 
       <div class="postos-import-feedback" id="postos-price-import-feedback" aria-live="polite">O arquivo será conferido antes de qualquer preço ser publicado.</div>
@@ -18859,52 +18859,78 @@ function postosExtrairPlanilhaPrecos(wb){
   let found=null;
   for(const sheetName of wb.SheetNames||[]){
     const matrix=XLSX.utils.sheet_to_json(wb.Sheets[sheetName],{header:1,defval:'',raw:true,blankrows:false});
-    // Alguns relatórios trazem título, período e filtro antes do cabeçalho real.
+    // O relatório real tem o cabeçalho na linha com CNPJ / Endereço / Serviço /
+    // Preço Final / Início de Vigência. O nome do posto NÃO é uma coluna: ele
+    // aparece sozinho na linha imediatamente anterior aos dados do estabelecimento.
+    // Continuamos aceitando também planilhas tabulares que tenham uma coluna de nome.
     for(let rowIndex=0;rowIndex<Math.min(80,matrix.length);rowIndex++){
-      const indexes={};(matrix[rowIndex]||[]).forEach((v,i)=>{const f=postosPriceHeaderField(v);if(f&&!Object.prototype.hasOwnProperty.call(indexes,f))indexes[f]=i;});
-      if(['nome','endereco','produto','inicio','preco'].every(k=>Number.isInteger(indexes[k]))){found={sheetName,matrix,rowIndex,indexes};break;}
+      const indexes={};
+      (matrix[rowIndex]||[]).forEach((v,i)=>{const f=postosPriceHeaderField(v);if(f&&!Object.prototype.hasOwnProperty.call(indexes,f))indexes[f]=i;});
+      const core=['endereco','produto','inicio','preco'].every(k=>Number.isInteger(indexes[k]));
+      const identity=Number.isInteger(indexes.nome)||Number.isInteger(indexes.cnpj);
+      if(core&&identity){found={sheetName,matrix,rowIndex,indexes,grouped:!Number.isInteger(indexes.nome)};break;}
     }
     if(found)break;
   }
-  if(!found)throw new Error('Não encontrei o cabeçalho do relatório. No arquivo enviado ele deve conter Abastecimento, Endereço, Preço Final e Início de Vigência.');
+  if(!found)throw new Error('Não encontrei o cabeçalho de preços. Neste relatório ele deve ter CNPJ, Endereço, Serviço, Preço Final e Início de Vigência.');
 
   const rows=[],ignored=[];
   let carry={nome:'',endereco:'',cnpj:''};
+  const idx=found.indexes;
   for(let ri=found.rowIndex+1;ri<found.matrix.length;ri++){
-    const row=found.matrix[ri]||[],idx=found.indexes,get=k=>Number.isInteger(idx[k])?row[idx[k]]:'';
-    const rawNome=postosCellText(get('nome')),rawEndereco=postosCellText(get('endereco')),rawCnpj=postosPriceCnpj(get('cnpj'));
-    const produto=postosCellText(get('produto'))||'Preço',inicio=postosPriceParseDate(get('inicio')),fim=postosPriceParseDate(get('fim')),preco=postosPriceParseNumber(get('preco'));
-
-    // Relatórios .xls podem usar células mescladas para nome/CNPJ/endereço. O
-    // SheetJS devolve valor somente na primeira linha do grupo, então mantemos
-    // a identidade do estabelecimento para as linhas seguintes de combustível.
-    if(rawNome||rawCnpj){
-      const newStation=(rawCnpj&&carry.cnpj&&rawCnpj!==carry.cnpj)||(rawNome&&carry.nome&&postosNorm(rawNome)!==postosNorm(carry.nome));
-      if(newStation)carry={nome:'',endereco:'',cnpj:''};
-      if(rawNome)carry.nome=rawNome;
-      if(rawCnpj)carry.cnpj=rawCnpj;
-      if(rawEndereco)carry.endereco=rawEndereco;
-    }else if(rawEndereco){
-      carry.endereco=rawEndereco;
-    }
-
-    const nome=rawNome||carry.nome,endereco=rawEndereco||carry.endereco,cnpj=rawCnpj||carry.cnpj;
+    const row=found.matrix[ri]||[],get=k=>Number.isInteger(idx[k])?row[idx[k]]:'';
+    const rawNome=Number.isInteger(idx.nome)?postosCellText(get('nome')):'';
+    const rawEndereco=postosCellText(get('endereco'));
+    const rawCnpj=Number.isInteger(idx.cnpj)?postosPriceCnpj(get('cnpj')):'';
+    const rawProduto=postosCellText(get('produto'));
+    const inicio=postosPriceParseDate(get('inicio')),fim=postosPriceParseDate(get('fim')),preco=postosPriceParseNumber(get('preco'));
     const hasPrice=Number.isFinite(preco)&&preco>0,hasStart=!!inicio;
 
-    // Títulos, subtotais, rodapés e linhas vazias não devem invalidar toda a importação.
-    if(!hasPrice&&!hasStart){continue;}
-    if(!nome||!endereco||!hasPrice||!hasStart){
-      ignored.push({line:ri+1,nome,endereco,hasPrice,hasStart});
+    if(found.grouped){
+      // No .xls enviado, exemplos reais são:
+      //   AUTO POSTO APARECIDAO
+      //   05.443.159/0001-02 | RODOVIA ... | APARECIDA ...
+      //   (vazio)             | (vazio)     | ... | DIESEL | ... | 6,88 | data
+      // Portanto uma linha com somente texto na coluna do CNPJ é o NOME do posto.
+      const anchorIndex=Number.isInteger(idx.cnpj)?idx.cnpj:0;
+      const anchor=postosCellText(row[anchorIndex]);
+      const nonEmpty=row.reduce((n,v)=>n+(postosCellText(v)?1:0),0);
+      if(anchor&&!rawCnpj&&!rawEndereco&&!rawProduto&&!hasPrice&&!hasStart&&nonEmpty===1){
+        const n=postosNorm(anchor);
+        if(n&&!/^(TOTAL|SUBTOTAL|TOTAL GERAL|FIM DO RELATORIO|RELATORIO)$/.test(n))carry={nome:anchor,endereco:'',cnpj:''};
+        continue;
+      }
+    }
+
+    // Uma nova linha de nome ou um novo CNPJ inicia/troca o estabelecimento.
+    if(rawNome){
+      if(carry.nome&&postosNorm(rawNome)!==postosNorm(carry.nome))carry={nome:'',endereco:'',cnpj:''};
+      carry.nome=rawNome;
+    }
+    if(rawCnpj){
+      if(carry.cnpj&&rawCnpj!==carry.cnpj){
+        // Em layout tabular, o nome vem na própria linha. No relatório agrupado,
+        // a linha de nome anterior já limpou cnpj/endereço antes de chegarmos aqui.
+        carry={nome:rawNome||'',endereco:'',cnpj:''};
+      }
+      carry.cnpj=rawCnpj;
+    }
+    if(rawEndereco)carry.endereco=rawEndereco;
+
+    const nome=rawNome||carry.nome,endereco=rawEndereco||carry.endereco,cnpj=rawCnpj||carry.cnpj;
+    if(!hasPrice&&!hasStart)continue; // linha de identificação, título, subtotal ou rodapé
+    if(!nome||!endereco||!rawProduto||!hasPrice||!hasStart){
+      ignored.push({line:ri+1,nome,endereco,produto:rawProduto,hasPrice,hasStart});
       continue;
     }
-    rows.push({nome,endereco,produto,produtoKey:postosNorm(produto)||'PRECO',cnpj,inicio,fim,preco,line:ri+1});
+    rows.push({nome,endereco,produto:rawProduto,produtoKey:postosNorm(rawProduto)||'PRECO',cnpj,inicio,fim,preco,line:ri+1});
   }
 
   if(!rows.length){
-    const detail=ignored.length?` ${ignored.length} linha(s) pareciam conter preço/data, mas estavam incompletas.`:'';
-    throw new Error('Nenhum preço válido foi encontrado no relatório.'+detail+' Confira as colunas Abastecimento, Endereço, Serviço, Preço Final e Início de Vigência.');
+    const detail=ignored.length?` ${ignored.length} linha(s) de preço/data estavam incompletas.`:'';
+    throw new Error('O cabeçalho foi reconhecido, mas nenhum preço válido foi lido.'+detail+' Confira se selecionou o Relatório de Preços de Serviços e Combustíveis.');
   }
-  return {rows,sheetName:found.sheetName,ignoredRows:ignored.length};
+  return {rows,sheetName:found.sheetName,ignoredRows:ignored.length,layout:found.grouped?'agrupado':'tabular',headerRow:found.rowIndex+1};
 }
 function postosPriceIsActive(row,now=Date.now()){return !Number(row?.fim||0)||Number(row.fim)>=now;}
 function postosPricePickLatest(a,b){
@@ -18918,12 +18944,24 @@ function postosPriceLegacyCnpjMap(){
   _postosPricesByCode.forEach(item=>(item.precos||[]).forEach(x=>{if(!x.cnpj||ambiguous.has(x.cnpj))return;if(map.has(x.cnpj)&&map.get(x.cnpj)!==item.codigo){map.delete(x.cnpj);ambiguous.add(x.cnpj);}else if(!map.has(x.cnpj))map.set(x.cnpj,item.codigo);}));
   return map;
 }
+function postosPriceBaseExactKeys(p){
+  const nome=postosNorm(p?.nome),endereco=postosNorm(p?.endereco),bairro=postosNorm(p?.bairro);if(!nome||!endereco)return [];
+  const keys=new Set([`${nome}|${endereco}`]);
+  // No relatório de preços o bairro vem anexado ao endereço após " - ".
+  // Na planilha da Rede de Postos o bairro é uma coluna separada. Normalizamos
+  // os dois formatos para que "endereço + bairro" possa bater exatamente.
+  if(bairro)keys.add(`${nome}|${postosNorm(`${p?.endereco||''} ${p?.bairro||''}`)}`);
+  return [...keys];
+}
+function postosPriceRowMatchesPosto(row,p){
+  const key=postosPriceKey(row?.nome,row?.endereco);return postosPriceBaseExactKeys(p).includes(key);
+}
 function postosMontarPreviewPrecos(extracted,fileName){
   const reportLatest=new Map();
   extracted.rows.forEach(row=>{const identity=postosPriceStationIdentity(row),key=identity+'|'+row.produtoKey;reportLatest.set(key,postosPricePickLatest(reportLatest.get(key),row));});
   const groups=new Map();[...reportLatest.values()].forEach(row=>{const key=postosPriceStationIdentity(row);if(!groups.has(key))groups.set(key,[]);groups.get(key).push(row);});
   const baseByCode=new Map((_postosBase||[]).map(p=>[String(p.codigo||''),p])),baseByExact=new Map(),ambiguousExact=new Set();
-  (_postosBase||[]).forEach(p=>{const key=postosPriceKey(p.nome,p.endereco);if(baseByExact.has(key)){ambiguousExact.add(key);baseByExact.delete(key);}else if(!ambiguousExact.has(key))baseByExact.set(key,p);});
+  (_postosBase||[]).forEach(p=>{postosPriceBaseExactKeys(p).forEach(key=>{if(baseByExact.has(key)&&String(baseByExact.get(key)?.codigo||'')!==String(p.codigo||'')){ambiguousExact.add(key);baseByExact.delete(key);}else if(!ambiguousExact.has(key))baseByExact.set(key,p);});});
   const legacyCnpj=postosPriceLegacyCnpjMap();
   const latestPerCodeProduct=new Map(),unmatched=[],confirmedLinks=new Map(),linkedByStored=new Set(),linkedByLegacy=new Set(),linkedByExact=new Set(),linkedByManual=new Set(),warnings=[];
 
@@ -18942,7 +18980,7 @@ function postosMontarPreviewPrecos(extracted,fileName){
       unmatched.push({key:identity,nome:rep.nome,endereco:rep.endereco,cnpj:rep.cnpj,products:rows.slice().sort((a,b)=>a.produto.localeCompare(b.produto,'pt-BR'))});return;
     }
     if(method==='manual')linkedByManual.add(posto.codigo);else if(method==='cnpj')linkedByStored.add(posto.codigo);else if(method==='legacy')linkedByLegacy.add(posto.codigo);else if(method==='exact')linkedByExact.add(posto.codigo);
-    if(method==='cnpj'&&rows.every(row=>postosPriceKey(row.nome,row.endereco)!==postosPriceKey(posto.nome,posto.endereco))){warnings.push({cnpj:rep.cnpj,codigo:posto.codigo,nome:rep.nome,postoNome:posto.nome});}
+    if(method==='cnpj'&&rows.every(row=>!postosPriceRowMatchesPosto(row,posto))){warnings.push({cnpj:rep.cnpj,codigo:posto.codigo,nome:rep.nome,postoNome:posto.nome});}
     rows.forEach(row=>{const pk=posto.codigo+'|'+row.produtoKey;latestPerCodeProduct.set(pk,{posto,row:postosPricePickLatest(latestPerCodeProduct.get(pk)?.row,row)});});
     if(rep.cnpj){
       const previous=_postosPriceLinksByCnpj.get(rep.cnpj);confirmedLinks.set(rep.cnpj,{cnpj:rep.cnpj,codigo:posto.codigo,nome:rep.nome,endereco:rep.endereco,source:method==='manual'?'manual':method==='exact'?'exact':method==='legacy'?'legacy':(previous?.source||'cnpj'),updatedAt:method==='cnpj'?(previous?.updatedAt||Date.now()):Date.now()});
@@ -18981,10 +19019,10 @@ function postosPriceTokenSimilarity(a,b){
   const aa=new Set(postosNorm(a).split(' ').filter(x=>x.length>1)),bb=new Set(postosNorm(b).split(' ').filter(x=>x.length>1));if(!aa.size||!bb.size)return 0;let hit=0;aa.forEach(x=>{if(bb.has(x))hit++;});return hit/Math.max(aa.size,bb.size);
 }
 function postosPriceCandidateScore(item,p){
-  const iname=postosNorm(item?.nome),pname=postosNorm(p?.nome),iaddr=postosNorm(item?.endereco),paddr=postosNorm(p?.endereco);let score=0;
+  const iname=postosNorm(item?.nome),pname=postosNorm(p?.nome),iaddr=postosNorm(item?.endereco),paddr=postosNorm(p?.endereco),paddrFull=postosNorm(`${p?.endereco||''} ${p?.bairro||''}`);let score=0;
   if(iname&&iname===pname)score+=120;else score+=postosPriceTokenSimilarity(iname,pname)*55;
-  if(iaddr&&iaddr===paddr)score+=120;else score+=postosPriceTokenSimilarity(iaddr,paddr)*70;
-  if(iname&&pname&&(iname.includes(pname)||pname.includes(iname)))score+=18;if(iaddr&&paddr&&(iaddr.includes(paddr)||paddr.includes(iaddr)))score+=22;
+  if(iaddr&&(iaddr===paddr||iaddr===paddrFull))score+=120;else score+=Math.max(postosPriceTokenSimilarity(iaddr,paddr),postosPriceTokenSimilarity(iaddr,paddrFull))*70;
+  if(iname&&pname&&(iname.includes(pname)||pname.includes(iname)))score+=18;if(iaddr&&((paddr&&iaddr.includes(paddr))||(paddrFull&&iaddr.includes(paddrFull))||(paddr&&paddr.includes(iaddr))||(paddrFull&&paddrFull.includes(iaddr))))score+=22;
   return score;
 }
 function postosPriceFindCandidates(item,query=''){
