@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<!-- IGNIS v60 · Rede de Postos: preços + vínculos CNPJ persistentes -->
+<!-- IGNIS v61 · Rede de Postos: preços + vínculos CNPJ + seleção de todos os combustíveis -->
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
@@ -2397,8 +2397,17 @@ input[type="checkbox"]:indeterminate{background:rgba(233,95,50,.2);border-color:
 #page-postos .postos-result-price strong{font-size:13px;color:#6be1b4;letter-spacing:-.01em}
 #page-postos .postos-result-price span{font-size:8.8px;color:var(--text3);text-align:right}
 #page-postos .postos-result-price.missing strong{font-size:10px;color:#778492;font-weight:650}
+#page-postos .postos-result-price-all{display:grid!important;gap:5px;align-items:stretch!important}
+#page-postos .postos-result-price-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:9px;align-items:center}
+#page-postos .postos-result-price-row span{font-size:9px!important;color:var(--text2)!important;text-align:left!important;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#page-postos .postos-result-price-row strong{font-size:12px!important;color:#6be1b4;white-space:nowrap}
 #page-postos .postos-popup-price{margin-top:8px!important;padding:7px 8px;border-radius:8px;background:#edf9f4;color:#167453!important;font-weight:800}
 #page-postos .postos-popup-price small{display:block;margin-top:2px;color:#5e7f73;font-size:9px;font-weight:600}
+#page-postos .postos-popup-price-all{display:grid;gap:5px}
+#page-postos .postos-popup-price-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:9px;align-items:center;padding-bottom:4px;border-bottom:1px solid rgba(22,116,83,.12)}
+#page-postos .postos-popup-price-row:last-child{padding-bottom:0;border-bottom:0}
+#page-postos .postos-popup-price-row span{font-size:9px;color:#5e7f73;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#page-postos .postos-popup-price-row strong{font-size:11px;color:#167453;white-space:nowrap}
 .postos-price-preview-note{padding:9px 10px;border-radius:9px;border:1px solid rgba(52,201,139,.16);background:rgba(52,201,139,.04);font-size:10px;line-height:1.45;color:#8edcbc}
 .postos-price-unmatched{display:grid;gap:5px;max-height:150px;overflow:auto}
 .postos-price-unmatched>div{padding:7px 8px;border-radius:8px;background:#0e151d;border:1px solid rgba(148,163,184,.1);font-size:9.5px;color:var(--text2);line-height:1.35}
@@ -18274,6 +18283,7 @@ const POSTOS_GEO_CACHE_KEY = 'ignis_postos_geo_v1';
 const POSTOS_PLACE_CACHE_KEY = 'ignis_postos_place_v1';
 const POSTOS_REVERSE_CACHE_KEY = 'ignis_postos_reverse_v1';
 const POSTOS_BATCH = 70;
+const POSTOS_PRICE_ALL = '__ALL__';
 let _postosBase = null;
 let _postosMap = null;
 let _postosMarkers = null;
@@ -18508,22 +18518,36 @@ function postosPopularPriceProducts(){
   const labels=new Map();_postosPricesByCode.forEach(item=>(item.precos||[]).forEach(x=>{if(!labels.has(x.produtoKey))labels.set(x.produtoKey,x.produto);}));
   const entries=[...labels.entries()].sort((a,b)=>a[1].localeCompare(b[1],'pt-BR'));
   if(!entries.length){bar.hidden=true;sel.innerHTML='<option value="">Selecione</option>';if(info)info.textContent='Preços ainda não importados.';return;}
-  const current=sel.value;bar.hidden=false;sel.innerHTML=entries.map(([key,label])=>`<option value="${postosEsc(key)}">${postosEsc(label)}</option>`).join('');
-  if(entries.some(([k])=>k===current))sel.value=current;else{
-    const preferred=entries.find(([k])=>k.includes('DIESEL')&&k.replace(/\s/g,'').includes('S10'))||entries[0];sel.value=preferred?.[0]||'';
+  const current=sel.value;bar.hidden=false;
+  sel.innerHTML=`<option value="${POSTOS_PRICE_ALL}">Todos os combustíveis / produtos</option>`+entries.map(([key,label])=>`<option value="${postosEsc(key)}">${postosEsc(label)}</option>`).join('');
+  if(current===POSTOS_PRICE_ALL||entries.some(([k])=>k===current))sel.value=current;else{
+    const preferred=entries.find(([k])=>k.includes('DIESEL')&&k.replace(/\s/g,'').includes('S10'))||entries[0];sel.value=preferred?.[0]||POSTOS_PRICE_ALL;
   }
   if(info){let txt=`${_postosPricesByCode.size.toLocaleString('pt-BR')} posto(s) com preços`;
     if(_postosPriceMeta.updatedAt)txt+=` · atualizado em ${postosFmtDate(_postosPriceMeta.updatedAt)}`;info.textContent=txt;}
 }
+function postosGetSelectedPrices(p){
+  const key=document.getElementById('postos-price-product')?.value||'';if(!key||!p)return [];
+  const item=_postosPricesByCode.get(String(p.codigo||''));if(!item)return [];
+  const all=(item.precos||[]).slice();
+  if(key===POSTOS_PRICE_ALL)return all.sort((a,b)=>String(a.produto||'').localeCompare(String(b.produto||''),'pt-BR'));
+  return all.filter(x=>x.produtoKey===key);
+}
 function postosGetSelectedPrice(p){
-  const key=document.getElementById('postos-price-product')?.value||'';if(!key||!p)return null;
-  const item=_postosPricesByCode.get(String(p.codigo||''));if(!item)return null;
-  return (item.precos||[]).find(x=>x.produtoKey===key)||null;
+  const prices=postosGetSelectedPrices(p);
+  if(!prices.length)return null;
+  if((document.getElementById('postos-price-product')?.value||'')===POSTOS_PRICE_ALL)return prices.reduce((best,x)=>!best||Number(x.preco)<Number(best.preco)?x:best,null);
+  return prices[0]||null;
+}
+function postosPriceSortValue(p){
+  const prices=postosGetSelectedPrices(p);
+  if(!prices.length)return null;
+  return Math.min(...prices.map(x=>Number(x.preco)).filter(Number.isFinite));
 }
 function postosSortResultsForDisplay(results){
   const arr=Array.isArray(results)?results:[],byPrice=document.getElementById('postos-price-sort')?.value==='preco',product=document.getElementById('postos-price-product')?.value||'';
   const distanceCompare=(a,b)=>a.alongKm!=null||b.alongKm!=null?(Number(a.alongKm||0)-Number(b.alongKm||0)||Number(a.offKm||0)-Number(b.offKm||0)):(Number(a.distKm||0)-Number(b.distKm||0));
-  if(byPrice&&product){arr.sort((a,b)=>{const ap=postosGetSelectedPrice(a.posto),bp=postosGetSelectedPrice(b.posto),av=ap?.preco,bv=bp?.preco,aOk=Number.isFinite(Number(av)),bOk=Number.isFinite(Number(bv));if(aOk!==bOk)return aOk?-1:1;if(aOk&&bOk&&Number(av)!==Number(bv))return Number(av)-Number(bv);return distanceCompare(a,b);});}
+  if(byPrice&&product){arr.sort((a,b)=>{const av=postosPriceSortValue(a.posto),bv=postosPriceSortValue(b.posto),aOk=Number.isFinite(Number(av)),bOk=Number.isFinite(Number(bv));if(aOk!==bOk)return aOk?-1:1;if(aOk&&bOk&&Number(av)!==Number(bv))return Number(av)-Number(bv);return distanceCompare(a,b);});}
   else arr.sort(distanceCompare);
   return arr;
 }
@@ -19197,8 +19221,13 @@ async function postosReverse(lat,lon){
 }
 function postosHaversine(lat1,lon1,lat2,lon2){const R=6371,toRad=x=>x*Math.PI/180,dLat=toRad(lat2-lat1),dLon=toRad(lon2-lon1),a=Math.sin(dLat/2)**2+Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;return 2*R*Math.asin(Math.sqrt(a));}
 function postosMarkerPopup(r){
-  const p=r.posto,price=postosGetSelectedPrice(p),productSel=document.getElementById('postos-price-product'),productLabel=productSel?.value?(productSel.selectedOptions?.[0]?.textContent||''):'';const extra=r.alongKm!=null?`<div class="postos-popup-metric">Km ${postosFmtNum(r.alongKm,0)} da viagem · ${postosFmtNum(r.offKm,1)} km fora da rota</div>`:`<div class="postos-popup-metric">${postosFmtNum(r.distKm,1)} km do centro selecionado</div>`;
-  const priceHtml=productLabel?(price?`<div class="postos-popup-price">${postosFmtPreco(price.preco)}/L<small>${postosEsc(productLabel)} · vigente desde ${postosFmtDate(price.inicio)}</small></div>`:`<div class="postos-popup-price" style="background:#f3f4f6;color:#6b7280!important">Sem preço para ${postosEsc(productLabel)}</div>`):'';
+  const p=r.posto,prices=postosGetSelectedPrices(p),productSel=document.getElementById('postos-price-product'),isAll=productSel?.value===POSTOS_PRICE_ALL,productLabel=productSel?.value?(productSel.selectedOptions?.[0]?.textContent||''):'';const extra=r.alongKm!=null?`<div class="postos-popup-metric">Km ${postosFmtNum(r.alongKm,0)} da viagem · ${postosFmtNum(r.offKm,1)} km fora da rota</div>`:`<div class="postos-popup-metric">${postosFmtNum(r.distKm,1)} km do centro selecionado</div>`;
+  let priceHtml='';
+  if(productLabel){
+    if(prices.length&&isAll)priceHtml=`<div class="postos-popup-price postos-popup-price-all">${prices.map(x=>`<div class="postos-popup-price-row"><span>${postosEsc(x.produto)}</span><strong>${postosFmtPreco(x.preco)}/L</strong></div>`).join('')}</div>`;
+    else if(prices.length){const price=prices[0];priceHtml=`<div class="postos-popup-price">${postosFmtPreco(price.preco)}/L<small>${postosEsc(productLabel)} · vigente desde ${postosFmtDate(price.inicio)}</small></div>`;}
+    else priceHtml=`<div class="postos-popup-price" style="background:#f3f4f6;color:#6b7280!important">${isAll?'Sem preços disponíveis':'Sem preço para '+postosEsc(productLabel)}</div>`;
+  }
   const origem=document.getElementById('postos-origem')?.value.trim()||'',destino=document.getElementById('postos-destino')?.value.trim()||'';
   const routeBtn=(r.alongKm!=null&&origem&&destino)?`<button onclick="postosAbrirRotaComParada(${r.lat},${r.lon})">Usar como parada</button>`:'';
   return `<div class="postos-popup"><b>${postosEsc(p.nome)}</b><span>Código EC ${postosEsc(p.codigo)}</span><div>${postosEsc(p.endereco)}</div><div>${postosEsc(p.bairro)} · ${postosEsc(p.cidade)}/${postosEsc(p.uf)}</div><div>CEP ${postosEsc(postosFmtCep(p.cep))}</div>${extra}${priceHtml}<div class="postos-popup-actions"><button onclick="postosAbrirGoogle(${r.lat},${r.lon})">Abrir no Google Maps</button>${routeBtn}</div></div>`;
@@ -19208,8 +19237,18 @@ function postosRenderResults(results,meta={}){
   const count=document.getElementById('postos-results-count'),mobileCount=document.getElementById('postos-mobile-list-count');
   if(count)count.textContent=results.length.toLocaleString('pt-BR');if(mobileCount)mobileCount.textContent=results.length.toLocaleString('pt-BR');
   if(!results.length){list.innerHTML='<div class="postos-empty"><b>Nenhum posto exibido ainda.</b><span>Faça uma busca por região ou calcule uma rota.</span></div>';window._postosRenderedResults=[];return;}
-  const productSel=document.getElementById('postos-price-product'),productLabel=productSel?.value?(productSel.selectedOptions?.[0]?.textContent||''):'';
-  list.innerHTML=results.map((r,i)=>{const p=r.posto,price=postosGetSelectedPrice(p);const metric=r.alongKm!=null?`Km ${postosFmtNum(r.alongKm,0)} · desvio ${postosFmtNum(r.offKm,1)} km`:`${postosFmtNum(r.distKm,1)} km do centro`;const priceHtml=productLabel?(price?`<div class="postos-result-price"><strong>${postosFmtPreco(price.preco)}/L</strong><span>Vigente desde ${postosFmtDate(price.inicio)}</span></div>`:`<div class="postos-result-price missing"><strong>Sem preço para este produto</strong><span>${postosEsc(productLabel)}</span></div>`):'';return `<button class="postos-result-card" onclick="postosFocusResult(${i})"><div class="postos-result-top"><span class="postos-result-index">${i+1}</span><div><b>${postosEsc(p.nome)}</b><small>${postosEsc(p.cidade)}/${postosEsc(p.uf)} · EC ${postosEsc(p.codigo)}</small></div></div><div class="postos-result-address">${postosEsc(p.endereco)} · ${postosEsc(p.bairro)}</div><div class="postos-result-metric">${metric}</div>${priceHtml}</button>`;}).join('');
+  const productSel=document.getElementById('postos-price-product'),isAll=productSel?.value===POSTOS_PRICE_ALL,productLabel=productSel?.value?(productSel.selectedOptions?.[0]?.textContent||''):'';
+  list.innerHTML=results.map((r,i)=>{
+    const p=r.posto,prices=postosGetSelectedPrices(p);
+    const metric=r.alongKm!=null?`Km ${postosFmtNum(r.alongKm,0)} · desvio ${postosFmtNum(r.offKm,1)} km`:`${postosFmtNum(r.distKm,1)} km do centro`;
+    let priceHtml='';
+    if(productLabel){
+      if(prices.length&&isAll)priceHtml=`<div class="postos-result-price postos-result-price-all">${prices.map(x=>`<div class="postos-result-price-row"><span>${postosEsc(x.produto)}</span><strong>${postosFmtPreco(x.preco)}/L</strong></div>`).join('')}</div>`;
+      else if(prices.length){const price=prices[0];priceHtml=`<div class="postos-result-price"><strong>${postosFmtPreco(price.preco)}/L</strong><span>Vigente desde ${postosFmtDate(price.inicio)}</span></div>`;}
+      else priceHtml=`<div class="postos-result-price missing"><strong>${isAll?'Sem preços disponíveis':'Sem preço para este produto'}</strong><span>${postosEsc(productLabel)}</span></div>`;
+    }
+    return `<button class="postos-result-card" onclick="postosFocusResult(${i})"><div class="postos-result-top"><span class="postos-result-index">${i+1}</span><div><b>${postosEsc(p.nome)}</b><small>${postosEsc(p.cidade)}/${postosEsc(p.uf)} · EC ${postosEsc(p.codigo)}</small></div></div><div class="postos-result-address">${postosEsc(p.endereco)} · ${postosEsc(p.bairro)}</div><div class="postos-result-metric">${metric}</div>${priceHtml}</button>`;
+  }).join('');
   window._postosRenderedResults=results;
 }
 function postosPlotResults(results,{fit=true,keepRoute=false,center=null}={}){
