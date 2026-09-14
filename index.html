@@ -1,11 +1,11 @@
 <!DOCTYPE html>
-<!-- IGNIS v56 · Cores Gobrax no Geral + permissões granulares de ações Gobrax -->
+<!-- IGNIS v57 · Importação segura e compartilhada da Rede de Postos -->
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <!-- IGNIS v46 · correção de travamento Motoristas PX + cache de nomes + renderização única -->
-<meta name="ignis-build" content="2026-09-11-postos-mobile-firebase-v2">
+<meta name="ignis-build" content="2026-09-14-postos-import-firebase-v3">
 <title>Ignis — Gestão Inteligente de Frotas e Equipamentos</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23ff6b2c'/%3E%3Cpath d='M36 9c1 8-4 11-7 15-3 4-5 8-2 14 2-4 5-6 9-8-1 8 5 11 5 17 6-4 9-10 8-17-1-10-7-17-13-21Z' fill='none' stroke='white' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -15,7 +15,7 @@
 <script async src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 <script type="module" async>
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, query, where, documentId, getDocs, getDocsFromCache, doc, setDoc, getDoc, deleteDoc, writeBatch, runTransaction, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, query, where, documentId, getDocs, getDocsFromCache, doc, setDoc, getDoc, getDocFromCache, deleteDoc, writeBatch, runTransaction, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBdfrSrif-vThP3WqWJF76hhKE7FXGFpL0",
@@ -90,7 +90,7 @@ async function fbRetry(task, attempts=3, baseDelay=450) {
     catch(e) {
       lastErr=e;
       // Conflito de revisão é regra de segurança, não falha de rede: não repetir.
-      if (e?.code === 'IGNIS_REVISION_CONFLICT') throw e;
+      if (e?.code === 'IGNIS_REVISION_CONFLICT' || e?.code === 'IGNIS_POSTOS_VERSION_CONFLICT') throw e;
       if (tentativa < attempts) await fbSleep(baseDelay * tentativa);
     }
   }
@@ -885,6 +885,120 @@ window.fbSavePostosGeo = async function(items) {
   } catch(e) {
     console.warn('IGNIS postos: não foi possível enviar coordenadas ao Firebase.', e);
     return false;
+  }
+};
+
+// ── REDE DE POSTOS: cadastro oficial compartilhado ──────────────────────────
+// A planilha completa é salva em chunks versionados. O manifesto só aponta para
+// a nova versão depois que todos os chunks foram confirmados, evitando que uma
+// conexão interrompida deixe os demais aparelhos com uma base pela metade.
+const FB_POSTOS_BASE_DOC = 'postos_rede_manifest';
+const FB_POSTOS_BASE_PREFIX = 'postos_rede';
+function fbNormalizePostoBaseItem(item) {
+  if (!item || typeof item !== 'object' || Array.isArray(item)) return null;
+  const codigo = String(item.codigo || '').trim();
+  if (!codigo) return null;
+  return {
+    codigo,
+    nome: String(item.nome || '').trim(),
+    uf: String(item.uf || '').trim().toUpperCase(),
+    cidade: String(item.cidade || '').trim(),
+    bairro: String(item.bairro || '').trim(),
+    endereco: String(item.endereco || '').trim(),
+    cep: String(item.cep || '').trim(),
+    geoResetAt: Math.max(0, Number(item.geoResetAt || 0))
+  };
+}
+window.fbLoadPostosBase = async function(currentVersion = '') {
+  const manifestRef = doc(db, 'fueltracker', FB_POSTOS_BASE_DOC);
+  let snap, fromCache = false;
+  try {
+    snap = await withTimeout(getDoc(manifestRef), 12000);
+  } catch (networkError) {
+    try {
+      snap = await withTimeout(getDocFromCache(manifestRef), 3500);
+      fromCache = true;
+    } catch (cacheError) {
+      throw networkError;
+    }
+  }
+  fromCache = fromCache || !!snap?.metadata?.fromCache;
+  if (!snap.exists()) return null;
+  const manifest = snap.data() || {};
+  const version = String(manifest.version || '');
+  const chunks = Number(manifest.chunks || 0);
+  const total = Number(manifest.total || 0);
+  if (!version || !Number.isInteger(chunks) || chunks < 1 || !Number.isInteger(total) || total < 1) {
+    throw new Error('Manifesto da Rede de Postos inválido.');
+  }
+  const metadata = {
+    version,
+    chunks,
+    total,
+    signature: String(manifest.signature || ''),
+    sourceFile: String(manifest.sourceFile || ''),
+    updatedAt: Number(manifest.updatedAt || 0),
+    updatedBy: String(manifest.updatedBy || ''),
+    fromCache
+  };
+  if (String(currentVersion || '') === version) return {...metadata, items:null, unchanged:true};
+  const items = (await fbReadChunkSeries(FB_POSTOS_BASE_PREFIX, version, chunks)).map(fbNormalizePostoBaseItem);
+  if (items.some(x => !x) || items.length !== total) {
+    throw new Error(`Base da Rede de Postos incompleta (${items.filter(Boolean).length}/${total}).`);
+  }
+  const codigos = new Set(items.map(x => x.codigo));
+  if (codigos.size !== items.length) throw new Error('Base da Rede de Postos contém Códigos EC duplicados.');
+  return {...metadata, items, unchanged:false};
+};
+window.fbSavePostosBase = async function(items, meta = {}) {
+  const input = Array.isArray(items) ? items : [];
+  const safe = input.map(fbNormalizePostoBaseItem);
+  if (!safe.length || safe.some(x => !x)) throw new Error('A nova base de postos contém registros inválidos.');
+  const unique = new Set(safe.map(x => x.codigo));
+  if (unique.size !== safe.length) throw new Error('A nova base contém Códigos EC duplicados.');
+
+  const manifestRef = doc(db, 'fueltracker', FB_POSTOS_BASE_DOC);
+  const oldSnap = await withTimeout(getDoc(manifestRef), 12000);
+  const old = oldSnap.exists() ? (oldSnap.data() || {}) : {};
+  const currentVersion = String(old.version || '');
+  if (Object.prototype.hasOwnProperty.call(meta, 'expectedVersion')
+      && String(meta.expectedVersion || '') !== currentVersion) {
+    const conflict = new Error('A Rede de Postos foi atualizada por outro usuário. Reabra a importação e confira a nova prévia.');
+    conflict.code = 'IGNIS_POSTOS_VERSION_CONFLICT';
+    throw conflict;
+  }
+
+  const version = fbVersion();
+  const predictedChunks = fbBuildAdaptiveChunks(safe, 250).length;
+  let chunks = 0;
+  try {
+    chunks = await fbWriteChunkSeries(FB_POSTOS_BASE_PREFIX, version, safe, 250);
+    const manifest = {
+      schema: 1,
+      version,
+      chunks,
+      total: safe.length,
+      signature: String(meta.signature || ''),
+      sourceFile: String(meta.sourceFile || '').slice(0, 180),
+      updatedAt: Date.now(),
+      updatedBy: String(meta.updatedBy || '').slice(0, 100)
+    };
+    await fbRetry(() => withTimeout(runTransaction(db, async tx => {
+      const latestSnap = await tx.get(manifestRef);
+      const latest = latestSnap.exists() ? (latestSnap.data() || {}) : {};
+      if (String(latest.version || '') !== currentVersion) {
+        const conflict = new Error('A Rede de Postos mudou enquanto a planilha era enviada. Reabra a importação e tente novamente.');
+        conflict.code = 'IGNIS_POSTOS_VERSION_CONFLICT';
+        throw conflict;
+      }
+      tx.set(manifestRef, manifest);
+    }), 25000), 3, 650);
+
+    fbDeleteChunkSeries(FB_POSTOS_BASE_PREFIX, String(old.version || ''), Number(old.chunks || 0));
+    return manifest;
+  } catch (e) {
+    fbDeleteChunkSeries(FB_POSTOS_BASE_PREFIX, version, chunks || predictedChunks);
+    throw e;
   }
 };
 
@@ -2002,6 +2116,11 @@ input[type="checkbox"]:indeterminate{background:rgba(233,95,50,.2);border-color:
 #page-postos .postos-toolbar{background:linear-gradient(145deg,rgba(24,31,40,.98),rgba(14,20,27,.98));border-color:rgba(148,163,184,.13)}
 #page-postos .postos-beta{background:rgba(52,201,139,.065);border-color:rgba(52,201,139,.22);color:#61d8ab}
 #page-postos .postos-beta .ui-icon{width:15px;height:15px;stroke-width:2}
+#page-postos .postos-hero-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}
+#page-postos .postos-import-btn{min-height:36px;display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:7px 11px;border-radius:9px;border:1px solid rgba(255,107,44,.3);background:rgba(255,107,44,.09);color:#ff8a60;font:750 11px 'DM Sans',sans-serif;cursor:pointer;transition:.18s;white-space:nowrap}
+#page-postos .postos-import-btn:hover{background:rgba(255,107,44,.15);border-color:rgba(255,107,44,.48);color:#fff;transform:translateY(-1px)}
+#page-postos .postos-import-btn .ui-icon{width:15px;height:15px}
+#page-postos .postos-import-btn[hidden]{display:none!important}
 #page-postos .postos-map-card,#page-postos .postos-list-card{border-color:rgba(148,163,184,.13);background:linear-gradient(180deg,#111820,#0f161e)}
 #page-postos .postos-mobile-switch{display:none}
 #page-postos .postos-result-card{background:#121a23;border-color:rgba(148,163,184,.12)}
@@ -2026,11 +2145,46 @@ input[type="checkbox"]:indeterminate{background:rgba(233,95,50,.2);border-color:
 #page-postos .leaflet-popup-content{margin:14px 15px}
 #page-postos .leaflet-control-zoom a{color:#24303d}
 
+/* Importação da lista oficial de credenciados. */
+.postos-import-modal-card{width:min(720px,calc(100vw - 32px));padding:24px!important}
+.postos-import-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:17px}
+.postos-import-head .modal-title{margin:0!important}
+.postos-import-sub{margin-top:4px;color:var(--text3);font-size:11.5px;line-height:1.5}
+.postos-import-drop{width:100%;min-height:104px;display:flex;align-items:center;justify-content:center;gap:13px;text-align:left;padding:18px;border:1.5px dashed rgba(255,107,44,.34);border-radius:14px;background:linear-gradient(135deg,rgba(255,107,44,.07),rgba(255,255,255,.012));color:var(--text);font:inherit;cursor:pointer;transition:.18s}
+.postos-import-drop:hover{border-color:rgba(255,107,44,.58);background:rgba(255,107,44,.1)}
+.postos-import-drop:disabled{cursor:wait;opacity:.62}
+.postos-import-drop-icon{width:44px;height:44px;min-width:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:#111923;border:1px solid rgba(255,107,44,.22);color:#ff8052}
+.postos-import-drop-icon .ui-icon{width:21px;height:21px}
+.postos-import-drop strong,.postos-import-drop small{display:block}
+.postos-import-drop strong{font-size:13px}.postos-import-drop small{margin-top:4px;font-size:10.5px;line-height:1.45;color:var(--text3);font-weight:500}
+.postos-import-feedback{margin-top:11px;padding:9px 11px;border:1px solid rgba(148,163,184,.12);border-radius:10px;background:#0f161e;color:var(--text3);font-size:10.5px;line-height:1.45}
+.postos-import-feedback.loading{color:#f0a17f;border-color:rgba(255,107,44,.25);background:rgba(255,107,44,.05)}
+.postos-import-feedback.error{color:#fca5a5;border-color:rgba(239,68,68,.27);background:rgba(239,68,68,.055)}
+.postos-import-feedback.success{color:#72dcb5;border-color:rgba(52,201,139,.24);background:rgba(52,201,139,.05)}
+.postos-import-preview{display:grid;gap:11px;margin-top:12px}
+.postos-import-preview[hidden],.postos-import-check[hidden]{display:none!important}
+.postos-import-file-row{display:flex;align-items:center;justify-content:space-between;gap:12px;font-size:10.5px;color:var(--text2)}
+.postos-import-file-row span{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.postos-import-file-row strong{white-space:nowrap;color:var(--text)}
+.postos-import-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.postos-import-stats>div{padding:11px;border:1px solid rgba(148,163,184,.12);border-radius:11px;background:#101821}
+.postos-import-stats span,.postos-import-stats strong{display:block}.postos-import-stats span{font-size:8.5px;letter-spacing:.065em;text-transform:uppercase;color:var(--text3);font-weight:800}.postos-import-stats strong{font-size:20px;line-height:1.2;margin-top:3px}
+.postos-import-stats .new strong{color:#52d59f}.postos-import-stats .changed strong{color:#f6ad75}.postos-import-stats .removed strong{color:#fb7d7d}.postos-import-stats .same strong{color:#a8b4c2}
+.postos-import-transition{display:flex;align-items:center;justify-content:center;gap:10px;padding:9px;border-radius:10px;background:rgba(255,255,255,.018);border:1px solid rgba(148,163,184,.1);font-size:10.5px;color:var(--text3)}
+.postos-import-transition i{font-style:normal;color:#ff8052}.postos-import-transition strong{color:var(--text)}
+.postos-import-examples{display:grid;gap:6px}
+.postos-import-example{display:flex;align-items:flex-start;gap:8px;padding:8px 9px;border-radius:9px;background:#0e151d;border:1px solid rgba(148,163,184,.1);font-size:10px;line-height:1.4;color:var(--text2)}
+.postos-import-example b{min-width:76px;color:var(--text);font-size:9px;text-transform:uppercase;letter-spacing:.045em}.postos-import-example span{min-width:0}
+.postos-import-check{display:flex;align-items:flex-start;gap:9px;padding:11px;border-radius:10px;border:1px solid rgba(239,68,68,.27);background:rgba(239,68,68,.055);color:#f6c5c5;font-size:10.5px;line-height:1.45;cursor:pointer}
+.postos-import-check input{width:18px;height:18px;min-width:18px;margin-top:1px;accent-color:#e95f32}
+.postos-import-actions .btn{min-height:42px}
+.postos-import-actions .btn:disabled{opacity:.45;cursor:not-allowed;filter:none}
+
 @media(max-width:720px){
   #page-postos .postos-shell{gap:10px!important}
   #page-postos .postos-hero{gap:10px!important;margin-bottom:2px!important}
   #page-postos .postos-hero .page-header-title{width:100%}
-  #page-postos .postos-beta{width:100%;justify-content:center;min-height:36px;padding:8px 10px;font-size:10px}
+  #page-postos .postos-hero-actions{width:100%;display:flex;gap:7px}
+  #page-postos .postos-beta,#page-postos .postos-import-btn{flex:1 1 0;min-width:0;justify-content:center;min-height:44px;padding:8px 9px;font-size:9.5px;white-space:normal;text-align:center;line-height:1.2}
   #page-postos .postos-toolbar{padding:10px!important;border-radius:15px;box-shadow:0 12px 30px rgba(0,0,0,.16)}
   #page-postos .postos-modes{display:grid;grid-template-columns:1fr 1fr;width:100%;padding:4px;margin-bottom:10px}
   #page-postos .postos-mode-btn{min-height:42px!important;padding:8px!important;font-size:11px!important;line-height:1.25;touch-action:manipulation}
@@ -2069,6 +2223,14 @@ input[type="checkbox"]:indeterminate{background:rgba(233,95,50,.2);border-color:
   #page-postos .postos-popup{min-width:0;width:100%}
   #page-postos .postos-popup-actions{display:grid;grid-template-columns:1fr;gap:7px}
   #page-postos .postos-popup-actions button{min-height:42px;font-size:11px;width:100%;touch-action:manipulation}
+  .postos-import-modal-card{padding:18px 14px calc(18px + env(safe-area-inset-bottom,0px))!important}
+  .postos-import-head{margin-bottom:14px}.postos-import-sub{font-size:10.5px}
+  .postos-import-drop{min-height:112px;padding:16px 13px;justify-content:flex-start}.postos-import-drop strong{font-size:12px}.postos-import-drop small{font-size:10px}
+  .postos-import-stats{grid-template-columns:1fr 1fr}.postos-import-stats>div{padding:10px}.postos-import-stats strong{font-size:18px}
+  .postos-import-file-row{align-items:flex-start;flex-direction:column;gap:3px}.postos-import-file-row span{max-width:100%}
+  .postos-import-example{display:block}.postos-import-example b{display:block;margin-bottom:3px}
+  .postos-import-actions{display:grid!important;grid-template-columns:1fr 1.25fr;position:sticky;bottom:calc(-18px - env(safe-area-inset-bottom,0px));margin:16px -14px calc(-18px - env(safe-area-inset-bottom,0px))!important;padding:12px 14px calc(12px + env(safe-area-inset-bottom,0px));background:rgba(15,21,29,.97);border-top:1px solid var(--border);backdrop-filter:blur(12px)}
+  .postos-import-actions .btn{width:100%;min-height:48px;padding:9px 8px;font-size:11px}
 }
 @media(max-width:390px){
   #page-postos .postos-mode-btn{font-size:10.5px!important}
@@ -3017,7 +3179,10 @@ input[type="checkbox"]:indeterminate{background:rgba(233,95,50,.2);border-color:
           <div class="page-title page-title-icon"><span class="title-icon"><svg class="ui-icon" viewBox="0 0 24 24"><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></svg></span>Rede de Postos</div>
           <div class="page-sub">Localize postos credenciados por cidade ou encontre opções próximas da sua rota.</div>
         </div>
-        <div class="postos-beta"><svg class="ui-icon" viewBox="0 0 24 24"><path d="M7 18h10a4 4 0 0 0 .8-7.9A6 6 0 0 0 6.4 8.3 4.8 4.8 0 0 0 7 18Z"/><path d="m9 13 2 2 4-4"/></svg> COORDENADAS COMPARTILHADAS</div>
+        <div class="postos-hero-actions">
+          <button id="postos-import-btn" class="postos-import-btn" type="button" hidden onclick="postosAbrirImportacao()"><svg class="ui-icon" viewBox="0 0 24 24"><path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>Atualizar planilha</button>
+          <div class="postos-beta"><svg class="ui-icon" viewBox="0 0 24 24"><path d="M7 18h10a4 4 0 0 0 .8-7.9A6 6 0 0 0 6.4 8.3 4.8 4.8 0 0 0 7 18Z"/><path d="m9 13 2 2 4-4"/></svg> COORDENADAS COMPARTILHADAS</div>
+        </div>
       </div>
 
       <div class="postos-toolbar">
@@ -3065,6 +3230,47 @@ input[type="checkbox"]:indeterminate{background:rgba(233,95,50,.2);border-color:
             <span class="postos-note">As coordenadas encontradas ficam compartilhadas no Firebase e são reaproveitadas em qualquer aparelho.</span>
           </div>
         </section>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="postos-import-modal" aria-hidden="true">
+    <div class="modal postos-import-modal-card" role="dialog" aria-modal="true" aria-labelledby="postos-import-title">
+      <div class="postos-import-head">
+        <div>
+          <div class="modal-title" id="postos-import-title">Atualizar Rede de Postos</div>
+          <div class="postos-import-sub">A planilha selecionada passará a ser a lista oficial em todos os aparelhos.</div>
+        </div>
+        <button class="pend-close" type="button" aria-label="Fechar" onclick="postosFecharImportacao()">×</button>
+      </div>
+
+      <input id="postos-import-file" type="file" accept=".xlsx,.xls" hidden onchange="postosLerPlanilha(this)">
+      <button class="postos-import-drop" id="postos-import-drop" type="button" onclick="document.getElementById('postos-import-file').click()">
+        <span class="postos-import-drop-icon"><svg class="ui-icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg></span>
+        <span><strong id="postos-import-drop-title">Selecionar planilha atualizada</strong><small>Modelo esperado: Código EC, Nome EC, Estado, Cidade, Bairro, Endereço e CEP.</small></span>
+      </button>
+
+      <div class="postos-import-feedback" id="postos-import-feedback" aria-live="polite">O IGNIS vai conferir a planilha e mostrar as alterações antes de salvar.</div>
+
+      <div id="postos-import-preview" class="postos-import-preview" hidden>
+        <div class="postos-import-file-row"><span id="postos-import-file-name">Planilha</span><strong id="postos-import-total-change">0 alterações</strong></div>
+        <div class="postos-import-stats">
+          <div class="new"><span>Novos</span><strong id="postos-import-new">0</strong></div>
+          <div class="changed"><span>Atualizados</span><strong id="postos-import-changed">0</strong></div>
+          <div class="removed"><span>Removidos</span><strong id="postos-import-removed">0</strong></div>
+          <div class="same"><span>Sem alteração</span><strong id="postos-import-same">0</strong></div>
+        </div>
+        <div class="postos-import-transition"><span id="postos-import-before">0 atuais</span><i>→</i><strong id="postos-import-after">0 na nova base</strong></div>
+        <div id="postos-import-examples" class="postos-import-examples"></div>
+        <label id="postos-import-removal-confirm" class="postos-import-check" hidden>
+          <input id="postos-import-removal-check" type="checkbox" onchange="postosAtualizarBotaoImportar()">
+          <span>Conferi a prévia e autorizo remover os postos que não aparecem na nova planilha.</span>
+        </label>
+      </div>
+
+      <div class="modal-actions postos-import-actions">
+        <button class="btn btn-secondary" type="button" onclick="postosFecharImportacao()">Cancelar</button>
+        <button class="btn btn-primary" id="postos-import-confirm-btn" type="button" disabled onclick="postosConfirmarImportacao()">Salvar nova base</button>
       </div>
     </div>
   </div>
@@ -17750,6 +17956,11 @@ let _postosClusterPromise = null;
 let _postosBasePromise = null;
 let _postosCloudPending = new Map();
 let _postosCloudFlushTimer = null;
+let _postosBaseMeta = {source:'arquivo',version:'',updatedAt:0,sourceFile:'postos-base.js'};
+let _postosCloudCheckPromise = null;
+let _postosCloudCheckedAt = 0;
+let _postosImportPreview = null;
+let _postosImportSaving = false;
 
 const POSTOS_UF_NOMES = {
   'ACRE':'AC','ALAGOAS':'AL','AMAPA':'AP','AMAZONAS':'AM','BAHIA':'BA','CEARA':'CE','DISTRITO FEDERAL':'DF',
@@ -17757,12 +17968,26 @@ const POSTOS_UF_NOMES = {
   'PARA':'PA','PARAIBA':'PB','PARANA':'PR','PERNAMBUCO':'PE','PIAUI':'PI','RIO DE JANEIRO':'RJ','RIO GRANDE DO NORTE':'RN',
   'RIO GRANDE DO SUL':'RS','RONDONIA':'RO','RORAIMA':'RR','SANTA CATARINA':'SC','SAO PAULO':'SP','SERGIPE':'SE','TOCANTINS':'TO'
 };
+const POSTOS_UFS_VALIDAS = new Set(['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO']);
 
 function postosEsc(v){return String(v??'').replace(/[&<>'\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','\"':'&quot;'}[c]));}
 function postosNorm(v){return String(v??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9]+/g,' ').trim().toUpperCase();}
-function postosFmtCep(v){const d=String(v||'').replace(/\D/g,'').padStart(8,'0');return d.length===8?d.slice(0,5)+'-'+d.slice(5):String(v||'');}
+function postosFmtCep(v){const raw=String(v||''),digits=raw.replace(/\D/g,'');if(!digits)return raw;const d=digits.padStart(8,'0');return d.length===8?d.slice(0,5)+'-'+d.slice(5):raw;}
 function postosFmtNum(v,n=1){return Number(v||0).toLocaleString('pt-BR',{minimumFractionDigits:n,maximumFractionDigits:n});}
 function postosSleep(ms){return new Promise(r=>setTimeout(r,ms));}
+function postosPlainRecord(r){
+  if(!r)return null;
+  const arr=Array.isArray(r);
+  const get=(key,index)=>arr?r[index]:r[key];
+  const codigo=String(get('codigo',0)||'').trim();if(!codigo)return null;
+  return {codigo,nome:String(get('nome',1)||'').trim(),uf:String(get('uf',2)||'').trim().toUpperCase(),cidade:String(get('cidade',3)||'').trim(),bairro:String(get('bairro',4)||'').trim(),endereco:String(get('endereco',5)||'').trim(),cep:String(get('cep',6)||'').trim(),geoResetAt:Math.max(0,Number(arr?0:get('geoResetAt',7)||0))};
+}
+function postosSignature(items){
+  let hash=2166136261;const fields=['codigo','nome','uf','cidade','bairro','endereco','cep'];
+  (Array.isArray(items)?items:[]).forEach(p=>fields.forEach(k=>{const s=String(p?.[k]||'')+'\u001f';for(let i=0;i<s.length;i++){hash^=s.charCodeAt(i);hash=Math.imul(hash,16777619);}}));
+  return `p${(hash>>>0).toString(16)}-${Array.isArray(items)?items.length:0}`;
+}
+function postosGeoFresh(p,g){const reset=Math.max(0,Number(p?.geoResetAt||0)),at=Math.max(0,Number(g?.at||0));return !!g&&(!reset||at>=reset);}
 function postosSetStatus(text,type='info',progress=null){
   const box=document.getElementById('postos-status'); if(!box)return;
   box.className='postos-status '+type;
@@ -17773,7 +17998,9 @@ function postosSetStatus(text,type='info',progress=null){
 function postosUpdateSummary(extra=''){
   const el=document.getElementById('postos-base-summary'); if(!el)return;
   const total=_postosBase?.length||0,cached=Object.values(_postosGeoCache||{}).filter(x=>Number.isFinite(Number(x?.lat))&&Number.isFinite(Number(x?.lon))).length;
-  el.textContent=`${total.toLocaleString('pt-BR')} credenciados · ${cached.toLocaleString('pt-BR')} coordenadas prontas · Firebase${extra?' · '+extra:''}`;
+  let origem=_postosBaseMeta?.source==='firebase'?'base compartilhada':'base inicial do site';
+  if(_postosBaseMeta?.updatedAt){try{origem+=` · ${new Date(_postosBaseMeta.updatedAt).toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'short'})}`;}catch(e){}}
+  el.textContent=`${total.toLocaleString('pt-BR')} credenciados · ${cached.toLocaleString('pt-BR')} coordenadas prontas · ${origem}${extra?' · '+extra:''}`;
 }
 function postosLoadCache(key){try{const x=JSON.parse(localStorage.getItem(key)||'{}');return x&&typeof x==='object'?x:{};}catch(e){return {};}}
 function postosScheduleCacheSave(){
@@ -17811,22 +18038,58 @@ async function postosEnsureCluster(){
   });
   return _postosClusterPromise;
 }
-async function postosEnsureBase(){
-  if(_postosBase)return _postosBase;
-  if(window.IGNIS_POSTOS_BASE){postosBuildBase();return _postosBase;}
-  if(_postosBasePromise)return _postosBasePromise;
-  _postosBasePromise=new Promise((resolve,reject)=>{
-    const existing=document.getElementById('ignis-postos-base-js');
-    if(existing){existing.addEventListener('load',()=>{postosBuildBase();resolve(_postosBase);},{once:true});existing.addEventListener('error',()=>reject(new Error('Base de postos não encontrada.')),{once:true});return;}
-    const s=document.createElement('script');s.id='ignis-postos-base-js';s.src='postos-base.js?v=20260911';s.onload=()=>{postosBuildBase();resolve(_postosBase);};s.onerror=()=>reject(new Error('Não foi possível carregar postos-base.js. Coloque o arquivo junto do index.html.'));document.head.appendChild(s);
-  });
-  return _postosBasePromise;
+async function postosFirebaseBaseReady(){
+  if(typeof window.fbLoadPostosBase==='function'&&typeof window.fbSavePostosBase==='function')return true;
+  await Promise.race([
+    new Promise(resolve=>window.addEventListener('firebaseReady',resolve,{once:true})),
+    postosSleep(4500)
+  ]);
+  return typeof window.fbLoadPostosBase==='function'&&typeof window.fbSavePostosBase==='function';
 }
-function postosBuildBase(){
-  const raw=Array.isArray(window.IGNIS_POSTOS_BASE)?window.IGNIS_POSTOS_BASE:[];
-  _postosBase=raw.map(r=>({codigo:String(r[0]||''),nome:String(r[1]||''),uf:String(r[2]||'').toUpperCase(),cidade:String(r[3]||''),bairro:String(r[4]||''),endereco:String(r[5]||''),cep:String(r[6]||''),cityNorm:postosNorm(r[3])}));
+async function postosRefreshCloudBase(force=false){
+  if(!force&&Date.now()-_postosCloudCheckedAt<60000)return _postosBaseMeta?.source==='firebase'?_postosBaseMeta:null;
+  if(_postosCloudCheckPromise)return _postosCloudCheckPromise;
+  _postosCloudCheckPromise=(async()=>{
+    if(!(await postosFirebaseBaseReady()))throw new Error('O Firebase ainda não está disponível para consultar a Rede de Postos.');
+    const cloud=await window.fbLoadPostosBase(String(_postosBaseMeta?.version||''));
+    _postosCloudCheckedAt=Date.now();
+    if(cloud&&cloud.version!==_postosBaseMeta?.version){
+      postosBuildBase(cloud.items,{source:'firebase',version:cloud.version,updatedAt:cloud.updatedAt,updatedBy:cloud.updatedBy,sourceFile:cloud.sourceFile,signature:cloud.signature,fromCache:cloud.fromCache});
+    }
+    return cloud;
+  })();
+  try{return await _postosCloudCheckPromise;}catch(e){_postosCloudCheckedAt=Date.now();throw e;}finally{_postosCloudCheckPromise=null;}
+}
+async function postosEnsureBase(forceCloud=false){
+  if(!_postosBase){
+    if(window.IGNIS_POSTOS_BASE){
+      postosBuildBase(window.IGNIS_POSTOS_BASE,{source:'arquivo',version:'',updatedAt:0,sourceFile:'postos-base.js'});
+    }else{
+      if(!_postosBasePromise){
+        _postosBasePromise=new Promise((resolve,reject)=>{
+          const existing=document.getElementById('ignis-postos-base-js');
+          const ready=()=>{if(!window.IGNIS_POSTOS_BASE)return reject(new Error('Base de postos não encontrada.'));postosBuildBase(window.IGNIS_POSTOS_BASE,{source:'arquivo',version:'',updatedAt:0,sourceFile:'postos-base.js'});resolve(_postosBase);};
+          if(existing){if(window.IGNIS_POSTOS_BASE)return ready();existing.addEventListener('load',ready,{once:true});existing.addEventListener('error',()=>reject(new Error('Base de postos não encontrada.')),{once:true});return;}
+          const s=document.createElement('script');s.id='ignis-postos-base-js';s.src='postos-base.js?v=20260914';s.onload=ready;s.onerror=()=>reject(new Error('Não foi possível carregar postos-base.js. Coloque o arquivo junto do index.html.'));document.head.appendChild(s);
+        });
+      }
+      await _postosBasePromise;
+    }
+  }
+  try{await postosRefreshCloudBase(forceCloud);}catch(e){console.warn('IGNIS postos: base compartilhada indisponível; usando a base já carregada.',e);}
+  return _postosBase;
+}
+function postosBuildBase(raw=window.IGNIS_POSTOS_BASE,meta={}){
+  const previousSignature=_postosBase?postosSignature(_postosBase):'';
+  const seen=new Set();
+  _postosBase=(Array.isArray(raw)?raw:[]).map(postosPlainRecord).filter(p=>p&&!seen.has(p.codigo)&&seen.add(p.codigo)).map(p=>({...p,cityNorm:postosNorm(p.cidade)}));
+  _postosBaseMeta={source:meta.source||'arquivo',version:String(meta.version||''),updatedAt:Number(meta.updatedAt||0),updatedBy:String(meta.updatedBy||''),sourceFile:String(meta.sourceFile||''),signature:String(meta.signature||postosSignature(_postosBase)),fromCache:!!meta.fromCache};
   _postosGeoCache=_postosGeoCache||postosLoadCache(POSTOS_GEO_CACHE_KEY);_postosPlaceCache=_postosPlaceCache||postosLoadCache(POSTOS_PLACE_CACHE_KEY);_postosReverseCache=_postosReverseCache||postosLoadCache(POSTOS_REVERSE_CACHE_KEY);
-  postosPopularUF();postosUpdateSummary();
+  const byCode=new Map(_postosBase.map(p=>[p.codigo,p]));let cacheChanged=false;
+  Object.keys(_postosGeoCache||{}).forEach(codigo=>{const p=byCode.get(codigo);if(!p||!postosGeoFresh(p,_postosGeoCache[codigo])){delete _postosGeoCache[codigo];_postosCloudPending.delete(codigo);cacheChanged=true;}});
+  postosPopularUF();postosUpdateSummary();if(cacheChanged)postosScheduleCacheSave();
+  const changed=!!previousSignature&&previousSignature!==postosSignature(_postosBase);
+  if(changed){_postosCurrentSearch=null;postosClearMap(false);postosRenderResults([]);postosToggleMore(false);}
 }
 function postosPopularUF(){
   const sel=document.getElementById('postos-uf');if(!sel||!_postosBase)return;
@@ -17876,13 +18139,177 @@ function postosSetMobileView(view,scroll=true){
   if(!lista)setTimeout(()=>_postosMap?.invalidateSize(),80);
   if(scroll&&window.innerWidth<=720)document.querySelector('.postos-mobile-switch')?.scrollIntoView({behavior:'smooth',block:'start'});
 }
+function postosPodeImportar(){const role=window._authUser?.role;return role==='adm'||role==='admin';}
+function postosAtualizarAcessoImportacao(){const btn=document.getElementById('postos-import-btn');if(btn)btn.hidden=!postosPodeImportar();}
+function postosImportFeedback(text,type=''){
+  const el=document.getElementById('postos-import-feedback');if(!el)return;
+  el.textContent=text||'';el.className='postos-import-feedback'+(type?' '+type:'');
+}
+function postosResetImportacao(){
+  _postosImportPreview=null;
+  const preview=document.getElementById('postos-import-preview'),check=document.getElementById('postos-import-removal-check'),confirmBtn=document.getElementById('postos-import-confirm-btn'),drop=document.getElementById('postos-import-drop'),input=document.getElementById('postos-import-file');
+  if(preview)preview.hidden=true;if(check)check.checked=false;if(confirmBtn){confirmBtn.disabled=true;confirmBtn.textContent='Salvar nova base';}if(drop)drop.disabled=false;if(input)input.value='';
+  const title=document.getElementById('postos-import-drop-title');if(title)title.textContent='Selecionar planilha atualizada';
+  postosImportFeedback('O IGNIS vai conferir a planilha e mostrar as alterações antes de salvar.');
+}
+async function postosAbrirImportacao(){
+  if(!postosPodeImportar()){showToast('Sem permissão. Apenas ADM Master e Admin podem atualizar a Rede de Postos.','error');return;}
+  postosResetImportacao();
+  const modal=document.getElementById('postos-import-modal'),drop=document.getElementById('postos-import-drop');
+  if(modal){modal.classList.add('open');modal.setAttribute('aria-hidden','false');}
+  if(drop)drop.disabled=true;
+  postosImportFeedback('Conferindo a versão mais recente no Firebase...','loading');
+  try{
+    await postosEnsureBase();
+    if(!(await postosFirebaseBaseReady()))throw new Error('O Firebase ainda não está disponível. Verifique a internet e tente novamente.');
+    const cloud=await postosRefreshCloudBase(true);
+    if(cloud?.fromCache)throw new Error('Sem conexão com o Firebase. A importação foi bloqueada para evitar substituir uma versão mais nova sem conferência.');
+    if(drop)drop.disabled=false;
+    postosImportFeedback('Pronto. Selecione a planilha completa e confira a prévia antes de salvar.');
+    setTimeout(()=>drop?.focus(),60);
+  }catch(e){
+    console.error('IGNIS postos: preparação da importação',e);
+    postosImportFeedback(e?.message||'Não foi possível preparar a importação.','error');
+    if(drop)drop.disabled=true;
+  }
+}
+function postosFecharImportacao(){
+  if(_postosImportSaving){postosImportFeedback('Aguarde: a nova base ainda está sendo confirmada no Firebase.','loading');return;}
+  const modal=document.getElementById('postos-import-modal');if(modal){modal.classList.remove('open');modal.setAttribute('aria-hidden','true');}ignisSyncModalScrollLock();
+}
+function postosCellText(v){return String(v??'').replace(/\u00a0/g,' ').replace(/\s+/g,' ').trim();}
+function postosCepPlanilha(v){const raw=postosCellText(v).replace(/\.0+$/,'');const digits=raw.replace(/\D/g,'');return digits&&digits.length<=8?digits.padStart(8,'0'):raw;}
+function postosExtrairPlanilha(wb){
+  const aliases={CODIGOEC:'codigo',CODEC:'codigo',NOMEEC:'nome',NOME:'nome',ESTADO:'uf',UF:'uf',CIDADE:'cidade',MUNICIPIO:'cidade',BAIRRO:'bairro',ENDERECO:'endereco',CEP:'cep'};
+  const required=['codigo','nome','uf','cidade','bairro','endereco','cep'];let found=null;
+  for(const sheetName of wb.SheetNames||[]){
+    const matrix=XLSX.utils.sheet_to_json(wb.Sheets[sheetName],{header:1,defval:'',raw:false,blankrows:false});
+    for(let rowIndex=0;rowIndex<Math.min(25,matrix.length);rowIndex++){
+      const indexes={};(matrix[rowIndex]||[]).forEach((v,i)=>{const key=postosNorm(v).replace(/\s/g,'');if(aliases[key]&&!Object.prototype.hasOwnProperty.call(indexes,aliases[key]))indexes[aliases[key]]=i;});
+      if(required.every(k=>Number.isInteger(indexes[k]))){found={sheetName,matrix,rowIndex,indexes};break;}
+    }
+    if(found)break;
+  }
+  if(!found)throw new Error('Não encontrei as 7 colunas do modelo: Código EC, Nome EC, Estado, Cidade, Bairro, Endereço e CEP.');
+  const records=[],seen=new Map(),errors=[];
+  for(let ri=found.rowIndex+1;ri<found.matrix.length;ri++){
+    const row=found.matrix[ri]||[],get=key=>postosCellText(row[found.indexes[key]]);
+    const source={codigo:get('codigo').replace(/\.0+$/,''),nome:get('nome'),uf:get('uf'),cidade:get('cidade'),bairro:get('bairro'),endereco:get('endereco'),cep:postosCepPlanilha(row[found.indexes.cep])};
+    if(Object.values(source).every(v=>!v))continue;
+    const line=ri+1,ufNorm=postosNorm(source.uf);source.uf=ufNorm.length===2?ufNorm:(POSTOS_UF_NOMES[ufNorm]||'');
+    if(!source.codigo)errors.push(`linha ${line}: Código EC vazio`);
+    if(!source.nome)errors.push(`linha ${line}: Nome EC vazio`);
+    if(!source.uf||!POSTOS_UFS_VALIDAS.has(source.uf))errors.push(`linha ${line}: Estado inválido`);
+    if(!source.cidade)errors.push(`linha ${line}: Cidade vazia`);
+    if(!source.endereco)errors.push(`linha ${line}: Endereço vazio`);
+    if(source.codigo&&seen.has(source.codigo))errors.push(`linhas ${seen.get(source.codigo)} e ${line}: Código EC ${source.codigo} duplicado`);
+    else if(source.codigo)seen.set(source.codigo,line);
+    records.push({...source,geoResetAt:0});
+    if(errors.length>=8)break;
+  }
+  if(errors.length)throw new Error('Revise a planilha — '+errors.join('; ')+'.');
+  if(!records.length)throw new Error('A planilha não possui nenhum posto preenchido.');
+  return records;
+}
+function postosCompararImportacao(imported,fileName){
+  const current=new Map((_postosBase||[]).map(p=>[p.codigo,p])),nextCodes=new Set(),fields=['nome','uf','cidade','bairro','endereco','cep'],locationFields=new Set(['uf','cidade','bairro','endereco','cep']);
+  const added=[],updated=[],same=[],now=Date.now();
+  const rows=imported.map(input=>{
+    const p=postosPlainRecord(input),old=current.get(p.codigo);nextCodes.add(p.codigo);
+    if(!old){p.geoResetAt=now;added.push(p);return p;}
+    const changedFields=fields.filter(k=>String(old[k]||'')!==String(p[k]||''));
+    const locationChanged=changedFields.some(k=>locationFields.has(k));
+    p.geoResetAt=locationChanged?now:Math.max(0,Number(old.geoResetAt||0));
+    if(changedFields.length)updated.push({posto:p,anterior:old,fields:changedFields,locationChanged});else same.push(p);
+    return p;
+  });
+  const removed=[...current.values()].filter(p=>!nextCodes.has(p.codigo));
+  return {rows,added,updated,removed,same,fileName:String(fileName||''),signature:postosSignature(rows),expectedVersion:String(_postosBaseMeta?.version||''),publishInitial:_postosBaseMeta?.source!=='firebase'};
+}
+function postosImportExample(label,items,formatter){
+  if(!items.length)return '';
+  const shown=items.slice(0,3).map(formatter).join(' · '),rest=items.length-3;
+  return `<div class="postos-import-example"><b>${postosEsc(label)}</b><span>${shown}${rest>0?` · +${rest.toLocaleString('pt-BR')} outro(s)`:''}</span></div>`;
+}
+function postosRenderImportPreview(preview){
+  const totalChanges=preview.added.length+preview.updated.length+preview.removed.length,fmt=n=>n.toLocaleString('pt-BR');
+  document.getElementById('postos-import-preview').hidden=false;
+  document.getElementById('postos-import-file-name').textContent=preview.fileName;
+  document.getElementById('postos-import-total-change').textContent=totalChanges?`${fmt(totalChanges)} alteração(ões)`:preview.publishInitial?'Publicação inicial':'Sem alterações';
+  document.getElementById('postos-import-new').textContent=fmt(preview.added.length);
+  document.getElementById('postos-import-changed').textContent=fmt(preview.updated.length);
+  document.getElementById('postos-import-removed').textContent=fmt(preview.removed.length);
+  document.getElementById('postos-import-same').textContent=fmt(preview.same.length);
+  document.getElementById('postos-import-before').textContent=`${fmt(_postosBase?.length||0)} atuais`;
+  document.getElementById('postos-import-after').textContent=`${fmt(preview.rows.length)} na nova base`;
+  const examples=[];
+  examples.push(postosImportExample('Novos',preview.added,p=>`EC ${postosEsc(p.codigo)} — ${postosEsc(p.nome)}`));
+  examples.push(postosImportExample('Atualizados',preview.updated,x=>`EC ${postosEsc(x.posto.codigo)} — ${postosEsc(x.fields.join(', '))}`));
+  examples.push(postosImportExample('Removidos',preview.removed,p=>`EC ${postosEsc(p.codigo)} — ${postosEsc(p.nome)}`));
+  document.getElementById('postos-import-examples').innerHTML=examples.filter(Boolean).join('')||(preview.publishInitial?'<div class="postos-import-example"><b>Publicar</b><span>A planilha coincide com o arquivo inicial e será registrada como base oficial no Firebase.</span></div>':'<div class="postos-import-example"><b>Resultado</b><span>A base do Firebase já está idêntica a esta planilha.</span></div>');
+  const removal=document.getElementById('postos-import-removal-confirm'),check=document.getElementById('postos-import-removal-check');
+  removal.hidden=!preview.removed.length;if(check)check.checked=false;
+  const canSave=totalChanges>0||preview.publishInitial;
+  if(!canSave)postosImportFeedback('A planilha é válida, mas não contém nenhuma alteração em relação à base oficial.','success');
+  else if(preview.removed.length>Math.max(25,Math.floor((_postosBase?.length||0)*.1)))postosImportFeedback('Atenção: esta planilha removerá uma parte grande da rede atual. Confirme se o arquivo está completo antes de continuar.','error');
+  else postosImportFeedback('Planilha válida. Confira os números abaixo antes de publicar.','success');
+  const title=document.getElementById('postos-import-drop-title');if(title)title.textContent='Escolher outra planilha';
+  postosAtualizarBotaoImportar();
+}
+function postosAtualizarBotaoImportar(){
+  const btn=document.getElementById('postos-import-confirm-btn'),check=document.getElementById('postos-import-removal-check'),p=_postosImportPreview;
+  if(!btn)return;const hasChanges=!!p&&(p.publishInitial||p.added.length+p.updated.length+p.removed.length>0),removalOk=!p?.removed.length||!!check?.checked;
+  btn.disabled=_postosImportSaving||!hasChanges||!removalOk;
+  btn.textContent=_postosImportSaving?'Enviando ao Firebase...':p?.publishInitial&&!p.added.length&&!p.updated.length&&!p.removed.length?'Publicar base oficial':'Salvar nova base';
+}
+async function postosLerPlanilha(input){
+  const file=input?.files?.[0];if(!file)return;
+  const drop=document.getElementById('postos-import-drop');if(drop)drop.disabled=true;
+  document.getElementById('postos-import-preview').hidden=true;_postosImportPreview=null;postosAtualizarBotaoImportar();
+  postosImportFeedback(`Lendo ${file.name}...`,'loading');
+  try{
+    if(file.size>25*1024*1024)throw new Error('A planilha ultrapassa 25 MB. Confirme se selecionou o arquivo correto.');
+    if(!await ensureXLSXReady())throw new Error('O leitor de Excel não foi carregado. Verifique a internet e tente novamente.');
+    const buffer=await file.arrayBuffer(),wb=XLSX.read(buffer,{type:'array',cellDates:false});
+    const records=postosExtrairPlanilha(wb);
+    _postosImportPreview=postosCompararImportacao(records,file.name);
+    postosRenderImportPreview(_postosImportPreview);
+  }catch(e){console.error('IGNIS postos: leitura da planilha',e);postosImportFeedback(e?.message||'Não foi possível ler a planilha.','error');showToast(e?.message||'Não foi possível ler a planilha.','error');}
+  finally{if(drop)drop.disabled=false;if(input)input.value='';}
+}
+async function postosConfirmarImportacao(){
+  const p=_postosImportPreview;if(!p||_postosImportSaving||!postosPodeImportar())return;
+  if(p.removed.length&&!document.getElementById('postos-import-removal-check')?.checked){postosImportFeedback('Confirme a remoção dos postos ausentes antes de continuar.','error');return;}
+  _postosImportSaving=true;postosAtualizarBotaoImportar();const drop=document.getElementById('postos-import-drop');if(drop)drop.disabled=true;
+  postosImportFeedback(`Enviando ${p.rows.length.toLocaleString('pt-BR')} postos e confirmando a nova versão...`,'loading');
+  postosSetStatus('Atualizando a lista oficial de postos no Firebase...','loading',35);
+  try{
+    if(!(await postosFirebaseBaseReady()))throw new Error('O Firebase não está disponível. Verifique a conexão e tente novamente.');
+    const result=await window.fbSavePostosBase(p.rows,{expectedVersion:p.expectedVersion,signature:p.signature,sourceFile:p.fileName,updatedBy:window._authUser?.nome||window._authUser?.id||'Administrador'});
+    const counts={added:p.added.length,updated:p.updated.length,removed:p.removed.length};
+    postosBuildBase(p.rows,{source:'firebase',version:result.version,updatedAt:result.updatedAt,updatedBy:result.updatedBy,sourceFile:result.sourceFile,signature:result.signature});
+    _postosCloudCheckedAt=Date.now();_postosImportSaving=false;_postosImportPreview=null;
+    postosFecharImportacao();postosSetMobileView('mapa',false);
+    postosSetStatus(`Rede atualizada com sucesso: ${counts.added} novo(s), ${counts.updated} atualizado(s) e ${counts.removed} removido(s). A nova base já está disponível para os outros aparelhos.`,'success');
+    showToast(`Rede de Postos atualizada: +${counts.added} novos, ${counts.updated} alterados e ${counts.removed} removidos.`,'success');
+  }catch(e){
+    console.error('IGNIS postos: gravação da nova base',e);
+    const msg=e?.message||'O Firebase não confirmou a nova base. Nenhuma versão incompleta foi publicada.';postosImportFeedback(msg,'error');postosSetStatus(msg,'error');showToast(msg,'error');
+    if(e?.code==='IGNIS_POSTOS_VERSION_CONFLICT'){
+      try{await postosRefreshCloudBase(true);}catch(refreshError){}
+      postosResetImportacao();postosImportFeedback('A base mudou desde a sua prévia. Selecione a planilha novamente para comparar com a versão mais recente.','error');
+    }
+  }finally{_postosImportSaving=false;if(drop)drop.disabled=false;postosAtualizarBotaoImportar();}
+}
 async function postosOnShow(){
   try{
+    postosAtualizarAcessoImportacao();
     postosSetStatus('Carregando mapa e base credenciada...','info',8);
     await Promise.all([postosEnsureLeaflet(),postosEnsureBase()]);
     await postosEnsureCluster();
     postosInitMap();setTimeout(()=>_postosMap?.invalidateSize(),80);
-    postosSetStatus('Pronto. O IGNIS busca primeiro as coordenadas compartilhadas no Firebase; somente os postos ainda desconhecidos precisam ser localizados.','success');
+    const origem=_postosBaseMeta?.source==='firebase'?'A lista oficial compartilhada está carregada.':'A base inicial do site está carregada; um administrador pode publicar uma planilha atualizada.';
+    postosSetStatus(`Pronto. ${origem} O IGNIS reutiliza as coordenadas já encontradas no Firebase.`,'success');
     postosShareExistingLocalGeo().catch(e=>console.warn('IGNIS postos: sincronização inicial das coordenadas locais.',e));
   }catch(e){console.error('IGNIS postos:',e);postosSetStatus(e.message||'Falha ao carregar a Rede de Postos.','error');}
 }
@@ -17903,17 +18330,15 @@ async function postosFirebaseGeoReady(){
 }
 async function postosHydrateSharedGeo(candidates){
   const lista=Array.isArray(candidates)?candidates:[];
-  const codigos=[...new Set(lista.map(p=>String(p?.codigo||'')).filter(c=>{
-    const x=_postosGeoCache?.[c];
-    return !(Number.isFinite(Number(x?.lat))&&Number.isFinite(Number(x?.lon)));
-  }))];
+  const byCode=new Map(lista.map(p=>[String(p?.codigo||''),p]));
+  const codigos=[...new Set(lista.map(p=>String(p?.codigo||'')).filter(c=>{const x=_postosGeoCache?.[c];return !(postosGeoFresh(byCode.get(c),x)&&Number.isFinite(Number(x?.lat))&&Number.isFinite(Number(x?.lon)));}))];
   if(!codigos.length||!(await postosFirebaseGeoReady()))return 0;
   try{
     const shared=await window.fbLoadPostosGeo(codigos)||{};
     let found=0;
     Object.entries(shared).forEach(([codigo,g])=>{
       const lat=Number(g?.lat),lon=Number(g?.lon);
-      if(Number.isFinite(lat)&&Number.isFinite(lon)){
+      if(postosGeoFresh(byCode.get(codigo),g)&&Number.isFinite(lat)&&Number.isFinite(lon)){
         _postosGeoCache[codigo]={lat,lon,at:Number(g?.at||0),shared:true};found++;
       }
     });
@@ -17922,8 +18347,9 @@ async function postosHydrateSharedGeo(candidates){
   }catch(e){console.warn('IGNIS postos: falha ao aproveitar coordenadas compartilhadas.',e);return 0;}
 }
 async function postosShareExistingLocalGeo(){
+  const byCode=new Map((_postosBase||[]).map(p=>[p.codigo,p]));
   Object.entries(_postosGeoCache||{}).forEach(([codigo,g])=>{
-    if(!g?.shared&&Number.isFinite(Number(g?.lat))&&Number.isFinite(Number(g?.lon)))postosQueueSharedGeo(codigo,g);
+    if(byCode.has(codigo)&&postosGeoFresh(byCode.get(codigo),g)&&!g?.shared&&Number.isFinite(Number(g?.lat))&&Number.isFinite(Number(g?.lon)))postosQueueSharedGeo(codigo,g);
   });
   return postosFlushSharedGeo();
 }
@@ -17960,8 +18386,8 @@ async function postosGeocodeText(text){
 async function postosGeocodeStation(p){
   if(_postosGeoCache?.[p.codigo]){
     const cached=_postosGeoCache[p.codigo];
-    if(!cached.missing&&!cached.shared)postosQueueSharedGeo(p.codigo,cached);
-    return cached;
+    if(postosGeoFresh(p,cached)){if(!cached.missing&&!cached.shared)postosQueueSharedGeo(p.codigo,cached);return cached;}
+    delete _postosGeoCache[p.codigo];postosScheduleCacheSave();
   }
   const cep=postosFmtCep(p.cep);
   const street=encodeURIComponent(p.endereco);const city=encodeURIComponent(p.cidade);const state=encodeURIComponent(p.uf);const postal=encodeURIComponent(cep);const country=encodeURIComponent('Brasil');
