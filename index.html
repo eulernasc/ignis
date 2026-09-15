@@ -1,11 +1,11 @@
 <!DOCTYPE html>
-<!-- IGNIS v61 · Rede de Postos: preços + vínculos CNPJ + seleção de todos os combustíveis -->
+<!-- IGNIS v62 · Tela CTA: conciliação CTA × Ticket Log × O2P -->
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <!-- IGNIS v46 · correção de travamento Motoristas PX + cache de nomes + renderização única -->
-<meta name="ignis-build" content="2026-09-14-postos-precos-v3-relatorio-cesar-vinculos-cnpj">
+<meta name="ignis-build" content="2026-09-15-cta-reconciliacao-v1">
 <title>Ignis — Gestão Inteligente de Frotas e Equipamentos</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23ff6b2c'/%3E%3Cpath d='M36 9c1 8-4 11-7 15-3 4-5 8-2 14 2-4 5-6 9-8-1 8 5 11 5 17 6-4 9-10 8-17-1-10-7-17-13-21Z' fill='none' stroke='white' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -2553,6 +2553,13 @@ input[type="checkbox"]:indeterminate{background:rgba(233,95,50,.2);border-color:
 }
 
 </style>
+<style>
+/* IGNIS CTA · conciliador CTA × Ticket Log × O2P */
+.cta-shell{max-width:1500px;margin:0 auto;padding-bottom:40px}.cta-header-note{display:flex;align-items:center;gap:8px;color:var(--text3);font-size:11px;margin-top:5px}.cta-header-note svg{width:15px;height:15px;color:#4fd1a1}.cta-import-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-bottom:14px}.cta-import-card{position:relative;border:1px solid var(--border);background:linear-gradient(180deg,#121922,#10161d);border-radius:14px;padding:16px;cursor:pointer;transition:.16s;min-height:118px;overflow:hidden}.cta-import-card:hover{transform:translateY(-1px);border-color:rgba(233,95,50,.35);background:#141c25}.cta-import-card[data-state="ok"]{border-color:rgba(68,211,155,.34);box-shadow:inset 0 0 0 1px rgba(68,211,155,.05)}.cta-import-card[data-state="error"]{border-color:rgba(255,111,111,.45)}.cta-import-card[data-state="loading"]{border-color:rgba(91,155,255,.35)}.cta-import-top{display:flex;align-items:center;justify-content:space-between;gap:12px}.cta-import-name{font-size:14px;font-weight:750;color:#fff}.cta-import-pill{font:700 9px 'DM Sans';text-transform:uppercase;letter-spacing:.08em;padding:4px 7px;border-radius:999px;color:#99a6b5;background:#0b1117;border:1px solid rgba(255,255,255,.06)}.cta-import-file{font-size:12px;color:#9facba;margin-top:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cta-import-status{font-size:11px;color:#6f7d8b;margin-top:5px}.cta-import-card[data-state="ok"] .cta-import-status{color:#4fd1a1}.cta-import-card[data-state="error"] .cta-import-status{color:#ff8c8c}.cta-rules{display:grid;grid-template-columns:minmax(0,1fr) 190px 190px auto;gap:12px;align-items:end;border:1px solid var(--border);background:#111821;border-radius:14px;padding:14px;margin-bottom:14px}.cta-rules-copy{align-self:center}.cta-rules-title{font-size:13px;font-weight:750;color:#fff}.cta-rules-sub{font-size:11px;color:var(--text3);margin-top:4px;line-height:1.45}.cta-field label{display:block;color:#758496;font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px}.cta-field select,.cta-field input{width:100%;height:40px;border:1px solid var(--border);background:#171f2a;color:#fff;border-radius:10px;padding:0 11px;font:600 12px 'DM Sans';outline:none}.cta-field select:focus,.cta-field input:focus{border-color:rgba(233,95,50,.62)}.cta-kpis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;margin:14px 0}.cta-kpi{border:1px solid var(--border);background:#111821;border-radius:12px;padding:13px}.cta-kpi-label{font-size:9px;text-transform:uppercase;letter-spacing:.08em;font-weight:800;color:#718092}.cta-kpi-value{font:700 24px 'DM Mono',monospace;color:#fff;margin-top:6px}.cta-kpi-sub{font-size:9px;color:#667585;margin-top:3px}.cta-kpi.import .cta-kpi-value{color:#ff9a6d}.cta-kpi.dup .cta-kpi-value{color:#53d8a7}.cta-kpi.review .cta-kpi-value{color:#ffb86b}.cta-analysis-summary{border:1px solid rgba(83,216,167,.18);background:rgba(34,132,98,.065);color:#b7c5d2;border-radius:11px;padding:11px 13px;font-size:11px;margin-bottom:12px;line-height:1.5}.cta-analysis-summary strong{color:#fff}.cta-analysis-summary span{color:#6f8091}.cta-toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px}.cta-filters{display:flex;gap:7px;flex-wrap:wrap}.cta-filter-btn{border:1px solid var(--border);background:#111821;color:#8997a7;border-radius:9px;min-height:34px;padding:0 10px;font:650 11px 'DM Sans';cursor:pointer;transition:.14s}.cta-filter-btn:hover{border-color:rgba(255,255,255,.13);color:#fff}.cta-filter-btn.active{background:rgba(233,95,50,.11);border-color:rgba(233,95,50,.48);color:#fff}.cta-filter-btn span{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:18px;padding:0 5px;margin-left:5px;border-radius:999px;background:#0b1117;color:#95a4b4;font:700 9px 'DM Mono',monospace}.cta-search{min-width:210px}.cta-table-card{border:1px solid var(--border);border-radius:14px;background:#10161e;overflow:hidden}.cta-table-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 14px;border-bottom:1px solid var(--border)}.cta-table-head-title{font-size:13px;font-weight:750;color:#fff}.cta-table-head-sub{font-size:10px;color:#6e7c8b;margin-top:3px}.cta-table-wrap{overflow:auto;max-height:61vh}.cta-table{width:100%;border-collapse:collapse;min-width:1250px}.cta-table th{position:sticky;top:0;z-index:3;background:#111923;color:#718093;font-size:9px;text-transform:uppercase;letter-spacing:.07em;font-weight:800;text-align:left;padding:10px 11px;border-bottom:1px solid var(--border)}.cta-table td{padding:11px;border-bottom:1px solid rgba(255,255,255,.045);vertical-align:top;color:#b9c4cf;font-size:11px}.cta-row{cursor:pointer}.cta-row:hover td{background:rgba(255,255,255,.025)!important}.cta-plate{font:700 12px 'DM Mono',monospace;color:#fff!important}.cta-status,.cta-action{display:inline-flex;align-items:center;border:1px solid currentColor;border-radius:999px;padding:4px 7px;font-size:9px;font-weight:750;white-space:nowrap}.cta-status.green,.cta-action.green{color:#50d7a4;background:rgba(80,215,164,.07)}.cta-status.orange,.cta-action.orange{color:#ff9363;background:rgba(255,147,99,.07)}.cta-status.amber,.cta-action.amber{color:#ffc46b;background:rgba(255,196,107,.07)}.cta-status.red,.cta-action.red{color:#ff7d7d;background:rgba(255,125,125,.07)}.cta-status.blue,.cta-action.blue{color:#7faefc;background:rgba(127,174,252,.07)}.cta-status.gray,.cta-action.gray{color:#97a3b1;background:rgba(151,163,177,.06)}.cta-src-main{color:#d7dfe7;font-size:10.5px;font-weight:650}.cta-src-sub{color:#788797;font-size:9.5px;margin-top:3px}.cta-src-sub b{color:#c8d3de}.cta-ellipsis{max-width:210px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.cta-source-empty{color:#536170;font-size:10px;font-style:italic}.cta-reason{max-width:230px;color:#8796a7!important;line-height:1.4}.cta-empty{min-height:180px;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:7px;color:#6f7d8b}.cta-empty b{color:#c9d3dd;font-size:14px}.cta-empty span{max-width:530px;font-size:11px;line-height:1.5}.cta-detail-modal{max-width:980px!important}.cta-detail-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.cta-detail-status{display:flex;align-items:center;gap:9px;flex-wrap:wrap;color:#7f8e9d;font-size:10px;margin-top:8px}.cta-detail-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:18px}.cta-detail-card{border:1px solid var(--border);background:#101720;border-radius:12px;padding:14px;min-height:155px}.cta-detail-label{font-size:9px;text-transform:uppercase;letter-spacing:.09em;color:#778696;font-weight:800}.cta-detail-date{font-size:10px;color:#8795a5;margin-top:10px}.cta-detail-big{font:700 24px 'DM Mono',monospace;color:#fff;margin:10px 0}.cta-detail-card>div:not(.cta-detail-label):not(.cta-detail-date):not(.cta-detail-big){font-size:11px;color:#b3bfca;margin-top:5px}.cta-detail-muted{color:#6f7d8c!important;font-size:10px!important;line-height:1.4}.cta-decision-box{border-top:1px solid var(--border);margin-top:18px;padding-top:16px}.cta-decision-title{font-size:13px;font-weight:750;color:#fff}.cta-decision-sub{font-size:10px;color:#748292;margin-top:4px}.cta-decision-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+@media(max-width:1100px){.cta-import-grid{grid-template-columns:1fr}.cta-rules{grid-template-columns:1fr 1fr}.cta-rules-copy{grid-column:1/-1}.cta-rules .btn{width:100%}.cta-kpis{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:700px){.cta-shell{padding-bottom:90px}.cta-rules{grid-template-columns:1fr}.cta-kpis{grid-template-columns:repeat(2,1fr)}.cta-toolbar{align-items:stretch}.cta-search{width:100%;min-width:0}.cta-detail-grid{grid-template-columns:1fr}.cta-detail-modal{max-height:88vh;overflow:auto}.cta-table-wrap{max-height:none}.cta-table{min-width:1120px}}
+
+</style>
 </head>
 <body>
 <div id="ignis-sync-banner" class="ignis-sync-banner" data-state="syncing" role="status" aria-live="polite" aria-atomic="true">
@@ -2668,6 +2675,7 @@ input[type="checkbox"]:indeterminate{background:rgba(233,95,50,.2);border-color:
 
     <div class="nav-section-label">Operação</div>
     <div class="nav-item" onclick="showPage('abastecimentos',this)"><span class="icon"><svg class="ui-icon" viewBox="0 0 24 24"><path d="M3 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18"/><path d="M3 9h12"/><path d="M15 7h2l3 3v8a2 2 0 0 1-4 0v-3"/><path d="M6 5h6"/></svg></span><span class="nav-label">Abastecimentos</span></div>
+    <div class="nav-item" id="nav-cta" onclick="showPage('cta',this);ctaOnShow()"><span class="icon"><svg class="ui-icon" viewBox="0 0 24 24"><path d="M4 6h16"/><path d="M7 3 4 6l3 3"/><path d="M20 18H4"/><path d="m17 15 3 3-3 3"/><circle cx="9" cy="12" r="2"/><circle cx="15" cy="12" r="2"/></svg></span><span class="nav-label">CTA</span></div>
     <div class="nav-item" id="nav-postos" onclick="showPage('postos',this);postosOnShow()"><span class="icon"><svg class="ui-icon" viewBox="0 0 24 24"><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></svg></span><span class="nav-label">Rede de Postos</span></div>
     <div class="nav-item" onclick="showPage('maquinas',this)"><span class="icon"><svg class="ui-icon" viewBox="0 0 24 24"><rect x="3" y="5" width="7" height="6" rx="1.5"/><rect x="14" y="5" width="7" height="6" rx="1.5"/><rect x="7" y="15" width="10" height="5" rx="1.5"/></svg></span><span class="nav-label">Frota e Equipamentos</span></div>
     <div class="nav-item" onclick="showPage('motoristas',this)"><span class="icon"><svg class="ui-icon" viewBox="0 0 24 24"><circle cx="12" cy="7" r="3"/><path d="M5 21v-2a7 7 0 0 1 14 0v2"/><path d="M8 14h8"/></svg></span><span class="nav-label">Motoristas</span></div>
@@ -3471,6 +3479,77 @@ input[type="checkbox"]:indeterminate{background:rgba(233,95,50,.2);border-color:
       <div id="abast-table-container"></div>
     </div>
   </div>
+
+  <!-- CTA · CONCILIAÇÃO CTA × TICKET LOG × O2P -->
+  <div id="page-cta" class="page">
+    <div class="cta-shell">
+      <div class="page-header">
+        <div>
+          <div class="page-title page-title-icon"><span class="title-icon"><svg class="ui-icon" viewBox="0 0 24 24"><path d="M4 6h16"/><path d="M7 3 4 6l3 3"/><path d="M20 18H4"/><path d="m17 15 3 3-3 3"/><circle cx="9" cy="12" r="2"/><circle cx="15" cy="12" r="2"/></svg></span>CTA</div>
+          <div class="page-sub">Conciliação de abastecimentos entre CTA Smart, Ticket Log e O2P</div>
+          <div class="cta-header-note"><svg class="ui-icon" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/><path d="m9 12 2 2 4-4"/></svg>Os arquivos são analisados somente nesta tela. Nada é gravado no Firebase nem enviado ao O2P.</div>
+        </div>
+        <div class="header-actions"><button class="btn btn-secondary" onclick="ctaReset()">Limpar análise</button></div>
+      </div>
+
+      <div class="cta-import-grid">
+        <div class="cta-import-card" data-cta-import="cta" data-state="empty" onclick="document.getElementById('cta-file-cta').click()">
+          <div class="cta-import-top"><div class="cta-import-name">CTA Smart</div><span class="cta-import-pill">.xls / .xlsx</span></div>
+          <div class="cta-import-file">Nenhum arquivo</div><div class="cta-import-status">Clique para selecionar</div>
+          <input id="cta-file-cta" type="file" accept=".xls,.xlsx" hidden onchange="ctaImportFile('cta',this)">
+        </div>
+        <div class="cta-import-card" data-cta-import="ticket" data-state="empty" onclick="document.getElementById('cta-file-ticket').click()">
+          <div class="cta-import-top"><div class="cta-import-name">Ticket Log</div><span class="cta-import-pill">.xls / .xlsx</span></div>
+          <div class="cta-import-file">Nenhum arquivo</div><div class="cta-import-status">Clique para selecionar</div>
+          <input id="cta-file-ticket" type="file" accept=".xls,.xlsx" hidden onchange="ctaImportFile('ticket',this)">
+        </div>
+        <div class="cta-import-card" data-cta-import="o2p" data-state="empty" onclick="document.getElementById('cta-file-o2p').click()">
+          <div class="cta-import-top"><div class="cta-import-name">O2P</div><span class="cta-import-pill">.xls / .xlsx</span></div>
+          <div class="cta-import-file">Nenhum arquivo</div><div class="cta-import-status">Clique para selecionar</div>
+          <input id="cta-file-o2p" type="file" accept=".xls,.xlsx" hidden onchange="ctaImportFile('o2p',this)">
+        </div>
+      </div>
+
+      <div class="cta-rules">
+        <div class="cta-rules-copy"><div class="cta-rules-title">Regras da comparação</div><div class="cta-rules-sub">Placa é obrigatória. Odômetro igual tem peso forte. A CTA usa tanto a hora inicial quanto a hora final para encontrar o melhor cruzamento.</div></div>
+        <div class="cta-field"><label>Janela de horário</label><select id="cta-time-tol"><option value="15">Até 15 min</option><option value="30">Até 30 min</option><option value="60" selected>Até 1 hora</option><option value="120">Até 2 horas</option><option value="1440">Mesmo dia</option></select></div>
+        <div class="cta-field"><label>Tolerância de litros</label><select id="cta-liters-tol"><option value="1">Até 1 L</option><option value="2">Até 2 L</option><option value="3" selected>Até 3 L</option><option value="5">Até 5 L</option></select></div>
+        <button class="btn btn-primary" onclick="ctaAnalyze()">Analisar comparação</button>
+      </div>
+
+      <div class="cta-kpis">
+        <div class="cta-kpi"><div class="cta-kpi-label">CTA</div><div class="cta-kpi-value" id="cta-kpi-cta">0</div><div class="cta-kpi-sub">registros lidos</div></div>
+        <div class="cta-kpi"><div class="cta-kpi-label">Ticket</div><div class="cta-kpi-value" id="cta-kpi-ticket">0</div><div class="cta-kpi-sub">registros lidos</div></div>
+        <div class="cta-kpi"><div class="cta-kpi-label">O2P</div><div class="cta-kpi-value" id="cta-kpi-o2p">0</div><div class="cta-kpi-sub">registros lidos</div></div>
+        <div class="cta-kpi import"><div class="cta-kpi-label">Usar / importar CTA</div><div class="cta-kpi-value" id="cta-kpi-import">0</div><div class="cta-kpi-sub">sem duplicação detectada</div></div>
+        <div class="cta-kpi dup"><div class="cta-kpi-label">Duplicados</div><div class="cta-kpi-value" id="cta-kpi-dup">0</div><div class="cta-kpi-sub">confirmados automaticamente</div></div>
+        <div class="cta-kpi review"><div class="cta-kpi-label">Revisar</div><div class="cta-kpi-value" id="cta-kpi-review">0</div><div class="cta-kpi-sub">decisão manual necessária</div></div>
+      </div>
+
+      <div class="cta-analysis-summary" id="cta-analysis-summary">Importe os três arquivos para iniciar a conciliação. Nada é enviado automaticamente para o O2P ou Firebase.</div>
+
+      <div class="cta-toolbar">
+        <div class="cta-filters">
+          <button class="cta-filter-btn active" data-filter="all" onclick="ctaSetFilter('all')">Todos <span>0</span></button>
+          <button class="cta-filter-btn" data-filter="import" onclick="ctaSetFilter('import')">Usar CTA <span>0</span></button>
+          <button class="cta-filter-btn" data-filter="duplicate" onclick="ctaSetFilter('duplicate')">Duplicados <span>0</span></button>
+          <button class="cta-filter-btn" data-filter="review" onclick="ctaSetFilter('review')">Revisar <span>0</span></button>
+          <button class="cta-filter-btn" data-filter="already" onclick="ctaSetFilter('already')">CTA já no O2P <span>0</span></button>
+          <button class="cta-filter-btn" data-filter="ok" onclick="ctaSetFilter('ok')">Ticket OK <span>0</span></button>
+          <button class="cta-filter-btn" data-filter="o2p" onclick="ctaSetFilter('o2p')">Somente O2P <span>0</span></button>
+        </div>
+        <input id="cta-search" class="filter-input cta-search" placeholder="Buscar placa..." oninput="ctaSearch(this.value)">
+      </div>
+
+      <div class="cta-table-card">
+        <div class="cta-table-head"><div><div class="cta-table-head-title">Conciliação dos abastecimentos</div><div class="cta-table-head-sub">Clique em qualquer linha para comparar CTA, Ticket e O2P lado a lado.</div></div></div>
+        <div class="cta-table-wrap">
+          <table class="cta-table"><thead><tr><th>Status</th><th>Placa</th><th>CTA Smart</th><th>Ticket Log</th><th>O2P</th><th>Por que o IGNIS classificou assim</th><th>Ação sugerida</th><th></th></tr></thead><tbody id="cta-results-body"><tr><td colspan="8"><div class="cta-empty"><b>Aguardando análise</b><span>Importe CTA, Ticket Log e O2P. Quando os três arquivos estiverem prontos, o IGNIS compara placa, data/hora, odômetro e litros.</span></div></td></tr></tbody></table>
+        </div>
+      </div>
+    </div>
+  </div>
+
 
   <!-- MÁQUINAS -->
   <div id="page-maquinas" class="page">
@@ -19636,6 +19715,211 @@ async function postosBuscarRota(reset=true){
 }
 function postosToggleMore(show,label='',fn=null){const b=document.getElementById('postos-load-more');if(!b)return;b.style.display=show?'inline-flex':'none';b.textContent=label||'Processar mais';b.onclick=fn||null;}
 function postosLimparCache(){if(!confirm('Limpar somente os dados de localização guardados neste aparelho? As coordenadas compartilhadas no Firebase serão mantidas.'))return;_postosGeoCache={};_postosPlaceCache={};_postosReverseCache={};_postosCepCache={};_postosMunicipioCenters=null;try{localStorage.removeItem(POSTOS_GEO_CACHE_KEY);localStorage.removeItem(POSTOS_PLACE_CACHE_KEY);localStorage.removeItem(POSTOS_REVERSE_CACHE_KEY);localStorage.removeItem(POSTOS_CEP_CACHE_KEY);localStorage.removeItem(POSTOS_MUNICIPIOS_CACHE_KEY);}catch(e){}postosUpdateSummary();postosSetStatus('Dados locais limpos. Na próxima pesquisa, o IGNIS baixará novamente as coordenadas compartilhadas no Firebase e refará as localizações necessárias.','success');}
+
+</script>
+
+<script>
+/* IGNIS CTA · conciliador temporário CTA × Ticket Log × O2P */
+window._ctaRecon = window._ctaRecon || {
+  cta:[], ticket:[], o2p:[], files:{}, events:[], decisions:{}, filter:'all', search:'',
+  settings:{ timeTol:60, litersTol:3 }
+};
+
+function ctaEsc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+function ctaNorm(v){return String(v??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().replace(/[^A-Z0-9]/g,'');}
+function ctaNum(v){
+  if(typeof v==='number'&&Number.isFinite(v))return v;
+  let s=String(v??'').trim(); if(!s)return 0;
+  if(s.includes(',')&&s.includes('.')) s=s.lastIndexOf(',')>s.lastIndexOf('.')?s.replace(/\./g,'').replace(',','.'):s.replace(/,/g,'');
+  else if(s.includes(',')) s=s.replace(',','.');
+  const n=Number(s.replace(/[^0-9+\-.]/g,'')); return Number.isFinite(n)?n:0;
+}
+function ctaPlate(v){return String(v??'').toUpperCase().replace(/[^A-Z0-9]/g,'').trim();}
+function ctaParseDate(v){
+  if(v instanceof Date&&!isNaN(v))return v.getTime();
+  if(typeof v==='number'&&Number.isFinite(v)){
+    try{const d=window.XLSX?.SSF?.parse_date_code?.(v);if(d&&d.y)return new Date(d.y,d.m-1,d.d,d.H||0,d.M||0,Math.floor(d.S||0)).getTime();}catch(e){}
+    const epoch=new Date(1899,11,30).getTime(); return epoch+v*86400000;
+  }
+  const s=String(v??'').trim(); if(!s)return 0;
+  let m=s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})(?:[ T]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
+  if(m)return new Date(+m[3],+m[2]-1,+m[1],+(m[4]||0),+(m[5]||0),+(m[6]||0)).getTime();
+  m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/);
+  if(m)return new Date(+m[1],+m[2]-1,+m[3],+(m[4]||0),+(m[5]||0),+(m[6]||0)).getTime();
+  const d=new Date(s); return isNaN(d)?0:d.getTime();
+}
+function ctaFmtDate(ts){if(!ts)return '—';return new Date(ts).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});}
+function ctaFmtN(v,d=1){const n=Number(v);return Number.isFinite(n)?n.toLocaleString('pt-BR',{minimumFractionDigits:d,maximumFractionDigits:d}):'—';}
+function ctaDay(ts){if(!ts)return '';const d=new Date(ts);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
+function ctaTimeDiff(a,b){
+  const aa=[a?.ts,a?.tsStart,a?.tsEnd].filter(x=>Number.isFinite(x)&&x>0),bb=[b?.ts,b?.tsStart,b?.tsEnd].filter(x=>Number.isFinite(x)&&x>0);
+  if(!aa.length||!bb.length)return Infinity;let best=Infinity;for(const x of aa)for(const y of bb)best=Math.min(best,Math.abs(x-y)/60000);return best;
+}
+function ctaOdoValid(r){return Number(r?.odo)>0;}
+function ctaOdoEqual(a,b){return ctaOdoValid(a)&&ctaOdoValid(b)&&Math.abs(Number(a.odo)-Number(b.odo))<=1;}
+function ctaSameDay(a,b){const aa=[a?.ts,a?.tsStart,a?.tsEnd].filter(Boolean),bb=[b?.ts,b?.tsStart,b?.tsEnd].filter(Boolean);return aa.some(x=>bb.some(y=>ctaDay(x)===ctaDay(y)));}
+function ctaLitDiff(a,b){return Math.abs(Number(a?.liters||0)-Number(b?.liters||0));}
+function ctaFirstIdx(heads,preds){for(let i=0;i<heads.length;i++){const h=heads[i];if(preds.some(p=>typeof p==='string'?h===p:p.test(h)))return i;}return -1;}
+function ctaCols(kind,row){
+  const h=(row||[]).map(ctaNorm), get=ps=>ctaFirstIdx(h,ps);
+  if(kind==='cta'){
+    const c={plate:get(['PLACA']),liters:get(['VOLUMEL','VOLUMELITROS',/^VOLUME.*L$/]),odo:get(['ODOMETRO','HODOMETRO']),start:get([/^DATAHORAIN/,/^DATAHORAINICIAL/]),end:get(['DATAHORAFINAL']),driver:get(['MOTORISTA']),posto:get(['POSTO']),id:get(['CODEXPORTACAONUMERICO','CODEXPORTACAONUMRICO'])};
+    c.date=c.end>=0?c.end:c.start; c.ok=c.plate>=0&&c.liters>=0&&c.odo>=0&&(c.start>=0||c.end>=0); return c;
+  }
+  if(kind==='ticket'){
+    const c={plate:get(['PLACA']),liters:get(['LITROS']),odo:get(['HODOMETROOUHORIMETRO','HODOMETRO']),date:get(['DATATRANSACAO']),driver:get(['NOMEMOTORISTA']),posto:get(['NOMEESTABELECIMENTO']),id:get(['CODIGOTRANSACAO'])};
+    c.ok=c.plate>=0&&c.liters>=0&&c.odo>=0&&c.date>=0; return c;
+  }
+  const c={plate:get(['PLACA']),liters:get(['LITROSABAST','LITROSABASTECIDOS','LITROS']),odo:get(['ODOMETRO','HODOMETRO']),date:get(['DATA']),driver:get(['MOTORISTA']),posto:get(['POSTO']),tipo:get(['TIPO']),id:get(['ID','CODIGO'])};
+  c.ok=c.plate>=0&&c.liters>=0&&c.odo>=0&&c.date>=0; return c;
+}
+function ctaFindSheet(wb,kind){
+  for(const name of wb.SheetNames||[]){
+    const ws=wb.Sheets[name],matrix=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:true});
+    for(let r=0;r<Math.min(35,matrix.length);r++){const cols=ctaCols(kind,matrix[r]||[]);if(cols.ok)return{name,matrix,headerRow:r,cols};}
+  }
+  return null;
+}
+function ctaParseRows(found,kind){
+  const {matrix,headerRow,cols}=found, out=[];
+  for(let i=headerRow+1;i<matrix.length;i++){
+    const row=matrix[i]||[], plate=ctaPlate(row[cols.plate]), liters=ctaNum(row[cols.liters]), odo=ctaNum(row[cols.odo]);
+    if(!plate||liters<=0)continue;
+    const rec={source:kind,plate,liters,odo,rowNo:i+1,driver:cols.driver>=0?String(row[cols.driver]||'').trim():'',posto:cols.posto>=0?String(row[cols.posto]||'').trim():'',rawId:cols.id>=0?String(row[cols.id]||'').trim():''};
+    if(kind==='cta'){rec.tsStart=cols.start>=0?ctaParseDate(row[cols.start]):0;rec.tsEnd=cols.end>=0?ctaParseDate(row[cols.end]):0;rec.ts=rec.tsEnd||rec.tsStart;}
+    else rec.ts=ctaParseDate(row[cols.date]);
+    if(kind==='o2p')rec.tipo=cols.tipo>=0?String(row[cols.tipo]||'').trim():'';
+    if(!rec.ts)continue; out.push(rec);
+  }
+  return out;
+}
+async function ctaImportFile(kind,input){
+  const file=input?.files?.[0];if(!file)return;
+  try{
+    if(!await ensureXLSXReady())throw new Error('O módulo de Excel ainda não carregou.');
+    ctaSetImportState(kind,'loading',file.name,'Lendo planilha...');
+    const buf=await file.arrayBuffer(),wb=XLSX.read(buf,{type:'array',cellDates:false,dense:false}),found=ctaFindSheet(wb,kind);
+    if(!found)throw new Error(kind==='cta'?'Não encontrei as colunas da CTA (Data/Hora, Placa, Volume e Odômetro).':kind==='ticket'?'Não encontrei as colunas da Ticket Log (Data Transação, Placa, Litros e Hodômetro).':'Não encontrei as colunas do O2P (Data, Placa, Litros Abast. e Odômetro).');
+    const rows=ctaParseRows(found,kind);if(!rows.length)throw new Error('O arquivo foi reconhecido, mas não encontrei abastecimentos válidos.');
+    window._ctaRecon[kind]=rows;window._ctaRecon.files[kind]=file.name;window._ctaRecon.events=[];
+    ctaSetImportState(kind,'ok',file.name,`${rows.length} abastecimento(s) válido(s)`);ctaRender();
+    if(_ctaRecon.cta.length&&_ctaRecon.ticket.length&&_ctaRecon.o2p.length)ctaAnalyze();
+    showToast(`${kind==='cta'?'CTA':kind==='ticket'?'Ticket Log':'O2P'}: ${rows.length} registros lidos.`,'success');
+  }catch(e){console.error('CTA import',kind,e);ctaSetImportState(kind,'error',file.name,e.message||'Falha ao ler arquivo');showToast(e.message||'Erro ao importar planilha','error');}
+  finally{if(input)input.value='';}
+}
+function ctaSetImportState(kind,stateName,fileName,msg){
+  const box=document.querySelector(`[data-cta-import="${kind}"]`);if(!box)return;box.dataset.state=stateName;
+  const f=box.querySelector('.cta-import-file'),s=box.querySelector('.cta-import-status');if(f)f.textContent=fileName||'Nenhum arquivo';if(s)s.textContent=msg||'';
+}
+function ctaPairCandidates(ctaRows,ticketRows){
+  const tol=Number(_ctaRecon.settings.timeTol||60),lt=Number(_ctaRecon.settings.litersTol||3),list=[];
+  const byPlate=new Map();ticketRows.forEach((r,j)=>{if(!byPlate.has(r.plate))byPlate.set(r.plate,[]);byPlate.get(r.plate).push([r,j]);});
+  ctaRows.forEach((a,i)=>{for(const [b,j] of (byPlate.get(a.plate)||[])){
+    const td=ctaTimeDiff(a,b),ld=ctaLitDiff(a,b),odo=ctaOdoEqual(a,b),same=ctaSameDay(a,b),aO=ctaOdoValid(a),bO=ctaOdoValid(b);let type='',score=0;
+    if(odo&&same&&td<=tol){type=ld<=lt?'confirmed':'divergent';score=100+(td<=15?25:td<=60?18:8)+(ld<=lt?20:Math.max(0,8-Math.min(8,ld/20)));}
+    else if(odo&&same){type='suspect';score=78+(td<=180?12:0)+(ld<=lt?8:0);}
+    else if((!aO||!bO)&&same&&td<=15){type='suspect';score=70+(ld<=lt?15:0);}
+    else if((!aO||!bO)&&same&&td<=tol&&ld<=lt){type='suspect';score=65;}
+    else continue;
+    list.push({i,j,a,b,type,score,td,ld,odo});
+  }});
+  list.sort((x,y)=>y.score-x.score||x.td-y.td||x.ld-y.ld);const usedA=new Set(),usedB=new Set(),pairs=[];
+  for(const c of list){if(usedA.has(c.i)||usedB.has(c.j))continue;usedA.add(c.i);usedB.add(c.j);pairs.push(c);}
+  return{pairs,usedA,usedB};
+}
+function ctaBuildEvents(){
+  const {pairs,usedA,usedB}=ctaPairCandidates(_ctaRecon.cta,_ctaRecon.ticket),events=[];let seq=1;
+  pairs.forEach(p=>events.push({id:`E${seq++}`,cta:p.a,ticket:p.b,pairType:p.type,pairMeta:{timeDiff:p.td,literDiff:p.ld,odoEq:p.odo}}));
+  _ctaRecon.cta.forEach((r,i)=>{if(!usedA.has(i))events.push({id:`E${seq++}`,cta:r});});
+  _ctaRecon.ticket.forEach((r,i)=>{if(!usedB.has(i))events.push({id:`E${seq++}`,ticket:r});});
+  const tol=Number(_ctaRecon.settings.timeTol||60),lt=Number(_ctaRecon.settings.litersTol||3),cands=[];
+  events.forEach((ev,ei)=>{const srcs=[ev.cta,ev.ticket].filter(Boolean);_ctaRecon.o2p.forEach((o,oi)=>{if(!srcs.some(s=>s.plate===o.plate))return;let best=null;
+    for(const s of srcs){if(s.plate!==o.plate)continue;const td=ctaTimeDiff(s,o),ld=ctaLitDiff(s,o),odo=ctaOdoEqual(s,o),same=ctaSameDay(s,o);let score=-1;
+      if(odo&&same)score=95+(td<=15?24:td<=tol?18:td<=180?10:3)+(ld<=lt?18:0);
+      else if(same&&td<=15)score=72+(ld<=lt?15:0);
+      else if(same&&td<=tol&&ld<=lt)score=66;
+      if(score>=0&&(!best||score>best.score))best={score,td,ld,odo,source:s.source};
+    }
+    if(best)cands.push({ei,oi,...best});
+  });});
+  cands.sort((a,b)=>b.score-a.score||a.td-b.td||a.ld-b.ld);const usedE=new Set(),usedO=new Set();
+  for(const c of cands){if(usedE.has(c.ei)||usedO.has(c.oi))continue;events[c.ei].o2p=_ctaRecon.o2p[c.oi];events[c.ei].o2pMeta={timeDiff:c.td,literDiff:c.ld,odoEq:c.odo,source:c.source};usedE.add(c.ei);usedO.add(c.oi);}
+  _ctaRecon.o2p.forEach((r,i)=>{if(!usedO.has(i))events.push({id:`E${seq++}`,o2p:r});});
+  return events;
+}
+function ctaBaseClassification(ev){
+  const c=!!ev.cta,t=!!ev.ticket,o=!!ev.o2p,lt=Number(_ctaRecon.settings.litersTol||3);
+  if(c&&t){
+    if(ev.pairType==='confirmed')return o?{cat:'duplicate',label:'Duplicado confirmado',action:'NÃO IMPORTAR CTA',tone:'green'}:{cat:'review',label:'Duplicado CTA × Ticket sem O2P',action:'REVISAR',tone:'amber'};
+    if(ev.pairType==='divergent')return{cat:'review',label:'Provável duplicidade · litros divergentes',action:'REVISAR',tone:'red'};
+    return{cat:'review',label:'Possível duplicidade',action:'REVISAR',tone:'amber'};
+  }
+  if(c&&!t){
+    if(o){if(ev.o2pMeta?.odoEq&&Number(ev.o2pMeta?.literDiff)<=lt)return{cat:'already',label:'CTA já está no O2P',action:'NÃO IMPORTAR',tone:'blue'};return{cat:'review',label:'CTA × O2P divergente',action:'REVISAR',tone:'red'};}
+    return{cat:'import',label:'Somente CTA',action:'IMPORTAR CTA',tone:'orange'};
+  }
+  if(t&&!c){return o?{cat:'ok',label:'Ticket já está no O2P',action:'OK',tone:'green'}:{cat:'review',label:'Ticket sem correspondência no O2P',action:'REVISAR',tone:'amber'};}
+  if(o)return{cat:'o2p',label:'Somente O2P',action:'MANTER / CONFERIR',tone:'gray'};
+  return{cat:'review',label:'Revisar',action:'REVISAR',tone:'amber'};
+}
+function ctaClassification(ev){
+  const d=_ctaRecon.decisions[ev.id];if(!d)return ctaBaseClassification(ev);
+  if(d==='cta')return{cat:'import',label:'Revisado · mesmo evento, usar CTA',action:ev.o2p?'USAR CTA NA RECONSTRUÇÃO':'IMPORTAR CTA',tone:'blue'};
+  if(d==='ticket')return{cat:'ok',label:'Revisado · mesmo evento, usar Ticket',action:'NÃO IMPORTAR CTA',tone:'green'};
+  if(d==='separate')return{cat:'import',label:'Revisado · são eventos diferentes',action:ev.cta&&!ev.o2p?'IMPORTAR CTA + MANTER TICKET':'MANTER OS DOIS',tone:'orange'};
+  return ctaBaseClassification(ev);
+}
+function ctaReason(ev){
+  if(ev.cta&&ev.ticket){const m=ev.pairMeta||{},parts=[];parts.push(m.odoEq?'Odômetro igual':'Odômetro não confirmou');if(Number.isFinite(m.timeDiff))parts.push(`${Math.round(m.timeDiff)} min`);if(Number.isFinite(m.literDiff))parts.push(`Δ ${ctaFmtN(m.literDiff,1)} L`);return parts.join(' · ');}
+  if(ev.o2p&&(ev.cta||ev.ticket)){const m=ev.o2pMeta||{},parts=[`O2P × ${(m.source||'fonte').toUpperCase()}`];parts.push(m.odoEq?'odômetro igual':'odômetro não confirmou');if(Number.isFinite(m.timeDiff))parts.push(`${Math.round(m.timeDiff)} min`);if(Number.isFinite(m.literDiff))parts.push(`Δ ${ctaFmtN(m.literDiff,1)} L`);return parts.join(' · ');}
+  if(ev.cta)return'Não achei Ticket nem O2P compatível para este abastecimento CTA.';
+  if(ev.ticket)return'Não achei CTA compatível para este abastecimento Ticket.';
+  return'Registro existe no O2P, mas não foi relacionado aos arquivos CTA/Ticket desta análise.';
+}
+function ctaAnalyze(){
+  _ctaRecon.settings.timeTol=Number(document.getElementById('cta-time-tol')?.value||60);_ctaRecon.settings.litersTol=Number(document.getElementById('cta-liters-tol')?.value||3);
+  if(!_ctaRecon.cta.length||!_ctaRecon.ticket.length||!_ctaRecon.o2p.length){showToast('Importe CTA, Ticket Log e O2P antes de analisar.','error');return;}
+  _ctaRecon.decisions={};_ctaRecon.events=ctaBuildEvents();ctaRender();showToast('Conciliação concluída. Revise os itens marcados em amarelo/vermelho.','success');
+}
+function ctaSourceHtml(r,label){
+  if(!r)return`<div class="cta-source-empty">Sem ${ctaEsc(label)}</div>`;
+  const time=r.source==='cta'&&r.tsStart&&r.tsEnd?`${ctaFmtDate(r.tsStart)} → ${new Date(r.tsEnd).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`:ctaFmtDate(r.ts);
+  return`<div class="cta-src-main">${ctaEsc(time)}</div><div class="cta-src-sub"><b>${ctaFmtN(r.liters,2)} L</b> · Odômetro ${r.odo?ctaFmtN(r.odo,0):'0/ausente'}</div>${r.posto?`<div class="cta-src-sub cta-ellipsis" title="${ctaEsc(r.posto)}">${ctaEsc(r.posto)}</div>`:''}`;
+}
+function ctaFilteredEvents(){
+  const f=_ctaRecon.filter||'all',q=String(_ctaRecon.search||'').trim().toUpperCase();let rows=_ctaRecon.events.slice();
+  if(f!=='all')rows=rows.filter(e=>ctaClassification(e).cat===f);if(q)rows=rows.filter(e=>(e.cta?.plate||e.ticket?.plate||e.o2p?.plate||'').includes(q));
+  const pr={review:0,import:1,duplicate:2,already:3,ok:4,o2p:5};rows.sort((a,b)=>(pr[ctaClassification(a).cat]??9)-(pr[ctaClassification(b).cat]??9)||((a.cta?.plate||a.ticket?.plate||a.o2p?.plate||'').localeCompare(b.cta?.plate||b.ticket?.plate||b.o2p?.plate||'')));return rows;
+}
+function ctaRender(){
+  const events=_ctaRecon.events||[],cats={all:events.length,import:0,duplicate:0,review:0,already:0,ok:0,o2p:0};events.forEach(e=>{const c=ctaClassification(e).cat;cats[c]=(cats[c]||0)+1;});
+  const set=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=String(v)};set('cta-kpi-cta',_ctaRecon.cta.length);set('cta-kpi-ticket',_ctaRecon.ticket.length);set('cta-kpi-o2p',_ctaRecon.o2p.length);set('cta-kpi-import',cats.import);set('cta-kpi-dup',cats.duplicate);set('cta-kpi-review',cats.review);
+  document.querySelectorAll('.cta-filter-btn').forEach(b=>{const key=b.dataset.filter;b.classList.toggle('active',key===_ctaRecon.filter);const n=b.querySelector('span');if(n)n.textContent=cats[key]??0;});
+  const summary=document.getElementById('cta-analysis-summary');if(summary){summary.innerHTML=events.length?`<strong>${events.length}</strong> eventos consolidados · <strong>${cats.import}</strong> para importar/usar CTA · <strong>${cats.duplicate}</strong> duplicado(s) confirmado(s) · <strong>${cats.review}</strong> item(ns) para revisão manual. <span>Nada desta tela é gravado no Firebase.</span>`:'Importe os três arquivos para iniciar a conciliação. Nada é enviado automaticamente para o O2P ou Firebase.';}
+  const body=document.getElementById('cta-results-body');if(!body)return;const rows=ctaFilteredEvents();
+  if(!events.length){body.innerHTML=`<tr><td colspan="9"><div class="cta-empty"><b>Aguardando análise</b><span>Importe CTA, Ticket Log e O2P. Quando os três arquivos estiverem prontos, o IGNIS compara placa, data/hora, odômetro e litros.</span></div></td></tr>`;return;}
+  if(!rows.length){body.innerHTML=`<tr><td colspan="9"><div class="cta-empty"><b>Nenhum item neste filtro</b><span>Altere o filtro ou a busca por placa.</span></div></td></tr>`;return;}
+  body.innerHTML=rows.slice(0,600).map(ev=>{const c=ctaClassification(ev),plate=ev.cta?.plate||ev.ticket?.plate||ev.o2p?.plate||'—';return`<tr class="cta-row" onclick="ctaOpenDetail('${ev.id}')"><td><span class="cta-status ${c.tone}">${ctaEsc(c.label)}</span></td><td class="cta-plate">${ctaEsc(plate)}</td><td>${ctaSourceHtml(ev.cta,'CTA')}</td><td>${ctaSourceHtml(ev.ticket,'Ticket')}</td><td>${ctaSourceHtml(ev.o2p,'O2P')}</td><td class="cta-reason">${ctaEsc(ctaReason(ev))}</td><td><span class="cta-action ${c.tone}">${ctaEsc(c.action)}</span></td><td><button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();ctaOpenDetail('${ev.id}')">Detalhes</button></td></tr>`;}).join('');
+}
+function ctaSetFilter(f){_ctaRecon.filter=f;ctaRender();}
+function ctaSearch(v){_ctaRecon.search=String(v||'');ctaRender();}
+function ctaOpenDetail(id){
+  const ev=_ctaRecon.events.find(e=>e.id===id);if(!ev)return;const c=ctaClassification(ev);let ov=document.getElementById('cta-detail-modal');if(!ov){ov=document.createElement('div');ov.id='cta-detail-modal';ov.className='modal-overlay';document.body.appendChild(ov);ov.addEventListener('click',e=>{if(e.target===ov)ov.classList.remove('open');});}
+  const card=(r,label)=>`<div class="cta-detail-card"><div class="cta-detail-label">${label}</div>${r?`<div class="cta-detail-date">${ctaEsc(r.source==='cta'&&r.tsStart&&r.tsEnd?`${ctaFmtDate(r.tsStart)} → ${new Date(r.tsEnd).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}`:ctaFmtDate(r.ts))}</div><div class="cta-detail-big">${ctaFmtN(r.liters,2)} L</div><div>Odômetro: <b>${r.odo?ctaFmtN(r.odo,0):'0 / ausente'}</b></div>${r.posto?`<div class="cta-detail-muted">${ctaEsc(r.posto)}</div>`:''}${r.tipo?`<div class="cta-detail-muted">Tipo no O2P: ${ctaEsc(r.tipo)}</div>`:''}`:'<div class="cta-detail-muted">Sem registro correspondente</div>'}</div>`;
+  const buttons=ev.cta&&ev.ticket?`<div class="cta-decision-box"><div class="cta-decision-title">Decisão manual</div><div class="cta-decision-sub">Use somente quando você tiver conferido o caso. A decisão vale apenas nesta análise.</div><div class="cta-decision-actions"><button class="btn btn-primary" onclick="ctaApplyDecision('${id}','cta')">Mesmo abastecimento · usar CTA</button><button class="btn btn-secondary" onclick="ctaApplyDecision('${id}','ticket')">Mesmo abastecimento · usar Ticket</button><button class="btn btn-secondary" onclick="ctaApplyDecision('${id}','separate')">São dois abastecimentos</button></div></div>`:'';
+  ov.innerHTML=`<div class="modal cta-detail-modal"><div class="cta-detail-head"><div><div class="modal-title">${ctaEsc(ev.cta?.plate||ev.ticket?.plate||ev.o2p?.plate||'Abastecimento')}</div><div class="cta-detail-status"><span class="cta-status ${c.tone}">${ctaEsc(c.label)}</span> <span>${ctaEsc(ctaReason(ev))}</span></div></div><button class="pend-close" onclick="closeModal('cta-detail-modal')">×</button></div><div class="cta-detail-grid">${card(ev.cta,'CTA SMART')}${card(ev.ticket,'TICKET LOG')}${card(ev.o2p,'O2P')}</div>${buttons}</div>`;ov.classList.add('open');
+}
+function ctaApplyDecision(id,decision){_ctaRecon.decisions[id]=decision;document.getElementById('cta-detail-modal')?.classList.remove('open');ctaRender();showToast('Decisão aplicada somente nesta análise.','success');}
+function ctaReset(){
+  if((_ctaRecon.cta.length||_ctaRecon.ticket.length||_ctaRecon.o2p.length)&&!confirm('Limpar os três arquivos e todas as decisões desta análise?'))return;
+  window._ctaRecon={cta:[],ticket:[],o2p:[],files:{},events:[],decisions:{},filter:'all',search:'',settings:{timeTol:60,litersTol:3}};
+  ['cta','ticket','o2p'].forEach(k=>ctaSetImportState(k,'empty','Nenhum arquivo','Clique para selecionar'));const s=document.getElementById('cta-search');if(s)s.value='';const t=document.getElementById('cta-time-tol');if(t)t.value='60';const l=document.getElementById('cta-liters-tol');if(l)l.value='3';ctaRender();
+}
+function ctaOnShow(){
+  if(!window._ctaRecon)window._ctaRecon={cta:[],ticket:[],o2p:[],files:{},events:[],decisions:{},filter:'all',search:'',settings:{timeTol:60,litersTol:3}};
+  const t=document.getElementById('cta-time-tol'),l=document.getElementById('cta-liters-tol');if(t)t.value=String(_ctaRecon.settings.timeTol||60);if(l)l.value=String(_ctaRecon.settings.litersTol||3);ctaRender();
+}
 
 </script>
 
