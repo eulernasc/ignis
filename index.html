@@ -3520,7 +3520,7 @@ input[type="checkbox"]:indeterminate{background:rgba(233,95,50,.2);border-color:
       <div class="cta-kpis">
         <div class="cta-kpi"><div class="cta-kpi-label">CTA</div><div class="cta-kpi-value" id="cta-kpi-cta">0</div><div class="cta-kpi-sub">registros lidos</div></div>
         <div class="cta-kpi"><div class="cta-kpi-label">Ticket</div><div class="cta-kpi-value" id="cta-kpi-ticket">0</div><div class="cta-kpi-sub">registros lidos</div></div>
-        <div class="cta-kpi"><div class="cta-kpi-label">O2P</div><div class="cta-kpi-value" id="cta-kpi-o2p">0</div><div class="cta-kpi-sub">registros lidos</div></div>
+        <div class="cta-kpi"><div class="cta-kpi-label">O2P</div><div class="cta-kpi-value" id="cta-kpi-o2p">0</div><div class="cta-kpi-sub" id="cta-kpi-o2p-sub">registros lidos</div></div>
         <div class="cta-kpi import"><div class="cta-kpi-label">Usar / importar CTA</div><div class="cta-kpi-value" id="cta-kpi-import">0</div><div class="cta-kpi-sub">sem duplicação detectada</div></div>
         <div class="cta-kpi dup"><div class="cta-kpi-label">Duplicados</div><div class="cta-kpi-value" id="cta-kpi-dup">0</div><div class="cta-kpi-sub">confirmados automaticamente</div></div>
         <div class="cta-kpi review"><div class="cta-kpi-label">Revisar</div><div class="cta-kpi-value" id="cta-kpi-review">0</div><div class="cta-kpi-sub">decisão manual necessária</div></div>
@@ -3536,7 +3536,8 @@ input[type="checkbox"]:indeterminate{background:rgba(233,95,50,.2);border-color:
           <button class="cta-filter-btn" data-filter="review" onclick="ctaSetFilter('review')">Revisar <span>0</span></button>
           <button class="cta-filter-btn" data-filter="already" onclick="ctaSetFilter('already')">CTA já no O2P <span>0</span></button>
           <button class="cta-filter-btn" data-filter="ok" onclick="ctaSetFilter('ok')">Ticket OK <span>0</span></button>
-          <button class="cta-filter-btn" data-filter="o2p" onclick="ctaSetFilter('o2p')">Somente O2P <span>0</span></button>
+          <button class="cta-filter-btn" data-filter="o2p" onclick="ctaSetFilter('o2p')">O2P no posto alvo <span>0</span></button>
+          <button class="cta-filter-btn" data-filter="outside" onclick="ctaSetFilter('outside')">O2P fora do escopo <span>0</span></button>
         </div>
         <input id="cta-search" class="filter-input cta-search" placeholder="Buscar placa..." oninput="ctaSearch(this.value)">
       </div>
@@ -19725,7 +19726,7 @@ function postosLimparCache(){if(!confirm('Limpar somente os dados de localizaç�
 <script>
 /* IGNIS CTA · conciliador temporário CTA × Ticket Log × O2P */
 window._ctaRecon = window._ctaRecon || {
-  cta:[], ticket:[], o2p:[], files:{}, events:[], decisions:{}, filter:'all', search:'',
+  cta:[], ticket:[], o2p:[], files:{}, events:[], decisions:{}, filter:'all', search:'', targetPosto:'', targetO2pCount:0, outsideO2pCount:0,
   settings:{ timeTol:60, litersTol:3 }
 };
 
@@ -19849,6 +19850,18 @@ function ctaBuildEvents(){
   });});
   cands.sort((a,b)=>b.score-a.score||a.td-b.td||a.ld-b.ld);const usedE=new Set(),usedO=new Set();
   for(const c of cands){if(usedE.has(c.ei)||usedO.has(c.oi))continue;events[c.ei].o2p=_ctaRecon.o2p[c.oi];events[c.ei].o2pMeta={timeDiff:c.td,literDiff:c.ld,odoEq:c.odo,source:c.source};usedE.add(c.ei);usedO.add(c.oi);}
+
+  // Detecta automaticamente qual posto do O2P pertence ao escopo da migração CTA.
+  // A referência principal são registros Ticket que já encontraram o mesmo abastecimento no O2P.
+  const postoCounts=new Map();
+  const contarPosto=ev=>{const posto=String(ev?.o2p?.posto||'').trim();if(!posto)return;postoCounts.set(posto,(postoCounts.get(posto)||0)+1);};
+  events.forEach(ev=>{if(ev.ticket&&ev.o2p)contarPosto(ev);});
+  if(!postoCounts.size)events.forEach(ev=>{if(ev.cta&&ev.o2p)contarPosto(ev);});
+  const targetPosto=[...postoCounts.entries()].sort((a,b)=>b[1]-a[1])[0]?.[0]||'';
+  _ctaRecon.targetPosto=targetPosto;
+  _ctaRecon.targetO2pCount=targetPosto?_ctaRecon.o2p.filter(r=>String(r.posto||'').trim()===targetPosto).length:0;
+  _ctaRecon.outsideO2pCount=targetPosto?_ctaRecon.o2p.length-_ctaRecon.targetO2pCount:0;
+
   _ctaRecon.o2p.forEach((r,i)=>{if(!usedO.has(i))events.push({id:`E${seq++}`,o2p:r});});
   return events;
 }
@@ -19864,7 +19877,11 @@ function ctaBaseClassification(ev){
     return{cat:'import',label:'Somente CTA',action:'IMPORTAR CTA',tone:'orange'};
   }
   if(t&&!c){return o?{cat:'ok',label:'Ticket já está no O2P',action:'OK',tone:'green'}:{cat:'review',label:'Ticket sem correspondência no O2P',action:'REVISAR',tone:'amber'};}
-  if(o)return{cat:'o2p',label:'Somente O2P',action:'MANTER / CONFERIR',tone:'gray'};
+  if(o){
+    const target=String(_ctaRecon.targetPosto||'').trim(),posto=String(ev.o2p?.posto||'').trim();
+    if(target&&posto&&posto!==target)return{cat:'outside',label:'O2P fora do escopo CTA',action:'PRESERVAR',tone:'gray'};
+    return{cat:'o2p',label:'O2P no posto em migração',action:'REVISAR',tone:'amber'};
+  }
   return{cat:'review',label:'Revisar',action:'REVISAR',tone:'amber'};
 }
 function ctaClassification(ev){
@@ -19879,7 +19896,9 @@ function ctaReason(ev){
   if(ev.o2p&&(ev.cta||ev.ticket)){const m=ev.o2pMeta||{},parts=[`O2P × ${(m.source||'fonte').toUpperCase()}`];parts.push(m.odoEq?'odômetro igual':'odômetro não confirmou');if(Number.isFinite(m.timeDiff))parts.push(`${Math.round(m.timeDiff)} min`);if(Number.isFinite(m.literDiff))parts.push(`Δ ${ctaFmtN(m.literDiff,1)} L`);return parts.join(' · ');}
   if(ev.cta)return'Não achei Ticket nem O2P compatível para este abastecimento CTA.';
   if(ev.ticket)return'Não achei CTA compatível para este abastecimento Ticket.';
-  return'Registro existe no O2P, mas não foi relacionado aos arquivos CTA/Ticket desta análise.';
+  const target=String(_ctaRecon.targetPosto||'').trim(),posto=String(ev.o2p?.posto||'').trim();
+  if(target&&posto&&posto!==target)return'Registro do O2P pertence a outro posto e ficou fora do escopo da migração CTA. Preserve este registro.';
+  return'Registro do O2P está no posto em migração, mas não encontrou CTA/Ticket compatível. Revise antes de qualquer saneamento.';
 }
 function ctaAnalyze(){
   _ctaRecon.settings.timeTol=Number(document.getElementById('cta-time-tol')?.value||60);_ctaRecon.settings.litersTol=Number(document.getElementById('cta-liters-tol')?.value||3);
@@ -19894,13 +19913,19 @@ function ctaSourceHtml(r,label){
 function ctaFilteredEvents(){
   const f=_ctaRecon.filter||'all',q=String(_ctaRecon.search||'').trim().toUpperCase();let rows=_ctaRecon.events.slice();
   if(f!=='all')rows=rows.filter(e=>ctaClassification(e).cat===f);if(q)rows=rows.filter(e=>(e.cta?.plate||e.ticket?.plate||e.o2p?.plate||'').includes(q));
-  const pr={review:0,import:1,duplicate:2,already:3,ok:4,o2p:5};rows.sort((a,b)=>(pr[ctaClassification(a).cat]??9)-(pr[ctaClassification(b).cat]??9)||((a.cta?.plate||a.ticket?.plate||a.o2p?.plate||'').localeCompare(b.cta?.plate||b.ticket?.plate||b.o2p?.plate||'')));return rows;
+  const pr={review:0,import:1,duplicate:2,already:3,ok:4,o2p:5,outside:6};rows.sort((a,b)=>(pr[ctaClassification(a).cat]??9)-(pr[ctaClassification(b).cat]??9)||((a.cta?.plate||a.ticket?.plate||a.o2p?.plate||'').localeCompare(b.cta?.plate||b.ticket?.plate||b.o2p?.plate||'')));return rows;
 }
 function ctaRender(){
-  const events=_ctaRecon.events||[],cats={all:events.length,import:0,duplicate:0,review:0,already:0,ok:0,o2p:0};events.forEach(e=>{const c=ctaClassification(e).cat;cats[c]=(cats[c]||0)+1;});
+  const events=_ctaRecon.events||[],cats={all:events.length,import:0,duplicate:0,review:0,already:0,ok:0,o2p:0,outside:0};events.forEach(e=>{const c=ctaClassification(e).cat;cats[c]=(cats[c]||0)+1;});
   const set=(id,v)=>{const el=document.getElementById(id);if(el)el.textContent=String(v)};set('cta-kpi-cta',_ctaRecon.cta.length);set('cta-kpi-ticket',_ctaRecon.ticket.length);set('cta-kpi-o2p',_ctaRecon.o2p.length);set('cta-kpi-import',cats.import);set('cta-kpi-dup',cats.duplicate);set('cta-kpi-review',cats.review);
+  const o2pSub=document.getElementById('cta-kpi-o2p-sub');if(o2pSub)o2pSub.textContent=events.length&&_ctaRecon.targetPosto?`${_ctaRecon.targetO2pCount||0} no posto alvo · ${_ctaRecon.outsideO2pCount||0} fora do escopo`:'registros lidos';
   document.querySelectorAll('.cta-filter-btn').forEach(b=>{const key=b.dataset.filter;b.classList.toggle('active',key===_ctaRecon.filter);const n=b.querySelector('span');if(n)n.textContent=cats[key]??0;});
-  const summary=document.getElementById('cta-analysis-summary');if(summary){summary.innerHTML=events.length?`<strong>${events.length}</strong> eventos consolidados · <strong>${cats.import}</strong> para importar/usar CTA · <strong>${cats.duplicate}</strong> duplicado(s) confirmado(s) · <strong>${cats.review}</strong> item(ns) para revisão manual. <span>Nada desta tela é gravado no Firebase.</span>`:'Importe os três arquivos para iniciar a conciliação. Nada é enviado automaticamente para o O2P ou Firebase.';}
+  const summary=document.getElementById('cta-analysis-summary');if(summary){
+    if(events.length){
+      const alvo=_ctaRecon.targetPosto?ctaEsc(_ctaRecon.targetPosto):'não detectado';
+      summary.innerHTML=`<strong>${events.length}</strong> eventos consolidados · <strong>${cats.import}</strong> para importar/usar CTA · <strong>${cats.duplicate}</strong> duplicado(s) confirmado(s) · <strong>${cats.review}</strong> item(ns) para revisão manual.<br><span>Posto em migração detectado: <b style="color:#c7d2dc">${alvo}</b> · ${_ctaRecon.targetO2pCount||0} registro(s) O2P no escopo · ${cats.outside||0} registro(s) O2P de outros postos preservados. Nada desta tela é gravado no Firebase.</span>`;
+    }else summary.innerHTML='Importe os três arquivos para iniciar a conciliação. Nada é enviado automaticamente para o O2P ou Firebase.';
+  }
   const body=document.getElementById('cta-results-body');if(!body)return;const rows=ctaFilteredEvents();
   if(!events.length){body.innerHTML=`<tr><td colspan="9"><div class="cta-empty"><b>Aguardando análise</b><span>Importe CTA, Ticket Log e O2P. Quando os três arquivos estiverem prontos, o IGNIS compara placa, data/hora, odômetro e litros.</span></div></td></tr>`;return;}
   if(!rows.length){body.innerHTML=`<tr><td colspan="9"><div class="cta-empty"><b>Nenhum item neste filtro</b><span>Altere o filtro ou a busca por placa.</span></div></td></tr>`;return;}
@@ -19917,11 +19942,11 @@ function ctaOpenDetail(id){
 function ctaApplyDecision(id,decision){_ctaRecon.decisions[id]=decision;document.getElementById('cta-detail-modal')?.classList.remove('open');ctaRender();showToast('Decisão aplicada somente nesta análise.','success');}
 function ctaReset(){
   if((_ctaRecon.cta.length||_ctaRecon.ticket.length||_ctaRecon.o2p.length)&&!confirm('Limpar os três arquivos e todas as decisões desta análise?'))return;
-  window._ctaRecon={cta:[],ticket:[],o2p:[],files:{},events:[],decisions:{},filter:'all',search:'',settings:{timeTol:60,litersTol:3}};
+  window._ctaRecon={cta:[],ticket:[],o2p:[],files:{},events:[],decisions:{},filter:'all',search:'',targetPosto:'',targetO2pCount:0,outsideO2pCount:0,settings:{timeTol:60,litersTol:3}};
   ['cta','ticket','o2p'].forEach(k=>ctaSetImportState(k,'empty','Nenhum arquivo','Clique para selecionar'));const s=document.getElementById('cta-search');if(s)s.value='';const t=document.getElementById('cta-time-tol');if(t)t.value='60';const l=document.getElementById('cta-liters-tol');if(l)l.value='3';ctaRender();
 }
 function ctaOnShow(){
-  if(!window._ctaRecon)window._ctaRecon={cta:[],ticket:[],o2p:[],files:{},events:[],decisions:{},filter:'all',search:'',settings:{timeTol:60,litersTol:3}};
+  if(!window._ctaRecon)window._ctaRecon={cta:[],ticket:[],o2p:[],files:{},events:[],decisions:{},filter:'all',search:'',targetPosto:'',targetO2pCount:0,outsideO2pCount:0,settings:{timeTol:60,litersTol:3}};
   const t=document.getElementById('cta-time-tol'),l=document.getElementById('cta-liters-tol');if(t)t.value=String(_ctaRecon.settings.timeTol||60);if(l)l.value=String(_ctaRecon.settings.litersTol||3);ctaRender();
 }
 
