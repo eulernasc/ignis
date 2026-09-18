@@ -19286,10 +19286,49 @@ async function postosConfirmarImportacaoCoordenadas(){
 function postosCoordSourceType(g){if(g?.manual||g?.locked)return'manual';if(String(g?.source||'')==='planilha_operacional')return'sheet';return'auto';}
 function postosCoordSourceLabel(g){const t=postosCoordSourceType(g);if(t==='manual')return'Manual';if(t==='sheet')return g?.competencia?`Planilha ${postosFmtCompetencia(g.competencia)}`:'Planilha mensal';return'Automática';}
 async function postosAbrirGerenciadorCoordenadas(){
-  if(!postosPodeImportar()){showToast('Sem permissão para gerenciar coordenadas.','error');return;}const modal=document.getElementById('postos-coord-manager-modal'),list=document.getElementById('postos-coord-list'),sub=document.getElementById('postos-coord-manager-sub');if(modal){modal.classList.add('open');modal.setAttribute('aria-hidden','false');}ignisSyncModalScrollLock();if(list)list.innerHTML='<div class="postos-coord-empty">Carregando coordenadas compartilhadas...</div>';if(sub)sub.textContent='Conferindo o Firebase...';_postosCoordManagerLoading=true;
-  try{await postosEnsureBase();if(await postosFirebaseGeoReady()&&typeof window.fbLoadAllPostosGeo==='function'){const shared=await window.fbLoadAllPostosGeo(),byCode=new Map((_postosBase||[]).map(p=>[String(p.codigo||''),p]));let added=0;Object.entries(shared||{}).forEach(([codigo,g])=>{const p=byCode.get(String(codigo));if(p&&postosGeoFresh(p,g)){_postosGeoCache[codigo]={...g,shared:true};added++;}});if(added)postosScheduleCacheSave();}postosRenderGerenciadorCoordenadas();}
-  catch(e){if(list)list.innerHTML=`<div class="postos-coord-empty">${postosEsc(e?.message||'Não foi possível carregar as coordenadas.')}</div>`;if(sub)sub.textContent='Falha ao consultar coordenadas.';}
-  finally{_postosCoordManagerLoading=false;}
+  if(!postosPodeImportar()){showToast('Sem permissão para gerenciar coordenadas.','error');return;}
+  const modal=document.getElementById('postos-coord-manager-modal'),list=document.getElementById('postos-coord-list'),sub=document.getElementById('postos-coord-manager-sub');
+  if(modal){modal.classList.add('open');modal.setAttribute('aria-hidden','false');}
+  ignisSyncModalScrollLock();
+  if(list)list.innerHTML='<div class="postos-coord-empty">Preparando coordenadas...</div>';
+  if(sub)sub.textContent='Carregando o que já está salvo neste aparelho...';
+  _postosCoordManagerLoading=true;
+  try{
+    await postosEnsureBase();
+    // Mostra imediatamente o cache local. A conferência no Firebase continua sem
+    // deixar a janela presa em "Carregando" caso a rede esteja lenta.
+    _postosCoordManagerLoading=false;
+    postosRenderGerenciadorCoordenadas();
+    if(sub)sub.textContent=(sub.textContent||'')+' · conferindo Firebase...';
+
+    if(await postosFirebaseGeoReady()&&typeof window.fbLoadAllPostosGeo==='function'){
+      const shared=await window.fbLoadAllPostosGeo(),byCode=new Map((_postosBase||[]).map(p=>[String(p.codigo||''),p]));
+      let added=0;
+      Object.entries(shared||{}).forEach(([codigo,g])=>{
+        const p=byCode.get(String(codigo));
+        if(p&&postosGeoFresh(p,g)){
+          const atual=_postosGeoCache?.[codigo];
+          // Mantém a versão mais recente/confirmada; ajustes manuais continuam
+          // protegidos e nunca são trocados por um retorno automático inferior.
+          const atualManual=!!(atual?.manual||atual?.locked),novoManual=!!(g?.manual||g?.locked);
+          const usarNovo=!atual||novoManual&&!atualManual||(!atualManual&&Number(g?.at||0)>=Number(atual?.at||0));
+          if(usarNovo){_postosGeoCache[codigo]={...g,shared:true};added++;}
+        }
+      });
+      if(added)postosScheduleCacheSave();
+      postosRenderGerenciadorCoordenadas();
+    }
+  }catch(e){
+    console.warn('IGNIS postos: gerenciador de coordenadas',e);
+    _postosCoordManagerLoading=false;
+    // Se já existe cache válido, mantém os dados visíveis e apenas informa que a
+    // conferência online falhou. Não apaga nem substitui qualquer coordenada.
+    postosRenderGerenciadorCoordenadas();
+    if(sub)sub.textContent=(sub.textContent||'')+' · Firebase não respondeu agora; exibindo dados já salvos.';
+    if(list&&!list.children.length)list.innerHTML=`<div class="postos-coord-empty">${postosEsc(e?.message||'Não foi possível carregar as coordenadas.')}</div>`;
+  }finally{
+    _postosCoordManagerLoading=false;
+  }
 }
 function postosRenderGerenciadorCoordenadas(){
   const list=document.getElementById('postos-coord-list');if(!list||_postosCoordManagerLoading)return;const byCode=new Map((_postosBase||[]).map(p=>[String(p.codigo||''),p])),all=[];Object.entries(_postosGeoCache||{}).forEach(([codigo,g])=>{const p=byCode.get(String(codigo));if(!p||!postosGeoFresh(p,g)||g?.missing)return;all.push({posto:p,geo:g,type:postosCoordSourceType(g)});});all.sort((a,b)=>String(a.posto.nome||'').localeCompare(String(b.posto.nome||''),'pt-BR'));const counts={sheet:0,manual:0,auto:0};all.forEach(x=>counts[x.type]++);document.getElementById('postos-coord-total').textContent=all.length.toLocaleString('pt-BR');document.getElementById('postos-coord-sheet').textContent=counts.sheet.toLocaleString('pt-BR');document.getElementById('postos-coord-manual').textContent=counts.manual.toLocaleString('pt-BR');document.getElementById('postos-coord-auto').textContent=counts.auto.toLocaleString('pt-BR');const sub=document.getElementById('postos-coord-manager-sub');if(sub)sub.textContent=`${all.length.toLocaleString('pt-BR')} posto(s) com coordenada confirmada na base compartilhada.`;const q=postosNorm(document.getElementById('postos-coord-search')?.value||''),filter=document.getElementById('postos-coord-source-filter')?.value||'all';let items=all.filter(x=>(filter==='all'||x.type===filter)&&(!q||postosNorm(`${x.posto.codigo} ${x.posto.nome} ${x.posto.endereco} ${x.posto.bairro} ${x.posto.cidade} ${x.posto.uf}`).includes(q)));const total=items.length;if(items.length>350)items=items.slice(0,350);if(!items.length){list.innerHTML='<div class="postos-coord-empty">Nenhum posto encontrado neste filtro.</div>';return;}list.innerHTML=(total>items.length?`<div class="postos-coord-empty" style="padding:11px 13px;text-align:left">${total.toLocaleString('pt-BR')} resultados. Exibindo os primeiros 350; use a busca para localizar um posto específico.</div>`:'')+items.map(({posto:p,geo:g,type})=>{const date=g.at?new Date(g.at).toLocaleDateString('pt-BR'):'—',sourceFile=g.sourceFile?` · ${postosEsc(g.sourceFile)}`:'';return `<div class="postos-coord-row"><div class="postos-coord-main"><strong>${postosEsc(p.nome)}</strong><small>EC ${postosEsc(p.codigo)} · ${postosEsc(p.endereco)} · ${postosEsc(p.cidade)}/${postosEsc(p.uf)}</small><small>Lat ${Number(g.lat).toFixed(6)} · Long ${Number(g.lon).toFixed(6)} · atualizado ${date}${sourceFile}</small><div class="postos-coord-meta"><span class="postos-coord-badge ${type}">${postosEsc(postosCoordSourceLabel(g))}</span>${g.updatedBy?`<span class="postos-coord-badge">${postosEsc(g.updatedBy)}</span>`:''}</div></div><div class="postos-coord-actions"><button class="postos-location-action view" type="button" onclick="postosCoordManagerFocus('${postosEsc(p.codigo)}')">Ver no mapa</button><button class="postos-location-action adjust" type="button" onclick="postosAbrirAjusteLocalizacao('${postosEsc(p.codigo)}')">Ajustar</button><button class="postos-location-action google" type="button" onclick="postosAbrirGooglePesquisaPosto('${postosEsc(p.codigo)}')">Abrir Maps</button></div></div>`;}).join('');postosUpdateSummary();
