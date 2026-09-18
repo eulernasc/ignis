@@ -822,7 +822,7 @@ window.fbLoadPostosGeo = async function(codigos) {
         const codigo = String(d.codigo || snap.id.slice(FB_POSTOS_GEO_PREFIX.length));
         const lat = Number(d.lat), lon = Number(d.lon);
         if (codigo && Number.isFinite(lat) && Number.isFinite(lon)) {
-          out[codigo] = { lat, lon, at:Number(d.updatedAt || 0), shared:true, algo:Number(d.algo||0), source:String(d.source||''), quality:String(d.quality||''), manual:!!d.manual, locked:!!d.locked, confirmedBy:String(d.confirmedBy||''), note:String(d.note||'') };
+          out[codigo] = { lat, lon, at:Number(d.updatedAt || 0), shared:true, algo:Number(d.algo||0), source:String(d.source||''), quality:String(d.quality||''), manual:!!d.manual, locked:!!d.locked, confirmedBy:String(d.confirmedBy||''), note:String(d.note||''), competencia:String(d.competencia||''), sourceFile:String(d.sourceFile||''), importedAt:Number(d.importedAt||0), updatedBy:String(d.updatedBy||'') };
         }
       });
     });
@@ -834,13 +834,36 @@ window.fbLoadPostosGeo = async function(codigos) {
     return out;
   }
 };
+window.fbLoadAllPostosGeo = async function() {
+  const out = {};
+  try {
+    const snap = await fbRetry(() => withTimeout(getDocs(query(
+      collection(db, 'fueltracker'),
+      where(documentId(), '>=', FB_POSTOS_GEO_PREFIX),
+      where(documentId(), '<', FB_POSTOS_GEO_PREFIX + '\uf8ff')
+    )), 18000), 2, 450);
+    snap.forEach(s => {
+      const d = s.data() || {};
+      const codigo = String(d.codigo || s.id.slice(FB_POSTOS_GEO_PREFIX.length));
+      const lat = Number(d.lat), lon = Number(d.lon);
+      if(codigo && Number.isFinite(lat) && Number.isFinite(lon)) {
+        out[codigo] = { lat, lon, at:Number(d.updatedAt||0), shared:true, algo:Number(d.algo||0), source:String(d.source||''), quality:String(d.quality||''), manual:!!d.manual, locked:!!d.locked, confirmedBy:String(d.confirmedBy||''), note:String(d.note||''), competencia:String(d.competencia||''), sourceFile:String(d.sourceFile||''), importedAt:Number(d.importedAt||0), updatedBy:String(d.updatedBy||'') };
+      }
+    });
+    return out;
+  } catch(e) {
+    console.warn('IGNIS postos: não foi possível carregar o catálogo completo de coordenadas.', e);
+    return out;
+  }
+};
+
 window.fbSavePostosGeo = async function(items) {
   const unique = new Map();
   (Array.isArray(items) ? items : []).forEach(x => {
     const codigo = String(x?.codigo || '').trim();
     const lat = Number(x?.lat), lon = Number(x?.lon);
     if (fbPostoGeoDocId(codigo) && Number.isFinite(lat) && Number.isFinite(lon)) {
-      unique.set(codigo, { codigo, lat, lon, updatedAt:Date.now(), source:String(x?.source||'geocoder'), algo:Number(x?.algo||0), quality:String(x?.quality||'exact'), manual:!!x?.manual, locked:!!x?.locked, confirmedBy:String(x?.confirmedBy||''), note:String(x?.note||'') });
+      unique.set(codigo, { codigo, lat, lon, updatedAt:Date.now(), source:String(x?.source||'geocoder'), algo:Number(x?.algo||0), quality:String(x?.quality||'exact'), manual:!!x?.manual, locked:!!x?.locked, confirmedBy:String(x?.confirmedBy||''), note:String(x?.note||''), competencia:String(x?.competencia||''), sourceFile:String(x?.sourceFile||''), importedAt:Number(x?.importedAt||0), updatedBy:String(x?.updatedBy||'') });
     }
   });
   const entries = [...unique.values()];
@@ -2570,6 +2593,10 @@ input[type="checkbox"]:indeterminate{background:rgba(233,95,50,.2);border-color:
 .postos-coverage{margin:14px 0 16px;border:1px solid rgba(62,211,156,.18);border-radius:16px;background:linear-gradient(180deg,rgba(15,25,31,.98),rgba(12,20,26,.98));padding:14px 15px}.postos-coverage-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:12px}.postos-coverage-head b{display:block;font-size:13px;color:#eef5f9}.postos-coverage-head span{display:block;font-size:10px;line-height:1.5;color:var(--text3);margin-top:4px}.postos-coverage-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}.postos-coverage-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:9px}.postos-coverage-card{appearance:none;border:1px solid var(--border);border-radius:12px;background:#101720;color:var(--text);padding:11px 12px;text-align:left;cursor:pointer;transition:.18s}.postos-coverage-card:hover{transform:translateY(-1px);border-color:rgba(255,107,44,.38)}.postos-coverage-card span{display:block;font-size:8.5px;letter-spacing:.07em;text-transform:uppercase;color:#8ca0b6;font-weight:800}.postos-coverage-card strong{display:block;font-size:22px;margin:5px 0 2px;color:#f3f7fa}.postos-coverage-card small{display:block;font-size:8.5px;line-height:1.35;color:var(--text3)}.postos-coverage-card.ok strong{color:#41d6a3}.postos-coverage-card.pending strong{color:#f4b544}.postos-coverage-card.fail strong,.postos-coverage-card.discarded strong{color:#ff7d73}.postos-coverage-card.outside strong{color:#9cb0c4}.postos-location-list-modal{width:min(1080px,95vw)!important;max-width:none!important;max-height:90vh!important;overflow:hidden!important}.postos-location-toolbar{display:flex;gap:10px;margin:14px 0;flex-wrap:wrap}.postos-location-toolbar input,.postos-location-toolbar select,.postos-location-panel input{height:44px;border:1px solid var(--border);border-radius:12px;background:#101720;color:#fff;padding:0 14px;font:inherit;outline:none}.postos-location-toolbar input{flex:1 1 280px}.postos-location-toolbar select{min-width:190px}.postos-location-scope{min-width:220px}.postos-location-list{max-height:65vh;overflow:auto;display:grid;gap:8px;padding-right:3px}.postos-location-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;padding:13px 14px;border:1px solid var(--border);border-radius:14px;background:linear-gradient(180deg,#111925,#0f1720)}.postos-location-row-main b{font-size:12px;color:#f2f6f9}.postos-location-row-main small{display:block;color:var(--text3);font-size:9px;margin-top:3px;line-height:1.4}.postos-location-row-reason{margin-top:7px;font-size:9px;color:#9fb0c0}.postos-location-row-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end;min-width:330px}.postos-location-action{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:38px;padding:0 12px;border-radius:11px;border:1px solid var(--border);background:#111925;color:#eef4f8;font:inherit;font-size:10px;font-weight:800;letter-spacing:.01em;cursor:pointer;transition:.18s;box-shadow:inset 0 1px 0 rgba(255,255,255,.04)}.postos-location-action:hover{transform:translateY(-1px);filter:brightness(1.04)}.postos-location-action.view{border-color:rgba(62,211,156,.22);background:rgba(62,211,156,.08);color:#c1f0df}.postos-location-action.retry{border-color:rgba(255,192,74,.24);background:rgba(255,192,74,.08);color:#ffd78a}.postos-location-action.adjust{border-color:rgba(255,107,44,.26);background:rgba(255,107,44,.09);color:#ffb18e}.postos-location-action.google{border-color:rgba(91,141,255,.26);background:rgba(91,141,255,.08);color:#c9d9ff}.postos-location-status{display:inline-flex;padding:4px 7px;border-radius:999px;border:1px solid var(--border);font-size:8px;font-weight:800;text-transform:uppercase;letter-spacing:.04em}.postos-location-status.located{color:#41d6a3;border-color:rgba(65,214,163,.25)}.postos-location-status.pending{color:#f4b544;border-color:rgba(244,181,68,.25)}.postos-location-status.failed,.postos-location-status.discarded{color:#ff8178;border-color:rgba(255,129,120,.25)}.postos-location-status.outside{color:#a8b7c6}.postos-location-modal-card{width:min(960px,95vw)!important;max-width:none!important;max-height:92vh!important;overflow:auto!important}.postos-location-station{margin:12px 0;padding:12px 13px;border:1px solid rgba(255,107,44,.18);border-radius:12px;background:rgba(255,107,44,.045)}.postos-location-station b{font-size:13px}.postos-location-station span{display:block;font-size:9.5px;color:var(--text3);margin-top:4px;line-height:1.45}.postos-location-tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-bottom:13px}.postos-location-tabs button{min-height:40px;border:1px solid var(--border);border-radius:10px;background:#101720;color:#9fb0c0;font:inherit;font-size:9.5px;font-weight:800;cursor:pointer}.postos-location-tabs button.active{border-color:rgba(255,107,44,.55);background:rgba(255,107,44,.09);color:#ff7a42}.postos-location-panel{border:1px solid var(--border);border-radius:12px;background:#0e151d;padding:13px}.postos-location-panel label{display:block;font-size:8.5px;letter-spacing:.06em;text-transform:uppercase;color:#8ca0b6;font-weight:800;margin-bottom:6px}.postos-location-panel small{display:block;font-size:8.5px;color:var(--text3);margin-top:7px}.postos-location-search-row{display:flex;gap:8px}.postos-location-search-row input{flex:1}.postos-location-suggestions{display:grid;gap:7px;margin-top:10px;max-height:220px;overflow:auto}.postos-location-suggestion{width:100%;display:flex;align-items:center;justify-content:space-between;gap:12px;text-align:left;padding:10px 11px;border:1px solid var(--border);border-radius:10px;background:#111a23;color:#e9f0f5;cursor:pointer}.postos-location-suggestion:hover{border-color:rgba(255,107,44,.38)}.postos-location-suggestion span{font-size:9.5px;line-height:1.4}.postos-location-suggestion small{margin:0;white-space:nowrap;color:#8da0b2}.postos-location-map{height:390px;border-radius:10px;overflow:hidden;background:#0b1117}.postos-location-map-help{font-size:9.5px;line-height:1.45;color:#a7b5c3;margin-bottom:10px}.postos-location-coords-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.postos-location-coords-grid input{width:100%}.postos-location-inline-actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}.postos-location-selected{margin-top:12px;padding:10px 12px;border:1px dashed var(--border);border-radius:10px;color:#9fb0c0;font-size:9.5px;line-height:1.45}.postos-location-selected.ready{border-style:solid;border-color:rgba(65,214,163,.28);background:rgba(65,214,163,.045);color:#bcebd9}.postos-location-empty{padding:28px;text-align:center;color:var(--text3);font-size:10px;border:1px dashed var(--border);border-radius:12px}.postos-location-list-modal .postos-mini-btn,.postos-location-modal-card .postos-mini-btn{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:0 12px;border:1px solid var(--border);border-radius:10px;background:#111925;color:#eaf1f6;font:inherit;font-size:10px;font-weight:800;cursor:pointer;transition:.18s}.postos-location-list-modal .postos-mini-btn:hover,.postos-location-modal-card .postos-mini-btn:hover{border-color:rgba(255,107,44,.35);background:rgba(255,107,44,.07);color:#fff}.postos-process-all-running{border-color:rgba(244,181,68,.4)!important;color:#f4b544!important}body.postos-coverage-open #page-postos .leaflet-control-container,body.postos-coverage-open #postos-map .leaflet-control-container{opacity:0!important;pointer-events:none!important;visibility:hidden!important}#postos-coverage-modal,#postos-location-modal{z-index:5000!important}
 @media(max-width:980px){.postos-coverage-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.postos-coverage-card:last-child{grid-column:1/-1}.postos-location-tabs{grid-template-columns:1fr 1fr}}
 @media(max-width:720px){.postos-coverage-head{display:block}.postos-coverage-actions{justify-content:flex-start;margin-top:10px}.postos-coverage-grid{grid-template-columns:1fr 1fr}.postos-location-toolbar{display:grid}.postos-location-toolbar select,.postos-location-scope{min-width:0;width:100%}.postos-location-row{grid-template-columns:1fr}.postos-location-row-actions{justify-content:flex-start;min-width:0}.postos-location-action{flex:1 1 calc(50% - 8px)}.postos-location-tabs{grid-template-columns:1fr 1fr}.postos-location-search-row{display:grid}.postos-location-map{height:320px}.postos-location-coords-grid{grid-template-columns:1fr}}
+/* Coordenadas mensais e catálogo de localizações */
+.postos-coord-period{display:grid;grid-template-columns:minmax(0,220px) 1fr;gap:12px;align-items:end;margin:12px 0}.postos-coord-period label{display:block;font-size:8.5px;letter-spacing:.07em;text-transform:uppercase;color:#8ca0b6;font-weight:800;margin-bottom:6px}.postos-coord-period input{width:100%;height:42px;border:1px solid var(--border);border-radius:10px;background:#101720;color:#fff;padding:0 12px;font:inherit;outline:none}.postos-coord-note{font-size:9.5px;line-height:1.45;color:var(--text3);padding-bottom:4px}.postos-coord-stats{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;margin-top:12px}.postos-coord-stat{padding:10px 11px;border:1px solid var(--border);border-radius:11px;background:#101720}.postos-coord-stat span{display:block;font-size:8px;letter-spacing:.06em;text-transform:uppercase;color:#8497aa;font-weight:800}.postos-coord-stat strong{display:block;font-size:20px;margin-top:4px;color:#eef5f9}.postos-coord-stat.ok strong{color:#41d6a3}.postos-coord-stat.warn strong{color:#f4b544}.postos-coord-stat.error strong{color:#ff8178}.postos-coord-manager{width:min(1120px,96vw)!important;max-width:none!important;max-height:92vh!important;overflow:hidden!important}.postos-coord-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;margin:12px 0}.postos-coord-summary>div{padding:10px 12px;border:1px solid var(--border);border-radius:11px;background:#101720}.postos-coord-summary span{display:block;font-size:8px;text-transform:uppercase;letter-spacing:.06em;color:#8497aa;font-weight:800}.postos-coord-summary strong{display:block;font-size:22px;margin-top:4px}.postos-coord-list{max-height:58vh;overflow:auto;display:grid;gap:8px;padding-right:4px}.postos-coord-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;padding:12px 13px;border:1px solid var(--border);border-radius:12px;background:#101720}.postos-coord-main strong{font-size:11.5px}.postos-coord-main small{display:block;margin-top:3px;color:var(--text3);font-size:8.7px;line-height:1.45}.postos-coord-meta{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}.postos-coord-badge{display:inline-flex;align-items:center;padding:4px 7px;border-radius:999px;border:1px solid var(--border);font-size:8px;font-weight:850;text-transform:uppercase;letter-spacing:.04em;color:#a9b9c8}.postos-coord-badge.manual{color:#41d6a3;border-color:rgba(65,214,163,.28);background:rgba(65,214,163,.05)}.postos-coord-badge.sheet{color:#ffb18e;border-color:rgba(255,107,44,.28);background:rgba(255,107,44,.06)}.postos-coord-badge.auto{color:#aebbd0;border-color:rgba(174,187,208,.2)}.postos-coord-actions{display:flex;align-items:center;justify-content:flex-end;gap:7px;flex-wrap:wrap;min-width:300px}.postos-coord-empty{padding:28px;border:1px dashed var(--border);border-radius:12px;text-align:center;color:var(--text3);font-size:10px}.postos-coord-toolbar{display:grid;grid-template-columns:minmax(240px,1fr) 220px;gap:10px;margin:12px 0}.postos-coord-toolbar input,.postos-coord-toolbar select{height:42px;border:1px solid var(--border);border-radius:10px;background:#101720;color:#fff;padding:0 12px;font:inherit;outline:none}
+@media(max-width:900px){.postos-coord-stats{grid-template-columns:repeat(3,minmax(0,1fr))}.postos-coord-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.postos-coord-row{grid-template-columns:1fr}.postos-coord-actions{min-width:0;justify-content:flex-start}}
+@media(max-width:620px){.postos-coord-period,.postos-coord-toolbar{grid-template-columns:1fr}.postos-coord-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.postos-coord-actions .postos-location-action{flex:1 1 calc(50% - 8px)}}
 </style>
 </head>
 <body>
@@ -3608,8 +3635,9 @@ input[type="checkbox"]:indeterminate{background:rgba(233,95,50,.2);border-color:
         <div class="postos-hero-actions">
           <button id="postos-import-btn" class="postos-import-btn" type="button" hidden onclick="postosAbrirImportacao()"><svg class="ui-icon" viewBox="0 0 24 24"><path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></svg>Atualizar planilha</button>
           <button id="postos-price-import-btn" class="postos-import-btn" type="button" hidden onclick="postosAbrirImportacaoPrecos()"><svg class="ui-icon" viewBox="0 0 24 24"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7H14a3.5 3.5 0 0 1 0 7H6"/></svg>Atualizar preços</button>
+          <button id="postos-coord-import-btn" class="postos-import-btn" type="button" hidden onclick="postosAbrirImportacaoCoordenadas()"><svg class="ui-icon" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m8 7 4-4 4 4"/><path d="M5 14v5h14v-5"/><circle cx="12" cy="12" r="2"/></svg>Atualizar coordenadas</button>
           <button id="postos-price-pending-btn" class="postos-import-btn" type="button" hidden onclick="postosAbrirPendentesVinculos()"><svg class="ui-icon" viewBox="0 0 24 24"><path d="M4 12h16M12 4v16"/><circle cx="12" cy="12" r="9"/></svg>Vincular pendentes <span id="postos-price-pending-count" class="postos-pending-badge">0</span></button>
-          <button id="postos-location-manager-btn" class="postos-import-btn" type="button" hidden onclick="postosAbrirCobertura('all')"><svg class="ui-icon" viewBox="0 0 24 24"><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/><path d="M18 4l2 2-5 5-2 .5.5-2Z"/></svg>Localizações</button>
+          <button id="postos-location-manager-btn" class="postos-import-btn" type="button" hidden onclick="postosAbrirGerenciadorCoordenadas()"><svg class="ui-icon" viewBox="0 0 24 24"><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/><path d="M18 4l2 2-5 5-2 .5.5-2Z"/></svg>Coordenadas <span id="postos-location-ready-count" class="postos-pending-badge">0</span></button>
           <div class="postos-beta"><svg class="ui-icon" viewBox="0 0 24 24"><path d="M7 18h10a4 4 0 0 0 .8-7.9A6 6 0 0 0 6.4 8.3 4.8 4.8 0 0 0 7 18Z"/><path d="m9 13 2 2 4-4"/></svg> COORDENADAS COMPARTILHADAS</div>
         </div>
       </div>
@@ -3803,6 +3831,58 @@ input[type="checkbox"]:indeterminate{background:rgba(233,95,50,.2);border-color:
         <button class="btn btn-secondary" type="button" onclick="postosFecharImportacao()">Cancelar</button>
         <button class="btn btn-primary" id="postos-import-confirm-btn" type="button" disabled onclick="postosConfirmarImportacao()">Salvar nova base</button>
       </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="postos-coord-import-modal" aria-hidden="true">
+    <div class="modal postos-import-modal-card" role="dialog" aria-modal="true" aria-labelledby="postos-coord-import-title">
+      <div class="postos-import-head">
+        <div>
+          <div class="modal-title" id="postos-coord-import-title">Atualizar coordenadas dos postos</div>
+          <div class="postos-import-sub">Importe a planilha mensal dos postos utilizados pela frota. O cruzamento é feito pelo Código EC; a Rede de Postos continua com todos os credenciados e somente as coordenadas são atualizadas.</div>
+        </div>
+        <button class="pend-close" type="button" aria-label="Fechar" onclick="postosFecharImportacaoCoordenadas()">×</button>
+      </div>
+      <input id="postos-coord-import-file" type="file" accept=".xlsx,.xls" hidden onchange="postosLerPlanilhaCoordenadas(this)">
+      <button class="postos-import-drop" id="postos-coord-import-drop" type="button" onclick="document.getElementById('postos-coord-import-file').click()">
+        <span class="postos-import-drop-icon"><svg class="ui-icon" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg></span>
+        <span><strong id="postos-coord-import-drop-title">Selecionar planilha de coordenadas</strong><small>Modelo esperado: CD_ESTABEL (Código EC), POINT_X (longitude) e POINT_Y (latitude). Nome e endereço podem vir junto, mas o vínculo é sempre pelo Código EC.</small></span>
+      </button>
+      <div class="postos-coord-period"><div><label>Competência</label><input id="postos-coord-import-period" type="month"></div><div class="postos-coord-note">Postos que não aparecerem no mês seguinte não perdem a coordenada já salva. Ajustes manuais continuam protegidos e não são sobrescritos pela importação.</div></div>
+      <div class="postos-import-feedback" id="postos-coord-import-feedback" aria-live="polite">O IGNIS vai validar os códigos e mostrar uma prévia antes de salvar.</div>
+      <div id="postos-coord-import-preview" class="postos-import-preview" hidden>
+        <div class="postos-import-file-row"><span id="postos-coord-import-file-name">Planilha</span><strong id="postos-coord-import-total">0 registros</strong></div>
+        <div class="postos-coord-stats">
+          <div class="ok"><span>Encontrados</span><strong id="postos-coord-import-matched">0</strong></div>
+          <div class="ok"><span>Novas</span><strong id="postos-coord-import-new">0</strong></div>
+          <div><span>Atualizadas</span><strong id="postos-coord-import-updated">0</strong></div>
+          <div><span>Sem alteração</span><strong id="postos-coord-import-same">0</strong></div>
+          <div class="warn"><span>Manual protegido</span><strong id="postos-coord-import-protected">0</strong></div>
+          <div class="error"><span>EC não encontrado</span><strong id="postos-coord-import-unmatched">0</strong></div>
+        </div>
+        <div id="postos-coord-import-examples" class="postos-import-examples"></div>
+      </div>
+      <div class="modal-actions postos-import-actions">
+        <button class="btn btn-secondary" type="button" onclick="postosFecharImportacaoCoordenadas()">Cancelar</button>
+        <button class="btn btn-primary" id="postos-coord-import-confirm-btn" type="button" disabled onclick="postosConfirmarImportacaoCoordenadas()">Salvar coordenadas</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="postos-coord-manager-modal" aria-hidden="true">
+    <div class="modal postos-coord-manager" role="dialog" aria-modal="true" aria-labelledby="postos-coord-manager-title">
+      <div class="postos-import-head">
+        <div><div class="modal-title" id="postos-coord-manager-title">Postos com coordenada localizada</div><div class="postos-import-sub" id="postos-coord-manager-sub">Carregando coordenadas compartilhadas...</div></div>
+        <button class="pend-close" type="button" aria-label="Fechar" onclick="closeModal('postos-coord-manager-modal')">×</button>
+      </div>
+      <div class="postos-coord-summary">
+        <div><span>Total localizados</span><strong id="postos-coord-total">0</strong></div>
+        <div><span>Planilha mensal</span><strong id="postos-coord-sheet">0</strong></div>
+        <div><span>Manual confirmado</span><strong id="postos-coord-manual">0</strong></div>
+        <div><span>Busca automática</span><strong id="postos-coord-auto">0</strong></div>
+      </div>
+      <div class="postos-coord-toolbar"><input id="postos-coord-search" type="search" placeholder="Buscar nome, Código EC, cidade ou endereço..." oninput="postosRenderGerenciadorCoordenadas()"><select id="postos-coord-source-filter" onchange="postosRenderGerenciadorCoordenadas()"><option value="all">Todas as origens</option><option value="sheet">Planilha mensal</option><option value="manual">Manual</option><option value="auto">Automática</option></select></div>
+      <div id="postos-coord-list" class="postos-coord-list"><div class="postos-coord-empty">Carregando...</div></div>
     </div>
   </div>
 
@@ -18619,6 +18699,9 @@ let _postosManualMap = null;
 let _postosManualMarker = null;
 let _postosProcessAllRunning = false;
 let _postosProcessAllStop = false;
+let _postosCoordImportPreview = null;
+let _postosCoordImportSaving = false;
+let _postosCoordManagerLoading = false;
 
 const POSTOS_UF_NOMES = {
   'ACRE':'AC','ALAGOAS':'AL','AMAPA':'AP','AMAZONAS':'AM','BAHIA':'BA','CEARA':'CE','DISTRITO FEDERAL':'DF',
@@ -18686,7 +18769,8 @@ function postosGeoFresh(p,g){
   // Coordenadas confirmadas manualmente ficam travadas ao Código EC e não são
   // invalidadas por uma futura mudança do algoritmo automático. Só um geoResetAt
   // mais novo no cadastro oficial pode forçar nova confirmação.
-  if(!(g?.manual||g?.locked)&&Number(g?.algo||0)!==POSTOS_GEO_ALGO_VERSION)return false;
+  const trustedSheet=String(g?.source||'')==='planilha_operacional';
+  if(!(g?.manual||g?.locked||trustedSheet)&&Number(g?.algo||0)!==POSTOS_GEO_ALGO_VERSION)return false;
   return Number.isFinite(Number(g?.lat))&&Number.isFinite(Number(g?.lon));
 }
 function postosSetStatus(text,type='info',progress=null){
@@ -18704,6 +18788,7 @@ function postosUpdateSummary(extra=''){
   let priceNote=priced?` · ${priced.toLocaleString('pt-BR')} com preço`:'';
   if(priced&&_postosPriceMeta?.updatedAt){try{priceNote+=` (${new Date(_postosPriceMeta.updatedAt).toLocaleDateString('pt-BR')})`;}catch(e){}}
   el.textContent=`${total.toLocaleString('pt-BR')} credenciados · ${cached.toLocaleString('pt-BR')} coordenadas prontas · ${origem}${priceNote}${extra?' · '+extra:''}`;
+  const locCount=document.getElementById('postos-location-ready-count');if(locCount)locCount.textContent=cached.toLocaleString('pt-BR');
 }
 function postosLoadCache(key){try{const x=JSON.parse(localStorage.getItem(key)||'{}');return x&&typeof x==='object'?x:{};}catch(e){return {};}}
 function postosScheduleCacheSave(){
@@ -18974,7 +19059,7 @@ function postosSetMobileView(view,scroll=true){
   if(scroll&&window.innerWidth<=720)document.querySelector('.postos-mobile-switch')?.scrollIntoView({behavior:'smooth',block:'start'});
 }
 function postosPodeImportar(){const role=window._authUser?.role;return role==='adm'||role==='admin';}
-function postosAtualizarAcessoImportacao(){const can=postosPodeImportar(),btn=document.getElementById('postos-import-btn'),priceBtn=document.getElementById('postos-price-import-btn'),pendingBtn=document.getElementById('postos-price-pending-btn'),locBtn=document.getElementById('postos-location-manager-btn');if(btn)btn.hidden=!can;if(priceBtn)priceBtn.hidden=!can;if(pendingBtn)pendingBtn.hidden=!can;if(locBtn)locBtn.hidden=!can;postosAtualizarPendentesUI();}
+function postosAtualizarAcessoImportacao(){const can=postosPodeImportar(),btn=document.getElementById('postos-import-btn'),priceBtn=document.getElementById('postos-price-import-btn'),coordBtn=document.getElementById('postos-coord-import-btn'),pendingBtn=document.getElementById('postos-price-pending-btn'),locBtn=document.getElementById('postos-location-manager-btn');if(btn)btn.hidden=!can;if(priceBtn)priceBtn.hidden=!can;if(coordBtn)coordBtn.hidden=!can;if(pendingBtn)pendingBtn.hidden=!can;if(locBtn)locBtn.hidden=!can;postosAtualizarPendentesUI();}
 function postosImportFeedback(text,type=''){
   const el=document.getElementById('postos-import-feedback');if(!el)return;
   el.textContent=text||'';el.className='postos-import-feedback'+(type?' '+type:'');
@@ -19135,6 +19220,76 @@ async function postosConfirmarImportacao(){
     }
   }finally{_postosImportSaving=false;if(drop)drop.disabled=false;postosAtualizarBotaoImportar();}
 }
+
+function postosCoordImportFeedback(text,type=''){
+  const el=document.getElementById('postos-coord-import-feedback');if(!el)return;el.textContent=text||'';el.className='postos-import-feedback'+(type?' '+type:'');
+}
+function postosCoordDefaultPeriod(fileName=''){
+  const s=postosNorm(fileName),months={JANEIRO:1,FEVEREIRO:2,MARCO:3,ABRIL:4,MAIO:5,JUNHO:6,JULHO:7,AGOSTO:8,SETEMBRO:9,OUTUBRO:10,NOVEMBRO:11,DEZEMBRO:12};
+  let month=0;for(const [k,v] of Object.entries(months))if(s.includes(k)){month=v;break;}
+  const ym=String(fileName||'').match(/(?:19|20)\d{2}/),year=ym?Number(ym[0]):new Date().getFullYear();
+  return month?`${year}-${String(month).padStart(2,'0')}`:'';
+}
+function postosFmtCompetencia(v){
+  const m=String(v||'').match(/^(\d{4})-(\d{2})$/);if(!m)return String(v||'');const names=['','Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];return `${names[Number(m[2])]}/${m[1]}`;
+}
+function postosResetImportacaoCoordenadas(){
+  _postosCoordImportPreview=null;const preview=document.getElementById('postos-coord-import-preview'),btn=document.getElementById('postos-coord-import-confirm-btn'),drop=document.getElementById('postos-coord-import-drop'),input=document.getElementById('postos-coord-import-file'),period=document.getElementById('postos-coord-import-period');
+  if(preview)preview.hidden=true;if(btn){btn.disabled=true;btn.textContent='Salvar coordenadas';}if(drop)drop.disabled=false;if(input)input.value='';if(period)period.value='';const title=document.getElementById('postos-coord-import-drop-title');if(title)title.textContent='Selecionar planilha de coordenadas';postosCoordImportFeedback('O IGNIS vai validar os códigos e mostrar uma prévia antes de salvar.');
+}
+async function postosAbrirImportacaoCoordenadas(){
+  if(!postosPodeImportar()){showToast('Sem permissão. Apenas ADM Master e Admin podem atualizar coordenadas.','error');return;}
+  postosResetImportacaoCoordenadas();const modal=document.getElementById('postos-coord-import-modal'),drop=document.getElementById('postos-coord-import-drop');if(modal){modal.classList.add('open');modal.setAttribute('aria-hidden','false');}ignisSyncModalScrollLock();if(drop)drop.disabled=true;postosCoordImportFeedback('Conferindo a Rede de Postos mais recente...','loading');
+  try{await postosEnsureBase();if(!(await postosFirebaseGeoReady()))throw new Error('O Firebase ainda não está disponível. Verifique a internet e tente novamente.');if(drop)drop.disabled=false;postosCoordImportFeedback('Pronto. Selecione a planilha mensal de coordenadas.');}
+  catch(e){postosCoordImportFeedback(e?.message||'Não foi possível preparar a importação.','error');if(drop)drop.disabled=true;}
+}
+function postosFecharImportacaoCoordenadas(){
+  if(_postosCoordImportSaving){postosCoordImportFeedback('Aguarde: as coordenadas ainda estão sendo confirmadas no Firebase.','loading');return;}const modal=document.getElementById('postos-coord-import-modal');if(modal){modal.classList.remove('open');modal.setAttribute('aria-hidden','true');}ignisSyncModalScrollLock();
+}
+function postosCoordNumber(v){if(typeof v==='number'&&Number.isFinite(v))return v;let s=String(v??'').trim();if(!s)return NaN;if(s.includes(',')&&!s.includes('.'))s=s.replace(',','.');else if(s.includes(',')&&s.includes('.'))s=s.lastIndexOf(',')>s.lastIndexOf('.')?s.replace(/\./g,'').replace(',','.'):s.replace(/,/g,'');return Number(s.replace(/[^0-9+\-.]/g,''));}
+function postosExtrairPlanilhaCoordenadas(wb){
+  const aliases={CDESTABEL:'codigo',CODIGOEC:'codigo',CODEC:'codigo',ESTABELECIMENTO:'codigo',POINTX:'lon',LONGITUDE:'lon',LON:'lon',LNG:'lon',POINTY:'lat',LATITUDE:'lat',LAT:'lat',NOMEREDUZ:'nome',NOMEEC:'nome',NOME:'nome',LOGRADOURO:'endereco',ENDERECO:'endereco',DSCIDADE:'cidade',CIDADE:'cidade',UF:'uf'};let found=null;
+  for(const sheetName of wb.SheetNames||[]){const matrix=XLSX.utils.sheet_to_json(wb.Sheets[sheetName],{header:1,defval:'',raw:true,blankrows:false});for(let ri=0;ri<Math.min(30,matrix.length);ri++){const idx={};(matrix[ri]||[]).forEach((v,i)=>{const key=postosNorm(v).replace(/\s/g,'');if(aliases[key]&&!Object.prototype.hasOwnProperty.call(idx,aliases[key]))idx[aliases[key]]=i;});if(Number.isInteger(idx.codigo)&&Number.isInteger(idx.lon)&&Number.isInteger(idx.lat)){found={sheetName,matrix,rowIndex:ri,indexes:idx};break;}}if(found)break;}
+  if(!found)throw new Error('Não encontrei as colunas CD_ESTABEL, POINT_X e POINT_Y.');
+  const map=new Map(),errors=[];for(let ri=found.rowIndex+1;ri<found.matrix.length;ri++){const row=found.matrix[ri]||[],get=k=>Number.isInteger(found.indexes[k])?row[found.indexes[k]]:'';const codigo=postosCellText(get('codigo')).replace(/\.0+$/,'');if(!codigo&&!postosCellText(get('lat'))&&!postosCellText(get('lon')))continue;const lat=postosCoordNumber(get('lat')),lon=postosCoordNumber(get('lon')),line=ri+1;if(!codigo){errors.push(`linha ${line}: Código EC vazio`);continue;}if(!Number.isFinite(lat)||Math.abs(lat)>90||!Number.isFinite(lon)||Math.abs(lon)>180){errors.push(`linha ${line}: latitude/longitude inválida para EC ${codigo}`);continue;}const rec={codigo,lat,lon,nome:postosCellText(get('nome')),endereco:postosCellText(get('endereco')),cidade:postosCellText(get('cidade')),uf:postosCellText(get('uf')).toUpperCase()};if(map.has(codigo)){const old=map.get(codigo);if(Math.abs(old.lat-lat)>0.00001||Math.abs(old.lon-lon)>0.00001)errors.push(`Código EC ${codigo} aparece com coordenadas diferentes`);continue;}map.set(codigo,rec);if(errors.length>=8)break;}
+  if(errors.length)throw new Error('Revise a planilha — '+errors.join('; ')+'.');const records=[...map.values()];if(!records.length)throw new Error('A planilha não possui coordenadas válidas.');return records;
+}
+async function postosCompararImportacaoCoordenadas(records,fileName){
+  const byCode=new Map((_postosBase||[]).map(p=>[String(p.codigo||''),p])),matched=records.filter(r=>byCode.has(r.codigo)),unmatched=records.filter(r=>!byCode.has(r.codigo));
+  if(matched.length&&await postosFirebaseGeoReady()){try{const latest=await window.fbLoadPostosGeo(matched.map(r=>r.codigo))||{};Object.entries(latest).forEach(([codigo,g])=>{const p=byCode.get(String(codigo));if(p&&postosGeoFresh(p,g))_postosGeoCache[codigo]={...g,shared:true};});postosScheduleCacheSave();}catch(e){console.warn('IGNIS postos: conferência das coordenadas atuais',e);}}
+  const novas=[],updated=[],same=[],protectedManual=[];for(const r of matched){const p=byCode.get(r.codigo),g=_postosGeoCache?.[r.codigo],fresh=postosGeoFresh(p,g)&&!g?.missing;if(fresh&&(g.manual||g.locked)){protectedManual.push({record:r,geo:g,posto:p});continue;}if(!fresh){novas.push({record:r,posto:p});continue;}const meters=postosHaversine(Number(g.lat),Number(g.lon),r.lat,r.lon)*1000;if(meters<=15)same.push({record:r,geo:g,posto:p,meters});else updated.push({record:r,geo:g,posto:p,meters});}
+  return{records,fileName:String(fileName||''),matched,unmatched,novas,updated,same,protectedManual};
+}
+function postosRenderCoordImportPreview(p){
+  const f=n=>Number(n||0).toLocaleString('pt-BR');document.getElementById('postos-coord-import-preview').hidden=false;document.getElementById('postos-coord-import-file-name').textContent=p.fileName;document.getElementById('postos-coord-import-total').textContent=`${f(p.records.length)} registro(s)`;document.getElementById('postos-coord-import-matched').textContent=f(p.matched.length);document.getElementById('postos-coord-import-new').textContent=f(p.novas.length);document.getElementById('postos-coord-import-updated').textContent=f(p.updated.length);document.getElementById('postos-coord-import-same').textContent=f(p.same.length);document.getElementById('postos-coord-import-protected').textContent=f(p.protectedManual.length);document.getElementById('postos-coord-import-unmatched').textContent=f(p.unmatched.length);
+  const examples=[];if(p.unmatched.length)examples.push(postosImportExample('Código EC fora da Rede',p.unmatched,x=>`EC ${postosEsc(x.codigo)}${x.nome?` — ${postosEsc(x.nome)}`:''}`));if(p.protectedManual.length)examples.push(postosImportExample('Protegidos por ajuste manual',p.protectedManual,x=>`EC ${postosEsc(x.posto.codigo)} — ${postosEsc(x.posto.nome)}`));if(p.updated.length)examples.push(postosImportExample('Coordenadas que mudam',p.updated,x=>`EC ${postosEsc(x.posto.codigo)} — ${postosFmtNum(x.meters,0)} m`));document.getElementById('postos-coord-import-examples').innerHTML=examples.filter(Boolean).join('')||'<div class="postos-import-example"><b>Validação</b><span>Todos os registros foram vinculados pelo Código EC sem conflito.</span></div>';
+  const period=document.getElementById('postos-coord-import-period'),btn=document.getElementById('postos-coord-import-confirm-btn');if(period&&!period.value)period.value=postosCoordDefaultPeriod(p.fileName);if(btn)btn.disabled=!p.matched.length;const title=document.getElementById('postos-coord-import-drop-title');if(title)title.textContent='Escolher outra planilha';postosCoordImportFeedback(`${f(p.matched.length)} de ${f(p.records.length)} registro(s) encontrados na Rede de Postos.${p.protectedManual.length?` ${f(p.protectedManual.length)} ajuste(s) manual(is) serão preservados.`:''}`,'success');
+}
+async function postosLerPlanilhaCoordenadas(input){
+  const file=input?.files?.[0];if(!file)return;const drop=document.getElementById('postos-coord-import-drop');if(drop)drop.disabled=true;_postosCoordImportPreview=null;document.getElementById('postos-coord-import-preview').hidden=true;document.getElementById('postos-coord-import-confirm-btn').disabled=true;postosCoordImportFeedback(`Lendo ${file.name}...`,'loading');
+  try{if(file.size>20*1024*1024)throw new Error('A planilha ultrapassa 20 MB.');if(!await ensureXLSXReady())throw new Error('O leitor de Excel não foi carregado.');const wb=XLSX.read(await file.arrayBuffer(),{type:'array',cellDates:false});const rows=postosExtrairPlanilhaCoordenadas(wb);_postosCoordImportPreview=await postosCompararImportacaoCoordenadas(rows,file.name);postosRenderCoordImportPreview(_postosCoordImportPreview);}
+  catch(e){console.error('IGNIS postos: coordenadas mensais',e);postosCoordImportFeedback(e?.message||'Não foi possível ler a planilha.','error');showToast(e?.message||'Não foi possível ler a planilha.','error');}
+  finally{if(drop)drop.disabled=false;if(input)input.value='';}
+}
+async function postosConfirmarImportacaoCoordenadas(){
+  const p=_postosCoordImportPreview;if(!p||_postosCoordImportSaving||!postosPodeImportar())return;const competencia=String(document.getElementById('postos-coord-import-period')?.value||'');if(!/^\d{4}-\d{2}$/.test(competencia)){postosCoordImportFeedback('Informe a competência da planilha antes de salvar.','error');return;}const saveRows=[...p.novas,...p.updated,...p.same].map(x=>x.record);if(!saveRows.length){postosCoordImportFeedback('Não há coordenadas para gravar; todos os registros encontrados estão protegidos por ajuste manual.','error');return;}
+  _postosCoordImportSaving=true;const btn=document.getElementById('postos-coord-import-confirm-btn'),drop=document.getElementById('postos-coord-import-drop');if(btn){btn.disabled=true;btn.textContent='Salvando...';}if(drop)drop.disabled=true;postosCoordImportFeedback(`Salvando ${saveRows.length.toLocaleString('pt-BR')} coordenada(s) no Firebase...`,'loading');
+  try{if(!(await postosFirebaseGeoReady()))throw new Error('Firebase indisponível.');const latest=await window.fbLoadPostosGeo(saveRows.map(r=>r.codigo))||{},protectedNow=new Set(Object.entries(latest).filter(([,g])=>g?.manual||g?.locked).map(([codigo])=>String(codigo))),safeRows=saveRows.filter(r=>!protectedNow.has(String(r.codigo)));if(!safeRows.length)throw new Error('Todas as coordenadas ficaram protegidas por ajustes manuais feitos após a prévia.');const now=Date.now(),updatedBy=String(window._authUser?.nome||window._authUser?.id||'Administrador'),items=safeRows.map(r=>({codigo:r.codigo,lat:r.lat,lon:r.lon,algo:POSTOS_GEO_ALGO_VERSION,source:'planilha_operacional',quality:'operational',manual:false,locked:false,confirmedBy:'',note:`Coordenada operacional confirmada pela planilha ${postosFmtCompetencia(competencia)}`,competencia,sourceFile:p.fileName,importedAt:now,updatedBy}));const ok=await window.fbSavePostosGeo(items);if(!ok)throw new Error('O Firebase não confirmou a gravação.');for(const x of items){_postosGeoCache[x.codigo]={lat:x.lat,lon:x.lon,at:now,shared:true,algo:POSTOS_GEO_ALGO_VERSION,source:x.source,quality:x.quality,manual:false,locked:false,confirmedBy:'',note:x.note,competencia,sourceFile:p.fileName,importedAt:now,updatedBy};_postosGeoIssues.delete(String(x.codigo));}postosScheduleCacheSave();if(_postosCurrentSearch)postosRefreshCurrentSearchFromCache();const rs=document.getElementById('postos-results-search'),rsc=document.getElementById('postos-results-scope');if((rs?.value||'').trim()||rsc?.value==='all')postosApplyResultsSearch();postosUpdateSummary();postosCoordImportFeedback('Coordenadas atualizadas com sucesso.','success');showToast(`${items.length} coordenada(s) atualizadas · competência ${postosFmtCompetencia(competencia)}${protectedNow.size?` · ${protectedNow.size} manual(is) preservada(s)`:''}.`,'success');_postosCoordImportPreview=null;_postosCoordImportSaving=false;postosFecharImportacaoCoordenadas();}
+  catch(e){console.error('IGNIS postos: salvar coordenadas mensais',e);postosCoordImportFeedback(e?.message||'Falha ao salvar coordenadas.','error');showToast(e?.message||'Falha ao salvar coordenadas.','error');}
+  finally{_postosCoordImportSaving=false;if(drop)drop.disabled=false;if(btn){btn.textContent='Salvar coordenadas';btn.disabled=!_postosCoordImportPreview;}}
+}
+function postosCoordSourceType(g){if(g?.manual||g?.locked)return'manual';if(String(g?.source||'')==='planilha_operacional')return'sheet';return'auto';}
+function postosCoordSourceLabel(g){const t=postosCoordSourceType(g);if(t==='manual')return'Manual';if(t==='sheet')return g?.competencia?`Planilha ${postosFmtCompetencia(g.competencia)}`:'Planilha mensal';return'Automática';}
+async function postosAbrirGerenciadorCoordenadas(){
+  if(!postosPodeImportar()){showToast('Sem permissão para gerenciar coordenadas.','error');return;}const modal=document.getElementById('postos-coord-manager-modal'),list=document.getElementById('postos-coord-list'),sub=document.getElementById('postos-coord-manager-sub');if(modal){modal.classList.add('open');modal.setAttribute('aria-hidden','false');}ignisSyncModalScrollLock();if(list)list.innerHTML='<div class="postos-coord-empty">Carregando coordenadas compartilhadas...</div>';if(sub)sub.textContent='Conferindo o Firebase...';_postosCoordManagerLoading=true;
+  try{await postosEnsureBase();if(await postosFirebaseGeoReady()&&typeof window.fbLoadAllPostosGeo==='function'){const shared=await window.fbLoadAllPostosGeo(),byCode=new Map((_postosBase||[]).map(p=>[String(p.codigo||''),p]));let added=0;Object.entries(shared||{}).forEach(([codigo,g])=>{const p=byCode.get(String(codigo));if(p&&postosGeoFresh(p,g)){_postosGeoCache[codigo]={...g,shared:true};added++;}});if(added)postosScheduleCacheSave();}postosRenderGerenciadorCoordenadas();}
+  catch(e){if(list)list.innerHTML=`<div class="postos-coord-empty">${postosEsc(e?.message||'Não foi possível carregar as coordenadas.')}</div>`;if(sub)sub.textContent='Falha ao consultar coordenadas.';}
+  finally{_postosCoordManagerLoading=false;}
+}
+function postosRenderGerenciadorCoordenadas(){
+  const list=document.getElementById('postos-coord-list');if(!list||_postosCoordManagerLoading)return;const byCode=new Map((_postosBase||[]).map(p=>[String(p.codigo||''),p])),all=[];Object.entries(_postosGeoCache||{}).forEach(([codigo,g])=>{const p=byCode.get(String(codigo));if(!p||!postosGeoFresh(p,g)||g?.missing)return;all.push({posto:p,geo:g,type:postosCoordSourceType(g)});});all.sort((a,b)=>String(a.posto.nome||'').localeCompare(String(b.posto.nome||''),'pt-BR'));const counts={sheet:0,manual:0,auto:0};all.forEach(x=>counts[x.type]++);document.getElementById('postos-coord-total').textContent=all.length.toLocaleString('pt-BR');document.getElementById('postos-coord-sheet').textContent=counts.sheet.toLocaleString('pt-BR');document.getElementById('postos-coord-manual').textContent=counts.manual.toLocaleString('pt-BR');document.getElementById('postos-coord-auto').textContent=counts.auto.toLocaleString('pt-BR');const sub=document.getElementById('postos-coord-manager-sub');if(sub)sub.textContent=`${all.length.toLocaleString('pt-BR')} posto(s) com coordenada confirmada na base compartilhada.`;const q=postosNorm(document.getElementById('postos-coord-search')?.value||''),filter=document.getElementById('postos-coord-source-filter')?.value||'all';let items=all.filter(x=>(filter==='all'||x.type===filter)&&(!q||postosNorm(`${x.posto.codigo} ${x.posto.nome} ${x.posto.endereco} ${x.posto.bairro} ${x.posto.cidade} ${x.posto.uf}`).includes(q)));const total=items.length;if(items.length>350)items=items.slice(0,350);if(!items.length){list.innerHTML='<div class="postos-coord-empty">Nenhum posto encontrado neste filtro.</div>';return;}list.innerHTML=(total>items.length?`<div class="postos-coord-empty" style="padding:11px 13px;text-align:left">${total.toLocaleString('pt-BR')} resultados. Exibindo os primeiros 350; use a busca para localizar um posto específico.</div>`:'')+items.map(({posto:p,geo:g,type})=>{const date=g.at?new Date(g.at).toLocaleDateString('pt-BR'):'—',sourceFile=g.sourceFile?` · ${postosEsc(g.sourceFile)}`:'';return `<div class="postos-coord-row"><div class="postos-coord-main"><strong>${postosEsc(p.nome)}</strong><small>EC ${postosEsc(p.codigo)} · ${postosEsc(p.endereco)} · ${postosEsc(p.cidade)}/${postosEsc(p.uf)}</small><small>Lat ${Number(g.lat).toFixed(6)} · Long ${Number(g.lon).toFixed(6)} · atualizado ${date}${sourceFile}</small><div class="postos-coord-meta"><span class="postos-coord-badge ${type}">${postosEsc(postosCoordSourceLabel(g))}</span>${g.updatedBy?`<span class="postos-coord-badge">${postosEsc(g.updatedBy)}</span>`:''}</div></div><div class="postos-coord-actions"><button class="postos-location-action view" type="button" onclick="postosCoordManagerFocus('${postosEsc(p.codigo)}')">Ver no mapa</button><button class="postos-location-action adjust" type="button" onclick="postosAbrirAjusteLocalizacao('${postosEsc(p.codigo)}')">Ajustar</button><button class="postos-location-action google" type="button" onclick="postosAbrirGooglePesquisaPosto('${postosEsc(p.codigo)}')">Abrir Maps</button></div></div>`;}).join('');postosUpdateSummary();
+}
+function postosCoordManagerFocus(codigo){const p=(_postosBase||[]).find(x=>String(x.codigo)===String(codigo)),g=_postosGeoCache?.[String(codigo)];if(!p||!postosGeoFresh(p,g)||g?.missing)return showToast('Este posto não possui coordenada confirmada.','error');const r=postosBuildKnownResult(p,g);closeModal('postos-coord-manager-modal');if(!r)return;postosRenderResults([r],{filtered:true});postosPlotResults([r],{fit:true,keepRoute:_postosCurrentSearch?.mode==='rota'});setTimeout(()=>postosFocusResult(0),60);}
 
 function postosPriceImportFeedback(text,type=''){
   const el=document.getElementById('postos-price-import-feedback');if(!el)return;el.textContent=text||'';el.className='postos-import-feedback'+(type?' '+type:'');
@@ -19505,7 +19660,7 @@ async function postosHydrateSharedGeo(candidates){
     Object.entries(shared).forEach(([codigo,g])=>{
       const lat=Number(g?.lat),lon=Number(g?.lon);
       if(postosGeoFresh(byCode.get(codigo),g)&&Number.isFinite(lat)&&Number.isFinite(lon)){
-        _postosGeoCache[codigo]={lat,lon,at:Number(g?.at||0),shared:true,algo:Number(g?.algo||0),source:String(g?.source||''),quality:String(g?.quality||''),manual:!!g?.manual,locked:!!g?.locked,confirmedBy:String(g?.confirmedBy||''),note:String(g?.note||'')};found++;
+        _postosGeoCache[codigo]={lat,lon,at:Number(g?.at||0),shared:true,algo:Number(g?.algo||0),source:String(g?.source||''),quality:String(g?.quality||''),manual:!!g?.manual,locked:!!g?.locked,confirmedBy:String(g?.confirmedBy||''),note:String(g?.note||''),competencia:String(g?.competencia||''),sourceFile:String(g?.sourceFile||''),importedAt:Number(g?.importedAt||0),updatedBy:String(g?.updatedBy||'')};found++;
       }
     });
     if(found)postosScheduleCacheSave();
@@ -19522,7 +19677,7 @@ async function postosShareExistingLocalGeo(){
 function postosQueueSharedGeo(codigo,geo){
   const lat=Number(geo?.lat),lon=Number(geo?.lon),code=String(codigo||'').trim();
   if(!code||!Number.isFinite(lat)||!Number.isFinite(lon))return;
-  _postosCloudPending.set(code,{codigo:code,lat,lon,algo:Number(geo?.algo||POSTOS_GEO_ALGO_VERSION),source:String(geo?.source||'geocoder'),quality:String(geo?.quality||'exact'),manual:!!geo?.manual,locked:!!geo?.locked,confirmedBy:String(geo?.confirmedBy||''),note:String(geo?.note||'')});
+  _postosCloudPending.set(code,{codigo:code,lat,lon,algo:Number(geo?.algo||POSTOS_GEO_ALGO_VERSION),source:String(geo?.source||'geocoder'),quality:String(geo?.quality||'exact'),manual:!!geo?.manual,locked:!!geo?.locked,confirmedBy:String(geo?.confirmedBy||''),note:String(geo?.note||''),competencia:String(geo?.competencia||''),sourceFile:String(geo?.sourceFile||''),importedAt:Number(geo?.importedAt||0),updatedBy:String(geo?.updatedBy||'')});
   clearTimeout(_postosCloudFlushTimer);
   _postosCloudFlushTimer=setTimeout(()=>postosFlushSharedGeo(),4200);
 }
@@ -20077,8 +20232,8 @@ async function postosManualInitMap(){
 }
 async function postosSalvarLocalizacaoManual(){
   const p=(_postosBase||[]).find(x=>String(x.codigo)===String(_postosManualState.codigo)),lat=Number(_postosManualState.lat),lon=Number(_postosManualState.lon);if(!p||!Number.isFinite(lat)||!Number.isFinite(lon))return showToast('Selecione uma localização antes de salvar.','error');const save=document.getElementById('postos-location-save');if(save){save.disabled=true;save.textContent='Salvando...';}
-  const confirmedBy=String(window._authUser?.email||window._authUser?.username||window._authUser?.nome||'');const out={lat,lon,at:Date.now(),shared:false,algo:POSTOS_GEO_ALGO_VERSION,source:'manual',quality:'confirmed',manual:true,locked:true,confirmedBy,note:_postosManualState.label||'Localização confirmada manualmente'};_postosGeoCache[p.codigo]=out;_postosGeoIssues.delete(String(p.codigo));postosScheduleCacheSave();
-  let cloud=false;try{if(await postosFirebaseGeoReady())cloud=await window.fbSavePostosGeo([{codigo:p.codigo,...out}]);}catch(e){console.warn('IGNIS postos: salvar localização manual',e);}if(cloud)_postosGeoCache[p.codigo].shared=true;postosScheduleCacheSave();postosRefreshCurrentSearchFromCache();postosCoverageUpdate();const rs=document.getElementById('postos-results-search'),rsc=document.getElementById('postos-results-scope');if((rs?.value||'').trim()||rsc?.value==='all')postosApplyResultsSearch();postosFecharAjusteLocalizacao();showToast(cloud?'Localização confirmada e compartilhada no Firebase.':'Localização salva neste aparelho, mas o Firebase não respondeu. Tente novamente quando a conexão voltar.',cloud?'success':'error');if(document.getElementById('postos-coverage-modal')?.classList.contains('open'))postosRenderCoberturaModal();if(save){save.textContent='Salvar localização confirmada';save.disabled=false;}
+  const confirmedBy=String(window._authUser?.email||window._authUser?.username||window._authUser?.nome||'');const out={lat,lon,at:Date.now(),shared:false,algo:POSTOS_GEO_ALGO_VERSION,source:'manual',quality:'confirmed',manual:true,locked:true,confirmedBy,note:_postosManualState.label||'Localização confirmada manualmente',competencia:'',sourceFile:'',importedAt:0,updatedBy:confirmedBy};_postosGeoCache[p.codigo]=out;_postosGeoIssues.delete(String(p.codigo));postosScheduleCacheSave();
+  let cloud=false;try{if(await postosFirebaseGeoReady())cloud=await window.fbSavePostosGeo([{codigo:p.codigo,...out}]);}catch(e){console.warn('IGNIS postos: salvar localização manual',e);}if(cloud)_postosGeoCache[p.codigo].shared=true;postosScheduleCacheSave();postosRefreshCurrentSearchFromCache();postosCoverageUpdate();const rs=document.getElementById('postos-results-search'),rsc=document.getElementById('postos-results-scope');if((rs?.value||'').trim()||rsc?.value==='all')postosApplyResultsSearch();postosFecharAjusteLocalizacao();showToast(cloud?'Localização confirmada e compartilhada no Firebase.':'Localização salva neste aparelho, mas o Firebase não respondeu. Tente novamente quando a conexão voltar.',cloud?'success':'error');if(document.getElementById('postos-coverage-modal')?.classList.contains('open'))postosRenderCoberturaModal();if(document.getElementById('postos-coord-manager-modal')?.classList.contains('open'))postosRenderGerenciadorCoordenadas();if(save){save.textContent='Salvar localização confirmada';save.disabled=false;}
 }
 
 function postosToggleMore(show,label='',fn=null){const b=document.getElementById('postos-load-more');if(!b)return;b.style.display=show?'inline-flex':'none';b.textContent=label||'Processar mais';b.onclick=fn||null;}
