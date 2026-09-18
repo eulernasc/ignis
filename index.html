@@ -1,11 +1,11 @@
 <!DOCTYPE html>
-<!-- IGNIS v63 · CTA: base limpa = CTA + Ticket atual; O2P = conferência -->
+<!-- IGNIS v64 · carregamento Firebase otimizado por cache direto + download apenas dos chunks ausentes -->
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <!-- IGNIS v46 · correção de travamento Motoristas PX + cache de nomes + renderização única -->
-<meta name="ignis-build" content="2026-09-15-cta-reconciliacao-v1">
+<meta name="ignis-build" content="2026-09-18-firebase-load-cache-v64">
 <title>Ignis — Gestão Inteligente de Frotas e Equipamentos</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23ff6b2c'/%3E%3Cpath d='M36 9c1 8-4 11-7 15-3 4-5 8-2 14 2-4 5-6 9-8-1 8 5 11 5 17 6-4 9-10 8-17-1-10-7-17-13-21Z' fill='none' stroke='white' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -212,72 +212,77 @@ async function fbReadChunkSeries(prefix, version, total) {
   if (!Number.isInteger(total) || total < 0 || total > FB_MAX_CHUNKS) {
     throw new Error(`${prefix}: manifesto inválido (${total} chunks)`);
   }
+
   const isMobile = fbIsMobileDevice();
-  const baseId = `${prefix}_${version}_`;
+  const ids = Array.from({length:total}, (_,i) => `${prefix}_${version}_${i}`);
+  const snapshots = new Array(total).fill(null);
   fbEmitProgress(prefix,0,total);
 
-  // v39: como cada versão é imutável, se TODOS os chunks dessa versão já estão
-  // no cache persistente do Firestore não há motivo para baixá-los de novo.
-  const buildFromSnapshot = (qsnap) => {
-    const docs = (qsnap?.docs || [])
-      .filter(d => String(d.id||'').startsWith(baseId))
-      .map(d => ({d, i:Number(String(d.id).slice(baseId.length))}))
-      .filter(x => Number.isInteger(x.i) && x.i >= 0 && x.i < total)
-      .sort((a,b)=>a.i-b.i);
-    if (docs.length !== total) return null;
-    for(let i=0;i<docs.length;i++) if(docs[i].i!==i) return null;
-    const out=[];
-    docs.forEach(x => out.push(...(x.d.data().registros || [])));
-    return out;
-  };
-
-  const makeQuery = () => query(
-    collection(db,'fueltracker'),
-    where(documentId(),'>=',baseId),
-    where(documentId(),'<=',baseId+'\uf8ff')
-  );
-
-  // Os chunks são imutáveis e o cache persistente também existe no computador.
-  // Antes ele só era consultado no celular, fazendo o desktop baixar novamente
-  // dezenas de documentos que já estavam prontos no próprio navegador.
-  try {
-    const cached = await getDocsFromCache(makeQuery());
-    const ready = buildFromSnapshot(cached);
-    if (ready) { fbEmitProgress(prefix,total,total); return ready; }
-  } catch(e) { /* cache incompleto/indisponível: segue para rede */ }
-
-  // Uma consulta por prefixo substitui dezenas/centenas de getDoc individuais.
-  // No iPhone isso reduz muito o custo de round-trips HTTP e o tempo em Sincronizando.
-  try {
-    const qsnap = await withTimeout(getDocs(makeQuery()), isMobile ? 30000 : 22000);
-    const ready = buildFromSnapshot(qsnap);
-    if (ready) { fbEmitProgress(prefix,total,total); return ready; }
-    console.warn(`IGNIS: leitura em lote de ${prefix} retornou ${qsnap?.docs?.length||0}/${total}; usando fallback.`);
-  } catch(e) {
-    console.warn(`IGNIS: consulta em lote de ${prefix} falhou; usando fallback por chunks.`,e);
-  }
-
-  // Fallback conservador para browsers/regras antigas.
-  const out = [];
-  const batchSize = isMobile ? 16 : 24;
-  const timeoutMs = isMobile ? 14000 : 16000;
-  for (let base = 0; base < total; base += batchSize) {
-    const size = Math.min(batchSize, total - base);
-    const snaps = await Promise.all(Array.from({length:size}, (_, off) => {
+  // v64: caminho rápido e conservador.
+  // Primeiro tenta cada chunk diretamente no cache persistente do Firestore. O modelo
+  // anterior fazia uma query por prefixo; em alguns ambientes essa query podia ficar
+  // aguardando timeout/list permission e, quando falhava, baixava TODOS os chunks de
+  // novo mesmo que a maioria já estivesse no cache. Agora só vai para a rede o que
+  // realmente estiver faltando, sem alterar qualquer regra de salvamento.
+  const cacheBatch = isMobile ? 24 : 48;
+  let cachedCount = 0;
+  for (let base = 0; base < total; base += cacheBatch) {
+    const size = Math.min(cacheBatch, total - base);
+    const cached = await Promise.allSettled(Array.from({length:size}, (_,off) => {
       const i = base + off;
-      return fbRetry(
-        () => withTimeout(getDoc(doc(db, 'fueltracker', `${prefix}_${version}_${i}`)), timeoutMs),
-        2, 300
-      );
+      return getDocFromCache(doc(db,'fueltracker',ids[i]));
     }));
-    snaps.forEach((snap, off) => {
+    cached.forEach((res,off) => {
       const i = base + off;
-      if (!snap.exists()) throw new Error(`${prefix}: chunk ${i+1}/${total} não encontrado`);
-      out.push(...(snap.data().registros || []));
+      if (res.status === 'fulfilled' && res.value?.exists()) {
+        snapshots[i] = res.value;
+        cachedCount++;
+      }
     });
-    fbEmitProgress(prefix,Math.min(base+size,total),total);
+    if (cachedCount) fbEmitProgress(prefix,cachedCount,total);
     await fbSleep(0);
   }
+
+  // Busca somente os chunks ausentes. Mantemos lotes moderados para evitar saturar
+  // Safari/iPhone e, no desktop, aumentamos um pouco o paralelismo. Cada documento
+  // continua validado individualmente e a função só retorna quando TODOS os chunks
+  // da versão do manifesto foram confirmados.
+  const missing = [];
+  for (let i=0;i<total;i++) if (!snapshots[i]) missing.push(i);
+  const networkBatch = isMobile ? 20 : 36;
+  const timeoutMs = isMobile ? 14000 : 15000;
+  let networkDone = 0;
+
+  for (let base = 0; base < missing.length; base += networkBatch) {
+    const batch = missing.slice(base, base + networkBatch);
+    const fetched = await Promise.all(batch.map(i =>
+      fbRetry(
+        () => withTimeout(getDoc(doc(db,'fueltracker',ids[i])), timeoutMs),
+        2, 300
+      )
+    ));
+    fetched.forEach((snap,off) => {
+      const i = batch[off];
+      if (!snap.exists()) throw new Error(`${prefix}: chunk ${i+1}/${total} não encontrado`);
+      snapshots[i] = snap;
+      networkDone++;
+    });
+    fbEmitProgress(prefix,Math.min(cachedCount + networkDone,total),total);
+    await fbSleep(0);
+  }
+
+  // Segurança final: nunca reconstrói uma série pela metade ou fora da ordem.
+  const out=[];
+  for (let i=0;i<total;i++) {
+    const snap=snapshots[i];
+    if (!snap?.exists()) throw new Error(`${prefix}: chunk ${i+1}/${total} não confirmado`);
+    const data=snap.data()||{};
+    if ((data.chunk !== undefined && data.chunk !== null && Number(data.chunk) !== i) || (data.version && String(data.version)!==String(version))) {
+      throw new Error(`${prefix}: chunk ${i+1}/${total} pertence a outra versão`);
+    }
+    out.push(...(data.registros || []));
+  }
+  fbEmitProgress(prefix,total,total);
   return out;
 }
 
