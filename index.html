@@ -4196,6 +4196,16 @@ input[type="checkbox"]:indeterminate{background:rgba(233,95,50,.2);border-color:
         </div>
         <input type="hidden" id="relg-edit-id" value="">
       </div>
+      <div style="background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:16px 20px;margin-bottom:12px">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:10px">
+          <div style="font-size:14px;font-weight:700">Grupos salvos</div>
+          <div id="relg-busca-contagem" style="font-size:11px;color:var(--text3)"></div>
+        </div>
+        <div style="position:relative">
+          <svg class="ui-icon" viewBox="0 0 24 24" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);width:17px;height:17px;color:var(--text3);pointer-events:none"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input type="text" class="form-input" id="relg-lista-busca" placeholder="Pesquisar grupo, e-mail ou operação..." oninput="relgFiltrarLista()" style="padding-left:38px;font-size:13px">
+        </div>
+      </div>
       <div id="relg-lista">
         <div class="empty" style="padding:40px"><div class="empty-icon">📧</div><div class="empty-text">Nenhum grupo criado ainda</div></div>
       </div>
@@ -14261,6 +14271,50 @@ function relgExcluir(id) {
   showToast('Grupo excluído', 'success');
 }
 
+function relgNormalizarBusca(valor) {
+  return String(valor || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+function relgFiltrarLista() {
+  const input = document.getElementById('relg-lista-busca');
+  const lista = document.getElementById('relg-lista');
+  const contador = document.getElementById('relg-busca-contagem');
+  if (!lista) return;
+
+  const termo = relgNormalizarBusca(input?.value);
+  const cards = [...lista.querySelectorAll('[data-relg-grupo-card]')];
+  let visiveis = 0;
+
+  cards.forEach(card => {
+    const bate = !termo || relgNormalizarBusca(card.dataset.relgSearch).includes(termo);
+    card.style.display = bate ? '' : 'none';
+    if (bate) visiveis++;
+  });
+
+  let vazioBusca = document.getElementById('relg-busca-vazia');
+  if (termo && cards.length && visiveis === 0) {
+    if (!vazioBusca) {
+      vazioBusca = document.createElement('div');
+      vazioBusca.id = 'relg-busca-vazia';
+      vazioBusca.className = 'empty';
+      vazioBusca.style.padding = '32px';
+      vazioBusca.innerHTML = '<div class="empty-icon">🔎</div><div class="empty-text">Nenhum grupo encontrado para esta pesquisa</div>';
+      lista.appendChild(vazioBusca);
+    }
+    vazioBusca.style.display = '';
+  } else if (vazioBusca) {
+    vazioBusca.style.display = 'none';
+  }
+
+  if (contador) {
+    contador.textContent = cards.length ? (termo ? visiveis + ' de ' + cards.length + ' grupo(s)' : cards.length + ' grupo(s)') : '';
+  }
+}
+
 function relgRender() {
   relgInit();
   relgPopularOps(null);
@@ -14268,11 +14322,20 @@ function relgRender() {
   if (!lista) return;
   if (!window._relGrupos.length) {
     lista.innerHTML = '<div class="empty" style="padding:40px"><div class="empty-icon">📧</div><div class="empty-text">Nenhum grupo criado ainda</div></div>';
+    const contador = document.getElementById('relg-busca-contagem');
+    if (contador) contador.textContent = '';
     return;
   }
   lista.innerHTML = '';
   window._relGrupos.forEach(g => {
     const div = document.createElement('div');
+    div.setAttribute('data-relg-grupo-card', '1');
+    div.dataset.relgSearch = [
+      g.nome,
+      g.emails,
+      ...(Array.isArray(g.ops) ? g.ops : []),
+      ...(Array.isArray(g.tipos) ? g.tipos : [])
+    ].filter(Boolean).join(' ');
     div.style.cssText = 'background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px 20px;margin-bottom:10px';
     const tipoNomes = { '__pesada__': '🚛 Pesada', '__leve__': 'Leve', '__maquinas__': '⚙️ Máquinas', '__tratores__': '🚜 Tratores', '__empilhadeiras__': '🏭 Empilhadeiras', '': '⊞ Todos' };
     div.innerHTML =
@@ -14298,6 +14361,7 @@ function relgRender() {
     btnDel.addEventListener('click', () => relgExcluir(g.id));
     btns.appendChild(btnDel);
   });
+  relgFiltrarLista();
 }
 
 // Integra grupos na renderRelEmailBloco
