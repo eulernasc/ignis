@@ -12076,6 +12076,14 @@ function renderRelatorio() {
     byMaq[r.placa].horas  += parseFloat(r.horas)||0;
   });
 
+  // Total de placas por operação no período/tipo selecionado (inclui dentro e abaixo da meta)
+  const placasPorOp = {};
+  Object.entries(byMaq).forEach(([placa, dados]) => {
+    const op = dados.operacao || 'Sem Operação';
+    if (!placasPorOp[op]) placasPorOp[op] = [];
+    placasPorOp[op].push(placa);
+  });
+
   // Calcula eficiência
   const maquinasProblema = [], maquinasOk = [];
   for (const [placa, dados] of Object.entries(byMaq)) {
@@ -12162,7 +12170,7 @@ function renderRelatorio() {
   '</div>';
 
   c.innerHTML = html;
-  window._relDados = { labelPeriodo, maquinasProblema, byOp, limite, isKmL, unidadeMedia, relTipo };
+  window._relDados = { labelPeriodo, maquinasProblema, byOp, placasPorOp, limite, isKmL, unidadeMedia, relTipo };
   renderRelEmailBloco(Object.keys(byOp), relTipo);
 }
 
@@ -12438,6 +12446,15 @@ function buildEmailHTML(blocoOps, byOp, labelPeriodo, limite, labelBloco, corpoT
   });
 
   const totalPlacas = todasMaquinas.length;
+
+  // Total de placas da operação/bloco no período, incluindo as que estão dentro da meta.
+  const placasOperacao = new Set();
+  const placasPorOp = window._relDados?.placasPorOp || {};
+  blocoOps.forEach(op => {
+    (placasPorOp[op] || []).forEach(placa => placasOperacao.add(placa));
+  });
+  const totalPlacasOperacao = placasOperacao.size;
+
   let rowIdx = 0;
   const linhas = todasMaquinas.map(m => {
     const op = m._op;
@@ -12500,7 +12517,7 @@ function buildEmailHTML(blocoOps, byOp, labelPeriodo, limite, labelBloco, corpoT
     '</td></tr>' +
 
     '<tr><td style="background:#ffffff;padding:8px 24px;border-bottom:1px solid #e2e8f0">' +
-      '<span style="font-size:12px;color:#64748b">🔧 <strong style="color:#1e293b">' + totalPlacas + '</strong> placa' + (totalPlacas>1?'s':'') + ' abaixo da meta</span>' +
+      '<span style="font-size:12px;color:#64748b">🔧 <strong style="color:#1e293b">' + totalPlacas + '</strong> placas abaixo da meta de um total de <strong style="color:#1e293b">' + totalPlacasOperacao + '</strong> placas na operação.</span>' +
     '</td></tr>' +
 
     '<tr><td>' +
