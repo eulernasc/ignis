@@ -12477,9 +12477,7 @@ function buildEmailHTML(blocoOps, byOp, labelPeriodo, limite, labelBloco, corpoT
 
     // Corpo do e-mail (texto livre) — FORA da tabela
     (corpoTexto ? '<div style="max-width:700px;margin:0 auto 16px auto;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#1e293b;line-height:1.6">' +
-      corpoTexto.replace(/</g,'&lt;').replace(/>/g,'&gt;').split('\n').map(line =>
-        '<p style="margin:0 0 4px 0;padding:0">' + (line.trim() || '&nbsp;') + '</p>'
-      ).join('') +
+      relgCorpoEmailHTML(corpoTexto) +
     '</div>' : '') +
 
     '<table width="700" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #cbd5e1">' +
@@ -14064,6 +14062,71 @@ function relSetTab(tab, el) {
 // ── RELATÓRIO — GRUPOS DE E-MAIL ─────────────────────────────────────────────
 window._relGrupos = [];
 
+const REL_DESTINATARIOS_AVISO = 'Caso seja necessário incluir ou retirar alguém da lista de destinatários deste e-mail, por favor, nos informe para que possamos manter a comunicação sempre atualizada.';
+
+function relgAplicarAvisoDestinatarios(corpo) {
+  const texto = String(corpo || '').replace(/\r\n/g, '\n');
+  const linhas = texto.split('\n');
+  const norm = valor => String(valor || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+  const avisoNorm = norm(REL_DESTINATARIOS_AVISO);
+
+  // Remove cópias anteriores do mesmo aviso para que a migração seja idempotente.
+  const semDuplicata = linhas.filter(linha => norm(linha) !== avisoNorm);
+  const idxDespedida = semDuplicata.findIndex(linha => /^seguimos\s+(?:a|à)\s+disposicao\.?$/i.test(norm(linha)));
+
+  if (idxDespedida >= 0) {
+    semDuplicata.splice(idxDespedida, 0, REL_DESTINATARIOS_AVISO, '');
+  } else {
+    while (semDuplicata.length && !semDuplicata[semDuplicata.length - 1].trim()) semDuplicata.pop();
+    if (semDuplicata.length) semDuplicata.push('');
+    semDuplicata.push(REL_DESTINATARIOS_AVISO);
+  }
+
+  return semDuplicata.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+function relgMigrarAvisoDestinatarios() {
+  if (!Array.isArray(window._relGrupos) || !window._relGrupos.length) return 0;
+  let alterados = 0;
+  window._relGrupos = window._relGrupos.map(grupo => {
+    const corpoAtual = String(grupo?.corpo || '');
+    const corpoNovo = relgAplicarAvisoDestinatarios(corpoAtual);
+    if (corpoNovo === corpoAtual) return grupo;
+    alterados++;
+    return { ...grupo, corpo: corpoNovo };
+  });
+  if (!alterados) return 0;
+
+  state.relGrupos = window._relGrupos;
+  try { localStorage.setItem('rel_grupos', JSON.stringify(window._relGrupos)); } catch(e) {}
+  saveState();
+  return alterados;
+}
+
+function relgCorpoEmailHTML(corpoTexto) {
+  const norm = valor => String(valor || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+  const avisoNorm = norm(REL_DESTINATARIOS_AVISO);
+  const escapeHtml = valor => String(valor || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  return String(corpoTexto || '').replace(/\r\n/g, '\n').split('\n').map(line => {
+    const conteudo = line.trim() ? escapeHtml(line) : '&nbsp;';
+    if (norm(line) === avisoNorm) {
+      return '<p style="margin:0 0 4px 0;padding:0;font-weight:700;color:#1d4ed8">' + conteudo + '</p>';
+    }
+    return '<p style="margin:0 0 4px 0;padding:0">' + conteudo + '</p>';
+  }).join('');
+}
+
 function relgInit() {
   // Fonte de verdade agora é state.relGrupos (sincronizado com Firebase, igual o resto do sistema)
   if (!Array.isArray(state.relGrupos)) state.relGrupos = [];
@@ -14083,6 +14146,13 @@ function relgInit() {
         }
       }
     } catch(e) { console.warn('Migração rel_grupos falhou:', e); }
+  }
+
+  // Garante em massa a mensagem padronizada em todos os grupos cadastrados.
+  // É idempotente: reabrir a tela não duplica o texto.
+  const gruposAtualizados = relgMigrarAvisoDestinatarios();
+  if (gruposAtualizados) {
+    showToast('Mensagem de atualização de destinatários aplicada em ' + gruposAtualizados + ' grupo(s).', 'success');
   }
 }
 
@@ -14216,7 +14286,7 @@ function relgSalvar() {
   const nome = document.getElementById('relg-nome').value.trim();
   relgChipSyncHidden();
   const emails = document.getElementById('relg-emails').value.trim();
-  const corpo = document.getElementById('relg-corpo').value.trim();
+  const corpo = relgAplicarAvisoDestinatarios(document.getElementById('relg-corpo').value.trim());
   const ops = [...document.querySelectorAll('.relg-op-check:checked')].map(c => c.value);
   const tipos = [...document.querySelectorAll('.relg-tipo-check:checked')].map(c => c.value);
   if (!nome) { showToast('Digite um nome para o grupo', 'error'); return; }
