@@ -563,9 +563,17 @@ window.fbSave = async function(data) {
           // Mescla casos por identificador + carimbo de alteração para não perder
           // tratativas paralelas de usuários diferentes.
           const current=latestData.planejamento2027||{},incoming=appliedLight.planejamento2027||{};
-          const cases=new Map((Array.isArray(current.tratativas)?current.tratativas:[]).filter(t=>t?.id).map(t=>[t.id,t]));
+          // Excluir de verdade: o registro sai das tratativas e um identificador de exclusão
+          // evita que sincronizações antigas de outros usuários recriem a ocorrência.
+          const excluidas={...(current.excluidas||{})};
+          Object.entries(incoming.excluidas||{}).forEach(([id,stamp])=>{
+            if(!excluidas[id]||String(stamp||'')>String(excluidas[id]))excluidas[id]=stamp;
+          });
+          const cases=new Map((Array.isArray(current.tratativas)?current.tratativas:[])
+            .filter(t=>t?.id&&!Object.prototype.hasOwnProperty.call(excluidas,t.id)).map(t=>[t.id,t]));
           (Array.isArray(incoming.tratativas)?incoming.tratativas:[]).forEach(t=>{
-            if(!t?.id)return;const existing=cases.get(t.id);
+            if(!t?.id||Object.prototype.hasOwnProperty.call(excluidas,t.id))return;
+            const existing=cases.get(t.id);
             if(!existing||String(t.atualizadoEm||'')>=String(existing.atualizadoEm||''))cases.set(t.id,t);
           });
           const metas={...(current.metas||{})},timestamps={...(current.metasRevisadas||{})};
@@ -575,7 +583,7 @@ window.fbSave = async function(data) {
               metas[g]=v;if(stamp)timestamps[g]=stamp;
             }
           });
-          appliedLight.planejamento2027={...current,...incoming,metas,metasRevisadas:timestamps,tratativas:[...cases.values()]};
+          appliedLight.planejamento2027={...current,...incoming,metas,metasRevisadas:timestamps,excluidas,tratativas:[...cases.values()]};
         }
         tx.set(mainRef, { ...latestData, ...appliedLight, _revision:version, _storageVersion:Number(latestData._storageVersion||FB_STORAGE_VERSION) });
         return;
@@ -6144,7 +6152,7 @@ async function _flushFirebaseSaveQueue() {
       updateSyncStatus(window._ignisMaintenanceState?.active?'maintenance':'connected');
       // O backup pesado já foi gravado antes do envio. Não fazemos uma segunda
       // clonagem completa aqui — isso era uma das travadas após importação.
-      try {
+      if(!(snapshot._lightChangedKeys?.length===1&&snapshot._lightChangedKeys[0]==='planejamento2027'))try {
         const leanRaw = JSON.parse(localStorage.getItem('fueltracker_v3') || '{}');
         leanRaw._savedAt = agora;
         localStorage.setItem('fueltracker_v3', JSON.stringify(leanRaw));
@@ -6199,14 +6207,16 @@ function saveState(options = {}) {
   const localSaveAt = Date.now();
   state._savedAt = localSaveAt;
   window._ultimoSaveAt = Math.max(Number(window._ultimoSaveAt||0), localSaveAt);
-  const snapshot = cloneStateForSave(state, mode);
+  // Salva somente o módulo alterado, sem clonar IDT, rankings, pilotos e dados de outras abas.
+  const scopedPlanning=mode==='light'&&Array.isArray(options?.keys)&&options.keys.length===1&&options.keys[0]==='planejamento2027';
+  const snapshot=scopedPlanning?{planejamento2027:_cloneValue(state.planejamento2027||{}),_saveMode:'light'}:cloneStateForSave(state,mode);
   snapshot._savedAt = localSaveAt;
   snapshot._baseRevision = String(window._firebaseRevision || '');
   snapshot._baseFuelSignature = String(window._firebaseFuelSignature || '');
   snapshot._baseArlaSignature = String(window._firebaseArlaSignature || '');
   snapshot._saveChangedPeriods = Array.isArray(options?.changedPeriodIds) ? options.changedPeriodIds.map(String) : [];
   snapshot._saveRemovedPeriods = Array.isArray(options?.removedPeriodIds) ? options.removedPeriodIds.map(String) : [];
-  snapshot._lightChangedKeys = mode==='light' ? _ignisLightChangedKeys(snapshot, window._firebaseLightBaseline) : [];
+  snapshot._lightChangedKeys = scopedPlanning ? ['planejamento2027'] : mode==='light' ? _ignisLightChangedKeys(snapshot, window._firebaseLightBaseline) : [];
   delete snapshot.importacaoMonitorEventos; delete snapshot.importacaoMonitorRegras; delete snapshot.importacaoMonitorInicializado;
   try {
     localStorage.setItem('ignis_pending_cloud_save', JSON.stringify({
@@ -6220,7 +6230,7 @@ function saveState(options = {}) {
   // ficam no localStorage e não clonam milhares de abastecimentos desnecessariamente.
   if(mode==='full'||mode==='fuel'||mode==='arla') idbSave({ ...state, _savedAt:localSaveAt });
 
-  try {
+  if(!scopedPlanning) try {
     const lean = { ...state };
     delete lean.abastecimentos;
     if (lean.semanas) {
