@@ -1,0 +1,24 @@
+name: Validar Acompanhamento de Performance
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'planejamento2027.js'
+      - 'planejamento2027.css'
+      - 'scripts/test-planejamento2027.js'
+      - '.github/workflows/test-acompanhamento.yml'
+  workflow_dispatch:
+jobs:
+  validar:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verificar sintaxe do módulo
+        run: node --check planejamento2027.js
+      - name: Executar testes funcionais sem dados reais
+        run: node scripts/test-planejamento2027.js
