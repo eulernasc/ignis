@@ -208,42 +208,192 @@ function ignisPlanSearch(v){
   const field=document.getElementById('p27-search');if(field){field.focus();field.setSelectionRange(Math.min(caret,field.value.length),Math.min(caret,field.value.length));}
 }
 
-function ignisPlanOpen(encoded,grupo){
-  const placa=decodeURIComponent(encoded),mes=window._ignisPlanMonth,id=mes+'|'+grupo+'|'+placa,c=ignisPlanConfig();
-  const old=c.tratativas.find(t=>t.id===id)||{};
-  const root=document.getElementById('p27-editor-root');if(!root)return;
-  const date=String(old.prazo||'');
-  root.innerHTML=`<div class="p27-backdrop" onclick="if(event.target===this)ignisPlanClose()">
-    <form class="p27-editor" onsubmit="ignisPlanSubmit(event,'${encodeURIComponent(placa)}','${grupo}')">
-      <div class="p27-editor-head"><div><strong>Tratativa • ${ignisPlanEsc(placa)}</strong><small>${ignisPlanMonthLabel(mes)}</small></div><button type="button" onclick="ignisPlanClose()" aria-label="Fechar">×</button></div>
-      <label>Motivo identificado<select name="categoria" required><option value="">Selecione o motivo</option>${['Problema mecânico','Treinamento','Indisciplina','Em investigação','Outro'].map(c=>`<option value="${c}" ${old.categoria===c?'selected':''}>${c}</option>`).join('')}</select></label>
-      <label>Responsável<input name="responsavel" maxlength="120" value="${ignisPlanEsc(old.responsavel||'')}" placeholder="Nome do responsável" required></label>
-      <div class="p27-form-grid"><label>Prazo de resolução<input type="date" name="prazo" value="${ignisPlanEsc(date)}" required></label>
-      <label>Status<select name="status"><option ${old.status==='Pendente'?'selected':''}>Pendente</option><option ${old.status==='Em andamento'?'selected':''}>Em andamento</option><option ${old.status==='Resolvido'?'selected':''}>Resolvido</option></select></label></div>
-      <label>Observações e ações<textarea name="observacao" rows="4" maxlength="1500" placeholder="Descreva o problema, ação combinada, evidências e próximos passos">${ignisPlanEsc(old.observacao||'')}</textarea></label>
-      <div id="p27-save-state" class="p27-save-state"></div><div class="p27-editor-actions"><button type="button" class="p27-action p27-secondary" onclick="ignisPlanClose()">Cancelar</button><button type="submit" class="p27-action" id="p27-save-btn">Salvar tratativa</button></div>
-    </form></div>`;
-  root.querySelector('select[name="categoria"]')?.focus();
+function ignisPlanClose(){
+  const root=document.getElementById('p27-editor-root');
+  if(root)root.innerHTML='';
+  document.body?.classList.remove('p27-modal-open');
 }
 
-function ignisPlanClose(){const e=document.getElementById('p27-editor-root');if(e)e.innerHTML='';}
+function ignisPlanShowOverdue(){
+  const root=document.getElementById('p27-editor-root');if(!root)return;
+  const entries=ignisPlanConfig().tratativas.filter(ignisPlanOverdue)
+    .sort((a,b)=>String(a.prazo||'').localeCompare(String(b.prazo||'')));
+  root.innerHTML=`<div class="p27-backdrop" onclick="if(event.target===this)ignisPlanClose()">
+   <section class="p27-editor p27-wide" role="dialog" aria-modal="true" aria-label="Prazos vencidos">
+    <div class="p27-editor-head"><div><strong>Prazos vencidos</strong><small>Todos os períodos · ações ainda não realizadas</small></div>
+      <button type="button" onclick="ignisPlanClose()" aria-label="Fechar">×</button></div>
+    <div class="p27-case-list">${entries.length?entries.map(t=>`
+      <div class="p27-case-item p27-overdue-item">
+        <div><strong>${ignisPlanEsc(t.placa)} · ${ignisPlanEsc(ignisPlanCauseName(t))}</strong>
+          <small>${ignisPlanEsc(t.mes)} · ${ignisPlanEsc(t.responsavel||'Sem responsável')} · Venceu em ${ignisPlanFmtDate(t.prazo)}</small></div>
+        <button class="p27-action" onclick="ignisPlanOpen('${ignisPlanSafeParam(t.placa)}','${ignisPlanSafeParam(t.grupo)}','${ignisPlanSafeParam(t.id)}','${ignisPlanSafeParam(t.mes)}')">Tratar</button>
+      </div>`).join(''):'<div class="p27-empty">Nenhum prazo vencido.</div>'}</div>
+    <div class="p27-editor-actions"><button class="p27-action p27-secondary" type="button" onclick="ignisPlanClose()">Fechar</button></div>
+   </section></div>`;
+  document.body?.classList.add('p27-modal-open');
+}
 
-async function ignisPlanSubmit(ev,encoded,grupo){
-  ev.preventDefault();const f=ev.currentTarget,form=new FormData(f),placa=decodeURIComponent(encoded),mes=window._ignisPlanMonth;
-  const c=ignisPlanConfig();const id=mes+'|'+grupo+'|'+placa,idx=c.tratativas.findIndex(x=>x.id===id);
-  const old=idx>=0?c.tratativas[idx]:null;const before=JSON.stringify(c.tratativas);
-  const next={...old,id,placa,mes,grupo,categoria:String(form.get('categoria')||''),responsavel:String(form.get('responsavel')||'').trim(),prazo:String(form.get('prazo')||''),status:String(form.get('status')||'Pendente'),observacao:String(form.get('observacao')||'').trim(),criadoEm:old?.criadoEm||new Date().toISOString(),atualizadoEm:new Date().toISOString(),atualizadoPor:String(window._authUser?.nome||window._authUser?.id||'')};
-  if(!next.categoria||!next.responsavel||!next.prazo)return;
-  if(idx>=0)c.tratativas[idx]=next;else c.tratativas.push(next);
-  const btn=f.querySelector('#p27-save-btn'),note=f.querySelector('#p27-save-state');if(btn)btn.disabled=true;if(note)note.textContent='Confirmando no Firebase...';
+function ignisPlanList(encoded,grupo,period){
+  const placa=decodeURIComponent(encoded),mes=decodeURIComponent(period||window._ignisPlanMonth);
+  const records=ignisPlanCases(mes,grupo,placa);
+  const root=document.getElementById('p27-editor-root');if(!root)return;
+  root.innerHTML=`<div class="p27-backdrop" onclick="if(event.target===this)ignisPlanClose()">
+    <section class="p27-editor p27-wide" role="dialog" aria-modal="true" aria-label="Ocorrências por veículo">
+      <div class="p27-editor-head"><div><strong>${ignisPlanEsc(placa)} · Histórico de ocorrências</strong>
+      <small>${ignisPlanMonthLabel(mes)} · ${records.length} causa(s) registrada(s)</small></div>
+      <button type="button" onclick="ignisPlanClose()" aria-label="Fechar">×</button></div>
+      <div class="p27-case-list">${records.map(t=>`
+        <article class="p27-case-card">
+          <div class="p27-case-heading"><div><strong>${ignisPlanEsc(ignisPlanCauseName(t))}</strong>
+            <small>Responsável: ${ignisPlanEsc(t.responsavel||'Não informado')}</small></div>
+            <button class="p27-action" type="button" onclick="ignisPlanOpen('${ignisPlanSafeParam(placa)}','${grupo}','${ignisPlanSafeParam(t.id)}','${mes}')">Editar</button></div>
+          <div class="p27-case-badges"><span class="p27-pill">${ignisPlanEsc(ignisPlanRegisterState(t))}</span>
+            <span class="p27-pill ${ignisPlanActionState(t)==='realizada'?'p27-done':ignisPlanOverdue(t)?'p27-urgent':'p27-active'}">
+              Ação ${ignisPlanEsc(ignisPlanActionState(t))}</span></div>
+          <p>${ignisPlanEsc(t.descricaoCausa||t.observacao||'Sem descrição detalhada')}</p>
+          <p><strong>Ação corretiva:</strong> ${ignisPlanEsc(t.acaoCorretiva||'Não especificada')}</p>
+          <p><strong>Prazo:</strong> ${ignisPlanFmtDate(t.prazo)} ${ignisPlanOverdue(t)?' · PRAZO VENCIDO':''}</p>
+          <details class="p27-history"><summary>Histórico de atualizações (${Array.isArray(t.historico)?t.historico.length:0})</summary>
+            ${ignisPlanHistory(t)}</details>
+        </article>`).join('')}</div>
+      <div class="p27-editor-actions"><button type="button" class="p27-action p27-secondary" onclick="ignisPlanClose()">Fechar</button>
+        <button type="button" class="p27-action" onclick="ignisPlanOpen('${ignisPlanSafeParam(placa)}','${grupo}','','${mes}')">Nova ocorrência</button></div>
+    </section></div>`;
+  document.body?.classList.add('p27-modal-open');
+}
+
+function ignisPlanFields(){
+  const frm=document.querySelector('#p27-editor-root .p27-editor form, #p27-editor-root form.p27-editor');
+  if(!frm)return;
+  const categoria=frm.querySelector('[name="categoria"]')?.value||'';
+  const acao=frm.querySelector('[name="acaoRealizada"]')?.value||'';
+  const desc=frm.querySelector('[data-p27-description]');
+  const question=frm.querySelector('[data-p27-action-question]');
+  const proposal=frm.querySelector('[data-p27-proposed-action]');
+  const info={
+    'Problema mecânico':['Descreva o problema identificado *','O problema mecânico foi resolvido? *','Ação para corrigir o problema *'],
+    'Dirigibilidade':['Descreva a necessidade de reciclagem *','A reciclagem do motorista/operador foi realizada? *','Treinamento ou reciclagem prevista *'],
+    'Parâmetro':['Justificativa para alteração do parâmetro *','O parâmetro de consumo já foi alterado? *','Alteração de parâmetro proposta *']
+  };
+  const fields=info[categoria];
+  if(desc)desc.textContent=fields?.[0]||'Descrição da causa *';
+  if(question)question.textContent=fields?.[1]||'A ação corretiva foi realizada? *';
+  if(proposal)proposal.textContent=fields?.[2]||'Ação corretiva planejada *';
+  const due=frm.querySelector('[data-p27-deadline]'),done=frm.querySelector('[data-p27-action-date]');
+  if(due){due.hidden=acao!=='nao';const input=due.querySelector('input');if(input)input.required=acao==='nao';}
+  if(done){done.hidden=acao!=='sim';const input=done.querySelector('input');if(input)input.required=acao==='sim';}
+  const warning=frm.querySelector('[data-p27-status-note]');
+  if(warning)warning.textContent=acao==='sim'?'Ação informada como realizada. Guarde a data e evidência da conclusão.':
+   acao==='nao'?'Ação pendente: informe o prazo obrigatório, mesmo que o registro esteja concluído.':
+   'Informe se o problema foi resolvido, se a reciclagem ocorreu ou se o parâmetro foi alterado.';
+}
+
+function ignisPlanOpen(encoded,grupo,caseEncoded='',period=''){
+  const placa=decodeURIComponent(encoded),mes=decodeURIComponent(period||window._ignisPlanMonth);
+  const caseId=caseEncoded?decodeURIComponent(caseEncoded):'';
+  const conf=ignisPlanConfig(),original=caseId?conf.tratativas.find(t=>t.id===caseId):null;
+  if(caseId&&!original){showToast('Esta ocorrência não foi encontrada. Atualize a aba.','error');return;}
+  const old=original||{},root=document.getElementById('p27-editor-root');if(!root)return;
+  const known=['Problema mecânico','Dirigibilidade','Parâmetro'];
+  const categoria=known.includes(old.categoria)?old.categoria:'';
+  const action=ignisPlanActionState(old);
+  const actionValue=action==='realizada'?'sim':action==='pendente'?'nao':'';
+  const current=ignisPlanSummary(mes).find(x=>x.grupo===grupo&&x.placa===placa);
+  const efficiency=Number.isFinite(current?.eficiencia)?current.eficiencia.toFixed(1)+'%':'sem apuração no mês';
+  root.innerHTML=`<div class="p27-backdrop" onclick="if(event.target===this)ignisPlanClose()">
+    <form class="p27-editor p27-wide" role="dialog" aria-modal="true" aria-label="${original?'Editar':'Registrar'} ocorrência"
+      onsubmit="ignisPlanSubmit(event,'${ignisPlanSafeParam(placa)}','${grupo}','${ignisPlanSafeParam(caseId)}','${ignisPlanSafeParam(mes)}')">
+      <div class="p27-editor-head"><div><strong>${original?'Editar ocorrência':'Nova ocorrência'} · ${ignisPlanEsc(placa)}</strong>
+        <small>${ignisPlanMonthLabel(mes)} · eficiência ${efficiency}</small></div>
+        <button type="button" onclick="ignisPlanClose()" aria-label="Fechar">×</button></div>
+      ${original&&!categoria?`<p class="p27-legacy-note">Categoria anterior: ${ignisPlanEsc(old.categoria||'Não informada')}. Reclassifique para uma das três causas abaixo. O texto antigo será preservado.</p>`:''}
+      <label>Causa identificada *
+        <select name="categoria" required onchange="ignisPlanFields()">
+          <option value="">Selecione uma causa</option>
+          ${known.map(x=>`<option value="${x}" ${categoria===x?'selected':''}>${x}</option>`).join('')}
+        </select></label>
+      <label><span data-p27-description>Descrição da causa *</span>
+        <textarea name="descricaoCausa" maxlength="1500" rows="3" required placeholder="Registre as evidências e a causa identificada">${ignisPlanEsc(old.descricaoCausa||old.observacao||'')}</textarea></label>
+      <label><span data-p27-proposed-action>Ação corretiva planejada *</span>
+        <textarea name="acaoCorretiva" maxlength="1200" rows="3" required placeholder="O que será feito para corrigir o desvio?">${ignisPlanEsc(old.acaoCorretiva||'')}</textarea></label>
+      <div class="p27-form-grid">
+        <label>Responsável pela tratativa *<input name="responsavel" maxlength="120" required value="${ignisPlanEsc(old.responsavel||'')}" placeholder="Instrutor / responsável"></label>
+        <label><span data-p27-action-question>A ação corretiva foi realizada? *</span>
+          <select name="acaoRealizada" required onchange="ignisPlanFields()">
+            <option value="">Selecione</option><option value="sim" ${actionValue==='sim'?'selected':''}>Sim</option>
+            <option value="nao" ${actionValue==='nao'?'selected':''}>Não, pendente</option>
+          </select></label>
+      </div>
+      <div class="p27-form-grid">
+        <label data-p27-deadline hidden>Prazo previsto para resolução *
+          <input type="date" name="prazo" value="${ignisPlanEsc(old.prazo||'')}"></label>
+        <label data-p27-action-date hidden>Data em que a ação foi realizada *
+          <input type="date" name="dataAcao" value="${ignisPlanEsc(old.dataAcao||ignisPlanLocalDate())}"></label>
+        <label>Situação do registro
+          <select name="statusRegistro">
+            ${['Registrada','Em acompanhamento','Concluída'].map(v=>`<option value="${v}" ${ignisPlanRegisterState(old)===v?'selected':''}>${v}</option>`).join('')}
+          </select></label>
+      </div>
+      <p class="p27-action-note" data-p27-status-note></p>
+      <label>Observações adicionais (opcional)
+        <textarea name="observacao" rows="3" maxlength="1500" placeholder="Retornos do instrutor, evidências, novas orientações...">${ignisPlanEsc(old.observacao||'')}</textarea></label>
+      ${original?`<details class="p27-history"><summary>Histórico de atualizações (${Array.isArray(old.historico)?old.historico.length:0})</summary>
+        ${ignisPlanHistory(old)}</details>`:''}
+      <div id="p27-save-state" class="p27-save-state" role="status" aria-live="polite"></div>
+      <div class="p27-editor-actions">
+        <button type="button" class="p27-action p27-secondary" onclick="ignisPlanClose()">Cancelar</button>
+        <button type="submit" class="p27-action" id="p27-save-btn">Salvar ocorrência</button></div>
+    </form></div>`;
+  document.body?.classList.add('p27-modal-open');
+  ignisPlanFields();
+}
+
+async function ignisPlanSubmit(ev,encoded,grupo,caseEncoded='',period=''){
+  ev.preventDefault();
+  const f=ev.currentTarget,form=new FormData(f),placa=decodeURIComponent(encoded),mes=decodeURIComponent(period||window._ignisPlanMonth);
+  const conf=ignisPlanConfig(),id=caseEncoded?decodeURIComponent(caseEncoded):`${mes}|${grupo}|${placa}|${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`;
+  const idx=conf.tratativas.findIndex(t=>t.id===id),old=idx>=0?conf.tratativas[idx]:null;
+  if(caseEncoded&&!old){showToast('Ocorrência não encontrada.','error');return;}
+  const before=JSON.stringify(conf.tratativas),now=new Date().toISOString();
+  const categoria=String(form.get('categoria')||''),acao=String(form.get('acaoRealizada')||'');
+  const responsavel=String(form.get('responsavel')||'').trim(),prazo=String(form.get('prazo')||''),dataAcao=String(form.get('dataAcao')||'');
+  const descricaoCausa=String(form.get('descricaoCausa')||'').trim(),acaoCorretiva=String(form.get('acaoCorretiva')||'').trim();
+  if(!['Problema mecânico','Dirigibilidade','Parâmetro'].includes(categoria)||!descricaoCausa||!acaoCorretiva||!responsavel||!['sim','nao'].includes(acao)){
+    showToast('Preencha a causa, descrição, ação, responsável e confirmação.','error');return;
+  }
+  if(acao==='nao'&&!/^\d{4}-\d{2}-\d{2}$/.test(prazo)){showToast('Defina o prazo para a ação pendente.','error');return;}
+  if(acao==='sim'&&!/^\d{4}-\d{2}-\d{2}$/.test(dataAcao)){showToast('Informe a data em que a ação foi realizada.','error');return;}
+  const current=ignisPlanSummary(mes).find(x=>x.grupo===grupo&&x.placa===placa);
+  const author=String(window._authUser?.nome||window._authUser?.id||'Usuário autenticado');
+  const next={...old,id,placa,mes,grupo,
+    operacao:old?.operacao||current?.operacao||'',categoria,descricaoCausa,acaoCorretiva,
+    acaoRealizada:acao==='sim',responsavel,prazo:acao==='nao'?prazo:(old?.prazo||''),
+    dataAcao:acao==='sim'?dataAcao:'',
+    statusRegistro:String(form.get('statusRegistro')||'Registrada'),
+    observacao:String(form.get('observacao')||'').trim(),
+    eficienciaNoRegistro:old?.eficienciaNoRegistro??current?.eficiencia??null,
+    metaNoRegistro:old?.metaNoRegistro??current?.meta??null,
+    criadoEm:old?.criadoEm||now,atualizadoEm:now,atualizadoPor:author,
+    historico:Array.isArray(old?.historico)?old.historico.slice():[]};
+  next.status=next.statusRegistro==='Concluída'?'Concluído':next.statusRegistro==='Em acompanhamento'?'Em andamento':'Pendente';
+  const differences=ignisPlanChangeRecord(old,next);
+  if(!old||differences.length){
+    next.historico.push({id:now+'-'+Math.random().toString(36).slice(2,8),quando:now,autor:author,
+      tipo:old?'Atualização da ocorrência':'Abertura da ocorrência',alteracoes:differences});
+  }
+  if(idx>=0)conf.tratativas[idx]=next;else conf.tratativas.push(next);
+  const btn=f.querySelector('#p27-save-btn'),note=f.querySelector('#p27-save-state');if(btn)btn.disabled=true;
+  if(note)note.textContent='Confirmando no Firebase...';
   try{
     const ok=await saveState({mode:'light',immediate:true});
     if(!ok)throw new Error(window._lastFirebaseSaveError||'A gravação não foi confirmada pelo Firebase.');
-    ignisPlanRender();showToast('Tratativa salva no Firebase.','success');
+    ignisPlanRender();
+    showToast('Ocorrência salva e histórico atualizado.','success');
   }catch(err){
-    c.tratativas=JSON.parse(before);if(btn)btn.disabled=false;
-    if(note)note.textContent='Não foi possível confirmar o salvamento: '+String(err.message||err);
-    showToast('A tratativa não foi confirmada na nuvem.','error');
+    conf.tratativas=JSON.parse(before);
+    if(btn)btn.disabled=false;
+    if(note)note.textContent='Salvamento não confirmado: '+String(err.message||err);
+    showToast('A ocorrência não foi confirmada na nuvem.','error');
   }
 }
 
