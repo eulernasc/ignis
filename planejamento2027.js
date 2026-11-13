@@ -107,61 +107,94 @@ function ignisPlanHistory(t){
 function ignisPlanRender(){
   const root=document.getElementById('page-planejamento');if(!root)return;
   const conf=ignisPlanConfig(), months=ignisPlanMonthChoices();
-  if(!window._ignisPlanMonth || !months.includes(window._ignisPlanMonth)){
-    const available=months.filter(m=>Object.values(state.semanas||{}).some(p=>String(p?.dataFim||p?.dataIni||'').startsWith(m))||state.abastecimentos?.some(a=>ignisPlanMonthOf(a)===m));
-    window._ignisPlanMonth=available[0]||months[0]||new Date().toISOString().slice(0,7);
+  if(!window._ignisPlanMonth||!months.includes(window._ignisPlanMonth)){
+    window._ignisPlanMonth=months[0]||ignisPlanLocalDate().slice(0,7);
   }
   const mon=window._ignisPlanMonth,groupFilter=window._ignisPlanGroup||'',statusFilter=window._ignisPlanStatus||'',q=String(window._ignisPlanQuery||'').trim().toUpperCase();
-  const list=ignisPlanSummary(mon),byId=new Map(conf.tratativas.filter(t=>t.mes===mon).map(t=>[t.id,t]));
-  const rows=list.filter(x=>x.abaixo||x.acima||byId.has(mon+'|'+x.grupo+'|'+x.placa));
-  for(const t of conf.tratativas.filter(t=>t.mes===mon)){
-    if(!rows.some(x=>x.grupo===t.grupo&&x.placa===t.placa))rows.push({placa:t.placa,grupo:t.grupo,operacao:t.operacao||'',media:0,meta:0,eficiencia:null,limite:conf.metas[t.grupo]||0,limiteSuperior:Number(conf.limiteSuperior),unidade:t.grupo==='maquinas'?'L/h':'km/L',atividade:0,atividadeUnidade:t.grupo==='maquinas'?'h':'km',abaixo:false,acima:false,semDados:true});
+  const list=ignisPlanSummary(mon),cases=conf.tratativas.filter(t=>t.mes===mon);
+  const allOverdue=conf.tratativas.filter(ignisPlanOverdue);
+  const rows=list.filter(x=>x.abaixo||x.acima||cases.some(t=>t.placa===x.placa&&t.grupo===x.grupo))
+    .map(x=>({...x,ocorrencias:ignisPlanCases(mon,x.grupo,x.placa)}));
+  for(const t of cases){
+    if(rows.some(x=>x.grupo===t.grupo&&x.placa===t.placa))continue;
+    rows.push({placa:t.placa,grupo:t.grupo,operacao:t.operacao||'',media:0,meta:0,eficiencia:null,
+      limite:conf.metas[t.grupo]||0,limiteSuperior:Number(conf.limiteSuperior),
+      unidade:t.grupo==='maquinas'?'L/h':'km/L',atividade:0,atividadeUnidade:t.grupo==='maquinas'?'h':'km',
+      abaixo:false,acima:false,semDados:true,ocorrencias:ignisPlanCases(mon,t.grupo,t.placa)});
   }
   const desvio=x=>x.eficiencia===null?0:x.abaixo?x.limite-x.eficiencia:x.acima?x.eficiencia-x.limiteSuperior:0;
   rows.sort((a,b)=>desvio(b)-desvio(a)||a.placa.localeCompare(b.placa));
-  const pending=rows.filter(x=>!byId.has(mon+'|'+x.grupo+'|'+x.placa)).length;
-  const open=conf.tratativas.filter(t=>t.mes===mon&&t.status!=='Resolvido').length;
-  const resolved=conf.tratativas.filter(t=>t.mes===mon&&t.status==='Resolvido').length;
+  const uncovered=rows.filter(x=>!x.ocorrencias.length).length;
+  const unresolved=cases.filter(t=>ignisPlanActionState(t)!=='realizada').length;
+  const done=cases.filter(t=>ignisPlanActionState(t)==='realizada').length;
   const seen=rows.filter(x=>{
-    const t=byId.get(mon+'|'+x.grupo+'|'+x.placa);
     if(groupFilter&&groupFilter!==x.grupo)return false;
-    if(statusFilter==='pendente'&&t)return false;
-    if(statusFilter==='andamento'&&(!t||t.status!=='Em andamento'))return false;
-    if(statusFilter==='resolvido'&&(!t||t.status!=='Resolvido'))return false;
-    return !q||(x.placa+' '+x.operacao+' '+(t?.responsavel||'')).toUpperCase().includes(q);
+    if(statusFilter==='sem-tratativa'&&x.ocorrencias.length)return false;
+    if(statusFilter==='pendente'&&!x.ocorrencias.some(t=>ignisPlanActionState(t)!=='realizada'))return false;
+    if(statusFilter==='vencido'&&!x.ocorrencias.some(ignisPlanOverdue))return false;
+    if(statusFilter==='resolvido'&&!x.ocorrencias.some(t=>ignisPlanActionState(t)==='realizada'))return false;
+    if(statusFilter==='registro-concluido'&&!x.ocorrencias.some(t=>ignisPlanRegisterState(t)==='Concluída'))return false;
+    return !q||(x.placa+' '+x.operacao+' '+x.ocorrencias.map(t=>t.responsavel+' '+t.categoria).join(' ')).toUpperCase().includes(q);
   });
-  const label={pesada:'Frota pesada',leve:'Frota leve',maquinas:'Máquinas e tratores'};
+  const labels={pesada:'Frota Pesada',leve:'Frota Leve',maquinas:'Máquinas'};
   const format=n=>Number(n).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1});
   root.innerHTML=`
-  <div class="page-header"><div class="page-header-title"><div class="page-title">Acompanhamento de Performance</div><div class="page-sub">Tratativas por veículo, dentro de toda a operação: abaixo da meta ou acima de 110%</div></div></div>
+  <div class="page-header"><div class="page-header-title"><div class="page-title">Acompanhamento de Performance</div>
+  <div class="page-sub">Registre a causa, acompanhe a ação corretiva e preserve o histórico por placa e equipamento.</div></div></div>
+  <div class="p27-info"><strong>Regras de acompanhamento</strong><span>Metas propostas de 90% (pesada), 93% (leve) e 95% (máquinas), ajustáveis após validação operacional.
+  A conclusão do <b>registro</b> não significa que a <b>ação corretiva</b> foi realizada.</span></div>
   <div class="p27-top">
-   <div class="p27-stat"><span>Abaixo da meta</span><strong>${list.filter(x=>x.abaixo).length}</strong><small>Eficiência inferior ao limite</small></div>
-   <div class="p27-stat p27-stat-high"><span>Acima de ${format(conf.limiteSuperior)}%</span><strong>${list.filter(x=>x.acima).length}</strong><small>Eficiência acima da faixa</small></div>
-   <div class="p27-stat"><span>Aguardando tratativa</span><strong>${pending}</strong><small>Sem registro de ação</small></div>
-   <div class="p27-stat"><span>Em acompanhamento</span><strong>${open}</strong><small>Tratativas não resolvidas</small></div>
-   <div class="p27-stat"><span>Resolvidos</span><strong>${resolved}</strong><small>Tratativas concluídas</small></div>
+    <div class="p27-stat"><span>Abaixo da meta</span><strong>${list.filter(x=>x.abaixo).length}</strong><small>Veículos abaixo do limite</small></div>
+    <div class="p27-stat p27-stat-high"><span>Acima de ${format(conf.limiteSuperior)}%</span><strong>${list.filter(x=>x.acima).length}</strong><small>Acima da faixa superior</small></div>
+    <div class="p27-stat"><span>Sem registro</span><strong>${uncovered}</strong><small>Veículos aguardando causa</small></div>
+    <div class="p27-stat"><span>Ações pendentes</span><strong>${unresolved}</strong><small>No período escolhido</small></div>
+    <div class="p27-stat p27-stat-overdue"><span>Prazos vencidos</span><strong>${allOverdue.length}</strong><small>Todos os períodos · <button type="button" onclick="ignisPlanShowOverdue()">Ver pendências</button></small></div>
+    <div class="p27-stat"><span>Ações realizadas</span><strong>${done}</strong><small>No período escolhido</small></div>
   </div>
-  <div class="p27-panel"><div class="p27-panel-head"><div><strong>Faixa de acompanhamento da eficiência</strong><p>Veículos abaixo da meta do grupo ou acima do limite superior entram automaticamente no acompanhamento. As porcentagens podem ser alteradas.</p></div></div>
-   <div class="p27-metas">
-    ${Object.entries(label).map(([key,name])=>`<label><span>${name}</span><div><input type="number" min="1" max="150" step="0.5" value="${Number(conf.metas[key])}" onchange="ignisPlanMetaChange('${key}',this.value)"><em>%</em></div></label>`).join('')}
-   <label class="p27-upper"><span>Limite superior de eficiência</span><div><input type="number" min="101" max="200" step="0.5" value="${Number(conf.limiteSuperior)}" onchange="ignisPlanUpperChange(this.value)"><em>%</em></div></label>
-   </div>
+  <div class="p27-panel"><div class="p27-panel-head"><div><strong>Faixa de acompanhamento da eficiência</strong>
+    <p>Veículos abaixo da meta do grupo ou acima do limite superior entram no acompanhamento. Os valores podem ser configurados.</p></div></div>
+    <div class="p27-metas">
+      ${Object.entries(labels).map(([key,name])=>`<label><span>${name}</span><div><input type="number" min="1" max="150" step="0.5" value="${Number(conf.metas[key])}" onchange="ignisPlanMetaChange('${key}',this.value)"><em>%</em></div></label>`).join('')}
+      <label class="p27-upper"><span>Limite superior</span><div><input type="number" min="101" max="200" step="0.5" value="${Number(conf.limiteSuperior)}" onchange="ignisPlanUpperChange(this.value)"><em>%</em></div></label>
+    </div>
   </div>
-  <div class="p27-panel"><div class="p27-panel-head"><div><strong>Acompanhamento por veículo</strong><p>Indicadores apurados a partir dos abastecimentos importados. Clique em Registrar/Editar para acompanhar cada caso.</p></div></div>
-   <div class="p27-filters">
-    <label>Período<select id="p27-month" onchange="window._ignisPlanMonth=this.value;ignisPlanRender()">${months.map(m=>`<option value="${m}" ${m===mon?'selected':''}>${ignisPlanMonthLabel(m)}</option>`).join('')}</select></label>
-    <label>Grupo<select onchange="window._ignisPlanGroup=this.value;ignisPlanRender()"><option value="">Todos</option>${Object.entries(label).map(([k,l])=>`<option value="${k}" ${groupFilter===k?'selected':''}>${l}</option>`).join('')}</select></label>
-    <label>Status<select onchange="window._ignisPlanStatus=this.value;ignisPlanRender()"><option value="">Todos</option><option value="pendente" ${statusFilter==='pendente'?'selected':''}>Sem tratativa</option><option value="andamento" ${statusFilter==='andamento'?'selected':''}>Em andamento</option><option value="resolvido" ${statusFilter==='resolvido'?'selected':''}>Resolvidos</option></select></label>
-    <label>Busca<input id="p27-search" placeholder="Placa, operação ou responsável" value="${ignisPlanEsc(window._ignisPlanQuery||'')}" oninput="ignisPlanSearch(this.value)"></label>
-   </div>
-   <div class="p27-table-wrap"><table class="p27-table"><thead><tr><th>Placa / operação</th><th>Grupo</th><th>Real / meta</th><th>Eficiência</th><th>Faixa de referência</th><th>Status / motivo</th><th>Ação</th></tr></thead><tbody>
-   ${seen.length?seen.map(x=>{const id=mon+'|'+x.grupo+'|'+x.placa,t=byId.get(id);const ef=x.eficiencia===null?'—':format(x.eficiencia)+'%';
-   return `<tr><td><strong>${ignisPlanEsc(x.placa)}</strong><small>${ignisPlanEsc(x.operacao||'Sem operação')}</small></td>
-    <td>${label[x.grupo]}</td><td>${x.semDados?'Sem dados atuais':`${format(x.media)} / ${x.meta>0?format(x.meta):'—'} ${x.unidade}`}<small>${x.semDados?'':format(x.atividade)+' '+x.atividadeUnidade+' no período'}</small></td>
-    <td><strong class="${x.abaixo?'p27-bad':x.acima?'p27-high':'p27-good'}">${ef}</strong>${x.acima?'<small class="p27-high">Acima do limite superior</small>':x.abaixo?'<small class="p27-bad">Abaixo da meta</small>':''}</td><td>${format(x.limite)}% a ${format(x.limiteSuperior)}%</td>
-    <td><span class="p27-pill ${!t?'p27-pending':t.status==='Resolvido'?'p27-done':'p27-active'}">${!t?'Sem tratativa':ignisPlanEsc(t.status)}</span><small>${ignisPlanEsc(t?.categoria||'')}</small></td>
-    <td><button class="p27-action" onclick="ignisPlanOpen('${encodeURIComponent(x.placa)}','${x.grupo}')">${t?'Editar':'Registrar'}</button></td></tr>`;}).join(''):`<tr><td colspan="7" class="p27-empty">${list.length?'Nenhum veículo corresponde aos filtros.':'Nenhum dado de abastecimento encontrado neste mês. Selecione outro período ou importe os relatórios.'}</td></tr>`}
-   </tbody></table></div>
+  <div class="p27-panel"><div class="p27-panel-head"><div><strong>Acompanhamento por veículo</strong>
+    <p>Cada veículo pode ter várias ocorrências, com causas, responsáveis e prazos independentes.</p></div></div>
+    <div class="p27-filters">
+      <label>Período<select id="p27-month" onchange="window._ignisPlanMonth=this.value;ignisPlanRender()">${months.map(m=>`<option value="${m}" ${m===mon?'selected':''}>${ignisPlanMonthLabel(m)}</option>`).join('')}</select></label>
+      <label>Grupo<select onchange="window._ignisPlanGroup=this.value;ignisPlanRender()"><option value="">Todos</option>${Object.entries(labels).map(([k,l])=>`<option value="${k}" ${groupFilter===k?'selected':''}>${l}</option>`).join('')}</select></label>
+      <label>Situação<select onchange="window._ignisPlanStatus=this.value;ignisPlanRender()">
+        <option value="">Todas</option>
+        <option value="sem-tratativa" ${statusFilter==='sem-tratativa'?'selected':''}>Sem registro</option>
+        <option value="pendente" ${statusFilter==='pendente'?'selected':''}>Ações pendentes</option>
+        <option value="vencido" ${statusFilter==='vencido'?'selected':''}>Prazos vencidos</option>
+        <option value="resolvido" ${statusFilter==='resolvido'?'selected':''}>Ações realizadas</option>
+        <option value="registro-concluido" ${statusFilter==='registro-concluido'?'selected':''}>Registros concluídos</option></select></label>
+      <label>Busca<input id="p27-search" placeholder="Placa, operação, causa ou responsável" value="${ignisPlanEsc(window._ignisPlanQuery||'')}" oninput="ignisPlanSearch(this.value)"></label>
+    </div>
+    <div class="p27-table-wrap"><table class="p27-table"><thead><tr>
+      <th>Placa / operação</th><th>Grupo</th><th>Real / meta</th><th>Eficiência</th>
+      <th>Faixa de referência</th><th>Ocorrências / situação</th><th>Ações</th></tr></thead><tbody>
+      ${seen.length?seen.map(x=>{
+        const total=x.ocorrencias.length,pendentes=x.ocorrencias.filter(t=>ignisPlanActionState(t)!=='realizada').length,
+          vencidos=x.ocorrencias.filter(ignisPlanOverdue).length,ef=x.eficiencia===null?'—':format(x.eficiencia)+'%',
+          id=ignisPlanSafeParam(x.placa);
+        return `<tr><td><strong>${ignisPlanEsc(x.placa)}</strong><small>${ignisPlanEsc(x.operacao||'Sem operação')}</small></td>
+          <td>${labels[x.grupo]||ignisPlanEsc(x.grupo)}</td>
+          <td>${x.semDados?'Sem dados no período':`${format(x.media)} / ${x.meta>0?format(x.meta):'—'} ${x.unidade}`}
+          <small>${x.semDados?'':format(x.atividade)+' '+x.atividadeUnidade+' no período'}</small></td>
+          <td><strong class="${x.abaixo?'p27-bad':x.acima?'p27-high':'p27-good'}">${ef}</strong>
+            ${x.abaixo?'<small class="p27-bad">Abaixo da meta</small>':x.acima?'<small class="p27-high">Acima do limite</small>':''}</td>
+          <td>${format(x.limite)}% a ${format(x.limiteSuperior)}%</td>
+          <td><span class="p27-pill ${vencidos?'p27-urgent':pendentes?'p27-active':total?'p27-done':'p27-pending'}">
+            ${total?total+' ocorrência(s)':'Sem registro'}</span>
+            ${total?`<small>${pendentes} pendente(s)${vencidos?' · '+vencidos+' vencida(s)':''}</small>`:''}</td>
+          <td><div class="p27-actions">
+            ${total?`<button class="p27-action p27-secondary" onclick="ignisPlanList('${id}','${x.grupo}','${mon}')">Ver ${total}</button>`:''}
+            <button class="p27-action" onclick="ignisPlanOpen('${id}','${x.grupo}','', '${mon}')">Nova ocorrência</button>
+          </div></td></tr>`;
+      }).join(''):`<tr><td colspan="7" class="p27-empty">${list.length?'Nenhum veículo corresponde aos filtros.':'Nenhum dado de abastecimento encontrado neste mês. Selecione outro período ou importe relatórios.'}</td></tr>`}
+    </tbody></table></div>
   </div>
   <div id="p27-editor-root"></div>`;
 }
