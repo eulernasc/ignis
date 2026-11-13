@@ -1,8 +1,10 @@
 'use strict';
-const fs=require('node:fs');
-const path=require('node:path');
-const vm=require('node:vm');
-const assert=require('node:assert/strict');
+import fs from 'node:fs';
+import path from 'node:path';
+import vm from 'node:vm';
+import assert from 'node:assert/strict';
+import {fileURLToPath} from 'node:url';
+const __dirname=path.dirname(fileURLToPath(import.meta.url));
 
 async function main(){
   const source=fs.readFileSync(path.resolve(__dirname,'../planejamento2027.js'),'utf8');
