@@ -199,8 +199,9 @@ async function fbWriteChunkSeries(prefix, version, items, chunkSize) {
       registros: chunk, chunk: i, total, version
     }), 24000), 3, 650);
   });
-  for (let i = 0; i < jobs.length; i += 4) {
-    await Promise.all(jobs.slice(i, i + 4).map(fn => fn()));
+  const writeConcurrency=fbIsMobileDevice()?4:6;
+  for (let i = 0; i < jobs.length; i += writeConcurrency) {
+    await Promise.all(jobs.slice(i, i + writeConcurrency).map(fn => fn()));
     await fbSleep(0);
   }
   return total;
@@ -11624,11 +11625,17 @@ Continuar?`)){
       // Lê o medidor absoluto da última data por placa, sem somar KM Real/Horas.
       const medidoresCapturados=ignisMesclarMedidoresUltimos(raw);
       const detalhesMedidores=window._ignisMedidoresDiagnostico||{};
+      const startSync=performance.now();
       const savePromise = saveState({ immediate: true, mode:'fuel', changedPeriodIds:newPeriodIds, removedPeriodIds }); // salva só as semanas alteradas + séries auxiliares
-      renderHistoricoPeriodos();
-      updateFilters(true);
-      ignisRunIdle(()=>{try{relChecarReincidencia()}catch(e){};try{renderPendencias(true)}catch(e){};try{renderAnomalias(true)}catch(e){}});
+      // Evita renderizações custosas enquanto o Firebase confirma a escrita, liberando a thread para o envio.
       const salvoFirebase = await savePromise;
+      const syncSeconds=Math.round((performance.now()-startSync)/100)/10;
+      window._ignisUltimoTempoImportacaoFirebase=syncSeconds;
+      if(salvoFirebase){
+        renderHistoricoPeriodos();
+        updateFilters(true);
+        ignisRunIdle(()=>{try{relChecarReincidencia()}catch(e){};try{renderPendencias(true)}catch(e){};try{renderAnomalias(true)}catch(e){}});
+      }
       if (!salvoFirebase) {
         ignisImportProgress(previewEl,100,'Sincronização não confirmada','Os dados continuam neste navegador, mas ainda não estão seguros para outros usuários');
         previewEl.innerHTML = `<div data-ignis-import-pending style="background:rgba(239,98,98,.08);border:1px solid rgba(239,98,98,.28);border-radius:10px;padding:16px;margin-top:12px"><div style="font-size:15px;font-weight:700;color:#ff7777;margin-bottom:6px">Importação processada, mas não confirmada no Firebase</div><div style="font-size:12px;color:var(--text2);line-height:1.6">Os dados estão preservados neste computador. O IGNIS agora tenta reenviar em blocos menores; não é necessário reimportar o Excel para tentar novamente.</div>${window._lastFirebaseSaveError?`<div style="font-size:10px;color:var(--text3);margin-top:8px;word-break:break-word">Motivo: ${pendEsc(window._lastFirebaseSaveError)}</div>`:''}<button class="btn btn-secondary btn-sm" style="margin-top:10px" onclick="ignisRetryImportacaoPendente()">Tentar salvar novamente</button></div>`;
@@ -11641,6 +11648,7 @@ Continuar?`)){
         <div style="background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);border-radius:10px;padding:16px;margin-top:12px">
           <div style="font-size:15px;font-weight:600;color:var(--green);margin-bottom:8px">${semanasNovas} semana(s) nova(s) · ${semanasMescladas} semana(s) existente(s) atualizada(s)</div>
           <div style="font-size:11px;color:var(--text2);margin-bottom:4px">Motoristas da coluna Motorista foram vinculados aos respectivos abastecimentos para o acompanhamento de médias.</div>
+          <div style="font-size:11px;color:var(--text3);margin-bottom:4px">Firebase confirmou em ${syncSeconds.toLocaleString('pt-BR')} segundo(s).</div>
           <div style="font-size:13px;color:var(--text2)">${novaMaq} novo(s) veículo(s) · ${registrosTotais} registro(s) consolidado(s)</div>
           <div style="font-size:12px;color:${medidoresCapturados?'var(--green)':'var(--yellow)'};margin-top:6px">
             ${medidoresCapturados?'✓ '+medidoresCapturados+' placa(s) com último odômetro/horímetro identificado(s).':'Atenção: nenhum odômetro/horímetro absoluto reconhecido neste arquivo. Confira se o relatório contém a leitura acumulada, além de KM Real/Horas.'}
