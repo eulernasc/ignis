@@ -31,7 +31,6 @@ function ignisPlanMonthChoices(){
   const months=new Set();
   Object.values(state.semanas||{}).forEach(p=>{const m=String(p?.dataFim||p?.dataIni||'').slice(0,7);if(/^\d{4}-\d\d$/.test(m))months.add(m);});
   (state.abastecimentos||[]).forEach(a=>{if(!a?.periodoId){const m=String(a?.data||'').slice(0,7);if(/^\d{4}-\d\d$/.test(m))months.add(m);}});
-  for(let i=1;i<=12;i++)months.add('2027-'+String(i).padStart(2,'0'));
   return [...months].sort().reverse();
 }
 
@@ -71,9 +70,8 @@ function ignisPlanRender(){
   const root=document.getElementById('page-planejamento');if(!root)return;
   const conf=ignisPlanConfig(), months=ignisPlanMonthChoices();
   if(!window._ignisPlanMonth || !months.includes(window._ignisPlanMonth)){
-    const hist=months.filter(m=>m!=='2027-01'&&m!=='2027-02');
     const available=months.filter(m=>Object.values(state.semanas||{}).some(p=>String(p?.dataFim||p?.dataIni||'').startsWith(m))||state.abastecimentos?.some(a=>ignisPlanMonthOf(a)===m));
-    window._ignisPlanMonth=available[0]||months[0]||'2027-01';
+    window._ignisPlanMonth=available[0]||months[0]||new Date().toISOString().slice(0,7);
   }
   const mon=window._ignisPlanMonth,groupFilter=window._ignisPlanGroup||'',statusFilter=window._ignisPlanStatus||'',q=String(window._ignisPlanQuery||'').trim().toUpperCase();
   const list=ignisPlanSummary(mon),byId=new Map(conf.tratativas.filter(t=>t.mes===mon).map(t=>[t.id,t]));
