@@ -107,6 +107,110 @@ function ignisPlanHistory(t){
   ||'<div class="p27-legacy-note">Ocorrência anterior a esta versão. As alterações antigas não possuem histórico detalhado; as próximas atualizações serão registradas.</div>';
 }
 
+function ignisPlanInlineCase(t){
+  const key=ignisPlanSafeParam(t.id),s=ignisPlanActionState(t),overdue=ignisPlanOverdue(t);
+  const isDone=s==='realizada';
+  const when=isDone?(t.dataAcao?ignisPlanFmtDate(t.dataAcao):'Data não informada'):ignisPlanFmtDate(t.prazo);
+  const status=isDone?'Concluída':overdue?'Vencida':'Pendente';
+  return `<div class="p27-inline-case" data-case="${ignisPlanEsc(t.id)}">
+    <div class="p27-inline-head"><strong>${ignisPlanEsc(ignisPlanCauseName(t))}</strong>
+    <span class="p27-inline-badge ${isDone?'p27-done':overdue?'p27-urgent':'p27-active'}">${status}</span></div>
+    <div class="p27-inline-info"><span class="${overdue?'p27-bad':''}">${isDone?'Concluída em':'Prazo'}: <b>${when}</b></span>
+    <span>Resp.: ${ignisPlanEsc(t.responsavel||'Não informado')}</span></div>
+    <div class="p27-inline-buttons">
+      ${!isDone?`<button type="button" class="p27-mini primary" onclick="ignisPlanQuickFinish('${key}')">Concluir</button>
+       <button type="button" class="p27-mini" onclick="ignisPlanToggleExtend('${key}')">Prorrogar</button>`:''}
+      <button type="button" class="p27-mini" onclick="ignisPlanOpen('${ignisPlanSafeParam(t.placa)}','${ignisPlanSafeParam(t.grupo)}','${key}','${ignisPlanSafeParam(t.mes)}')">Detalhes</button>
+      <button type="button" class="p27-mini danger" onclick="ignisPlanDeleteCase('${key}')">Excluir</button>
+    </div>
+    ${!isDone?`<div class="p27-extend" id="p27-extend-${key}" hidden>
+      <label>Nova data<input type="date" min="${ignisPlanLocalDate()}" value="${t.prazo&&t.prazo>=ignisPlanLocalDate()?ignisPlanEsc(t.prazo):ignisPlanLocalDate()}"></label>
+      <label>Justificativa<input type="text" maxlength="220" placeholder="Motivo da prorrogação"></label>
+      <div class="p27-inline-buttons">
+        <button type="button" class="p27-mini primary" onclick="ignisPlanExtend('${key}')">Salvar novo prazo</button>
+        <button type="button" class="p27-mini" onclick="ignisPlanToggleExtend('${key}')">Cancelar</button>
+      </div>
+    </div>`:''}
+  </div>`;
+}
+
+function ignisPlanCaseById(encoded){
+  return ignisPlanConfig().tratativas.find(t=>t.id===decodeURIComponent(encoded))||null;
+}
+
+function ignisPlanAuthor(){return String(window._authUser?.nome||window._authUser?.id||'Não identificado');}
+
+function ignisPlanAuditUpdate(t,next,label,extra=[]){
+  const now=new Date().toISOString();
+  next.atualizadoEm=now;next.atualizadoPor=ignisPlanAuthor();
+  next.historico=Array.isArray(t.historico)?t.historico.slice():[];
+  next.historico.push({id:now+'-'+Math.random().toString(36).slice(2,9),quando:now,autor:ignisPlanAuthor(),tipo:label,
+    alteracoes:ignisPlanChangeRecord(t,next).concat(extra)});
+  return next;
+}
+
+async function ignisPlanCommitInline(mutate,successMessage){
+  if(window._ignisPlanSaving){showToast('Já existe uma alteração sendo sincronizada.','info');return false;}
+  const conf=ignisPlanConfig(),before=JSON.stringify({tratativas:conf.tratativas,excluidas:conf.excluidas||{}});
+  window._ignisPlanSaving=true;
+  const status=document.getElementById('p27-inline-save');if(status)status.textContent='Salvando no Firebase...';
+  const start=Date.now();
+  try{
+    mutate(conf);
+    const ok=await saveState({mode:'light',keys:['planejamento2027'],immediate:true});
+    if(!ok)throw new Error(window._lastFirebaseSaveError||'Firebase não confirmou o salvamento.');
+    ignisPlanRender();showToast(successMessage,'success');
+    console.info('IGNIS Performance: operação confirmada em '+((Date.now()-start)/1000).toFixed(1)+'s.');
+    return true;
+  }catch(err){
+    const old=JSON.parse(before);conf.tratativas=old.tratativas;conf.excluidas=old.excluidas;
+    ignisPlanRender();showToast('Não foi possível salvar. Alteração revertida.','error');
+    console.error('IGNIS Performance: erro de salvamento',err);return false;
+  }finally{window._ignisPlanSaving=false;}
+}
+
+async function ignisPlanQuickFinish(encoded){
+  const t=ignisPlanCaseById(encoded);if(!t)return;
+  if(ignisPlanActionState(t)==='realizada'){showToast('Esta ação já está concluída.','info');return;}
+  if(!confirm('Confirmar que a ação corretiva da placa '+t.placa+' foi realizada?'))return;
+  await ignisPlanCommitInline(conf=>{
+    const index=conf.tratativas.findIndex(x=>x.id===t.id);if(index<0)throw new Error('Ocorrência não encontrada');
+    conf.tratativas[index]=ignisPlanAuditUpdate(t,{...t,acaoRealizada:true,dataAcao:ignisPlanLocalDate()},'Ação corretiva concluída');
+  },'Ação concluída e registrada no histórico.');
+}
+
+function ignisPlanToggleExtend(encoded){
+  const panel=document.getElementById('p27-extend-'+encoded);
+  if(!panel)return;panel.hidden=!panel.hidden;
+  if(!panel.hidden)panel.querySelector('input[type="date"]')?.focus();
+}
+
+async function ignisPlanExtend(encoded){
+  const t=ignisPlanCaseById(encoded),panel=document.getElementById('p27-extend-'+encoded);
+  if(!t||!panel)return;
+  const prazo=String(panel.querySelector('input[type="date"]')?.value||'');
+  const motivo=String(panel.querySelector('input[type="text"]')?.value||'').trim();
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(prazo)||prazo<ignisPlanLocalDate()||(t.prazo&&prazo<=t.prazo)){
+    showToast('Informe uma data futura, posterior ao prazo anterior.','error');return;
+  }
+  if(motivo.length<5){showToast('Informe o motivo da prorrogação.','error');return;}
+  await ignisPlanCommitInline(conf=>{
+    const index=conf.tratativas.findIndex(x=>x.id===t.id);if(index<0)throw new Error('Ocorrência não encontrada');
+    conf.tratativas[index]=ignisPlanAuditUpdate(t,{...t,prazo,acaoRealizada:false,dataAcao:'',motivoProrrogacao:motivo},
+      'Prazo prorrogado',[{campo:'Justificativa',anterior:'',atual:motivo}]);
+  },'Novo prazo salvo e registrado no histórico.');
+}
+
+async function ignisPlanDeleteCase(encoded){
+  const t=ignisPlanCaseById(encoded);if(!t)return;
+  if(!confirm('Excluir definitivamente a ocorrência de '+ignisPlanCauseName(t)+' da placa '+t.placa+'?'))return;
+  await ignisPlanCommitInline(conf=>{
+    conf.tratativas=conf.tratativas.filter(x=>x.id!==t.id);
+    if(!conf.excluidas||typeof conf.excluidas!=='object')conf.excluidas={};
+    conf.excluidas[t.id]=new Date().toISOString();
+  },'Ocorrência excluída.');
+}
+
 function ignisPlanRender(){
   const root=document.getElementById('page-planejamento');if(!root)return;
   const conf=ignisPlanConfig(), months=ignisPlanMonthChoices();
@@ -154,6 +258,7 @@ function ignisPlanRender(){
     <div class="p27-stat p27-stat-overdue"><span>Prazos vencidos</span><strong>${allOverdue.length}</strong><small>Todos os períodos · <button type="button" onclick="ignisPlanShowOverdue()">Ver pendências</button></small></div>
     <div class="p27-stat"><span>Ações realizadas</span><strong>${done}</strong><small>No período escolhido</small></div>
   </div>
+  <div id="p27-inline-save" class="p27-inline-save" aria-live="polite"></div>
   <div class="p27-panel"><div class="p27-panel-head"><div><strong>Faixa de acompanhamento da eficiência</strong>
     <p>Veículos abaixo da meta do grupo ou acima do limite superior entram no acompanhamento. Os valores podem ser configurados.</p></div></div>
     <div class="p27-metas">
@@ -189,13 +294,8 @@ function ignisPlanRender(){
           <td><strong class="${x.abaixo?'p27-bad':x.acima?'p27-high':'p27-good'}">${ef}</strong>
             ${x.abaixo?'<small class="p27-bad">Abaixo da meta</small>':x.acima?'<small class="p27-high">Acima do limite</small>':''}</td>
           <td>${format(x.limite)}% a ${format(x.limiteSuperior)}%</td>
-          <td><span class="p27-pill ${vencidos?'p27-urgent':pendentes?'p27-active':total?'p27-done':'p27-pending'}">
-            ${total?total+' ocorrência(s)':'Sem registro'}</span>
-            ${total?`<small>${pendentes} pendente(s)${vencidos?' · '+vencidos+' vencida(s)':''}</small>`:''}</td>
-          <td><div class="p27-actions">
-            ${total?`<button class="p27-action p27-secondary" onclick="ignisPlanList('${id}','${x.grupo}','${mon}')">Ver ${total}</button>`:''}
-            <button class="p27-action" onclick="ignisPlanOpen('${id}','${x.grupo}','', '${mon}')">Nova ocorrência</button>
-          </div></td></tr>`;
+          <td><div class="p27-inline-list">${x.ocorrencias.length?x.ocorrencias.map(ignisPlanInlineCase).join(""):'<span class="p27-pill p27-pending">Sem ocorrência</span>'}</div></td>
+          <td><div class="p27-actions"><button class="p27-action" onclick="ignisPlanOpen('${id}','${x.grupo}','','${mon}')">Nova ocorrência</button></div></td></tr>`;
       }).join(''):`<tr><td colspan="7" class="p27-empty">${list.length?'Nenhum veículo corresponde aos filtros.':'Nenhum dado de abastecimento encontrado neste mês. Selecione outro período ou importe relatórios.'}</td></tr>`}
     </tbody></table></div>
   </div>
