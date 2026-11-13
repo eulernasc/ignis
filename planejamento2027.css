@@ -13,3 +13,16 @@
 .p27-backdrop{position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;padding:16px;overflow-y:auto}.p27-editor{background:var(--bg2,#17212a);border:1px solid var(--border);border-radius:18px;width:min(520px,100%);max-height:90vh;overflow-y:auto;padding:24px;box-sizing:border-box;display:flex;flex-direction:column;gap:14px;box-shadow:0 22px 60px rgba(0,0,0,.4)}.p27-editor-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}.p27-editor-head strong{font-size:19px}.p27-editor-head small{display:block;color:var(--text3);font-size:11px;margin-top:4px}.p27-editor-head button{background:transparent;color:var(--text2);border:0;font-size:27px;cursor:pointer}.p27-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.p27-editor textarea{resize:vertical}.p27-editor-actions{display:flex;justify-content:flex-end;gap:8px}.p27-save-state{font-size:12px;color:var(--yellow);min-height:14px}
 @media(max-width:1080px){.p27-top{grid-template-columns:repeat(2,minmax(0,1fr))}.p27-filters{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:620px){.p27-stat{padding:13px}.p27-stat strong{font-size:24px}.p27-panel{padding:13px}.p27-metas{grid-template-columns:1fr}.p27-filters{grid-template-columns:1fr}.p27-editor{padding:16px}.p27-form-grid{grid-template-columns:1fr}}
+
+/* Acompanhamento de Performance: faixa inferior e acima de 110%. */
+.p27-top{grid-template-columns:repeat(5,minmax(0,1fr))}
+.p27-stat-high{border-top:2px solid #d796ff}
+.p27-stat-high strong,.p27-high{color:#d4a1ff!important}
+.p27-metas{grid-template-columns:repeat(4,minmax(0,1fr))}
+.p27-metas .p27-upper{border-color:rgba(206,146,253,.4);background:rgba(124,62,191,.12)}
+.p27-metas .p27-upper em{color:#d4a1ff}
+.p27-metas .p27-upper input{width:78px}
+.p27-table .p27-high{font-weight:750}
+@media(max-width:1180px){.p27-top{grid-template-columns:repeat(3,minmax(0,1fr))}.p27-metas{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:760px){.p27-top{grid-template-columns:repeat(2,minmax(0,1fr))}.p27-metas{grid-template-columns:1fr}}
+@media(max-width:400px){.p27-top{gap:8px}.p27-stat{padding:12px 10px}.p27-stat span{font-size:11px}}
