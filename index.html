@@ -17979,14 +17979,14 @@ function ignisNumeroSeguro(v){
   }
   let n=Number(str); if(!Number.isFinite(n))n=0; return negPar?-Math.abs(n):n;
 }
-function ignisHeaderNorm(v){return String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();}
+function ignisHeaderNorm(v){return String(v||'').replace(/([a-záàãâéêíóôõúç])([A-ZÁÀÃÂÉÊÍÓÔÕÚÇ])/g,'$1 $2').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();}
 function ignisCampoMedidorAbsoluto(header){
   const h=ignisHeaderNorm(header);
   if(!h)return null;
   // NUNCA interpretar KM real/rodado, horas trabalhadas, eficiência ou consumo como leitura absoluta.
   if(/\b(km real|km produtivo|km improdutivo|km ideal|km rodado|km percorrido|horas trabalhadas|horas rodadas|horas operadas|media|eficiencia|variacao|var km|km h|consumo|litros|volume|distancia percorrida)\b/.test(h))return null;
-  const hasHor=/\b(horimetro|horometro|hourmeter|horas acumuladas|horas acumulado)\b/.test(h);
-  const hasOdo=/\b(odometro|hodometro|odometer|hodometer|hodometro|hodometro|quilometragem acumulada|km acumulado|km acumulada)\b/.test(h);
+  const hasHor=/(horimetro|horometro|hourmeter|horas acumuladas|horas acumulado)/.test(h);
+  const hasOdo=/(odometro|hodometro|odometer|hodometer|quilometragem acumulada|km acumulado|km acumulada)/.test(h);
   // Campos de abastecimento combinados, como "Hodômetro/Horímetro", usam o tipo da placa.
   if(hasHor&&hasOdo)return 'Misto';
   if(hasHor)return 'Horímetro';
@@ -18053,7 +18053,7 @@ function ignisMesclarMedidoresUltimos(rows){
  diagnostics.campos=[...headers].filter(k=>ignisCampoMedidorAbsoluto(k));
  const cols=[...headers].filter(k=>ignisCampoMedidorAbsoluto(k)).map(k=>({field:k,kind:ignisCampoMedidorAbsoluto(k),norm:ignisHeaderNorm(k)}));
  const allPlates=new Set();
- const dateFields=['data','data abastecimento','data do abastecimento','dt abastecimento','data transacao','data da transacao','data hora','data hora abastecimento','data movimento','data leitura','dt movimento'];
+ const dateFields=['data','data abastecimento','dataabastecimento','data do abastecimento','dt abastecimento','data transacao','datatransacao','data da transacao','data hora','data hora abastecimento','data movimento','data leitura','dt movimento'];
  for(let i=0;i<rows.length;i++){
   const r=rows[i];if(!r||typeof r!=='object')continue;
   const placa=String(ignisValorRow(r,['placa','placa veiculo','placa do veiculo','placa equipamento','placa do equipamento'])||'').trim().toUpperCase().replace(/\s+/g,'');
