@@ -230,7 +230,7 @@ async function fbReadChunkSeries(prefix, version, total) {
     const size = Math.min(cacheBatch, total - base);
     const cached = await Promise.allSettled(Array.from({length:size}, (_,off) => {
       const i = base + off;
-      return getDocFromCache(doc(db,'fueltracker',ids[i]));
+      return withTimeout(getDocFromCache(doc(db,'fueltracker',ids[i])), 3000);
     }));
     cached.forEach((res,off) => {
       const i = base + off;
@@ -2624,7 +2624,7 @@ input[type="checkbox"]:indeterminate{background:rgba(233,95,50,.2);border-color:
 @media(max-width:900px){.postos-coord-stats{grid-template-columns:repeat(3,minmax(0,1fr))}.postos-coord-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.postos-coord-row{grid-template-columns:1fr}.postos-coord-actions{min-width:0;justify-content:flex-start}}
 @media(max-width:620px){.postos-coord-period,.postos-coord-toolbar{grid-template-columns:1fr}.postos-coord-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.postos-coord-actions .postos-location-action{flex:1 1 calc(50% - 8px)}}
 </style>
-<link rel="stylesheet" href="planejamento2027.css?v=20261113">
+<link rel="stylesheet" href="planejamento2027.css?v=20261113b">
 </head>
 <body>
 <div id="ignis-sync-banner" class="ignis-sync-banner" data-state="syncing" role="status" aria-live="polite" aria-atomic="true">
@@ -3157,7 +3157,7 @@ input[type="checkbox"]:indeterminate{background:rgba(233,95,50,.2);border-color:
     </div>
   </div>
 
-  <!-- PLANEJAMENTO 2027 -->
+  <!-- ACOMPANHAMENTO DE PERFORMANCE: id e armazenamento antigos mantidos por compatibilidade -->
   <div id="page-planejamento" class="page"></div>
 
   <!-- COMPARATIVO -->
@@ -6471,7 +6471,7 @@ const AUTH_PAGES = [
   { id:'cta',           label:'CTA',                   group:'Operação' },
   { id:'postos',        label:'Rede de Postos',        group:'Operação' },
   { id:'maquinas',      label:'Frota e Equipamentos',  group:'Operação' },
-  { id:'planejamento', label:'Planejamento 2027',      group:'Operação' },
+  { id:'planejamento', label:'Acompanhamento de Performance',      group:'Operação' },
   { id:'motoristas',    label:'Motoristas',             group:'Operação' },
   { id:'relatorio',     label:'Relatório',             group:'Inteligência' },
   { id:'excluir',       label:'A Excluir',             group:'Inteligência' },
@@ -11622,7 +11622,8 @@ Continuar?`)){
 
       ignisImportProgress(previewEl,86,'Salvando dados','Análises concluídas. Sincronizando com o Firebase');await ignisNextFrame();
       // Lê o medidor absoluto da última data por placa, sem somar KM Real/Horas.
-      ignisMesclarMedidoresUltimos(raw);
+      const medidoresCapturados=ignisMesclarMedidoresUltimos(raw);
+      const detalhesMedidores=window._ignisMedidoresDiagnostico||{};
       const savePromise = saveState({ immediate: true, mode:'fuel', changedPeriodIds:newPeriodIds, removedPeriodIds }); // salva só as semanas alteradas + séries auxiliares
       renderHistoricoPeriodos();
       updateFilters(true);
@@ -11641,6 +11642,10 @@ Continuar?`)){
           <div style="font-size:15px;font-weight:600;color:var(--green);margin-bottom:8px">${semanasNovas} semana(s) nova(s) · ${semanasMescladas} semana(s) existente(s) atualizada(s)</div>
           <div style="font-size:11px;color:var(--text2);margin-bottom:4px">Motoristas da coluna Motorista foram vinculados aos respectivos abastecimentos para o acompanhamento de médias.</div>
           <div style="font-size:13px;color:var(--text2)">${novaMaq} novo(s) veículo(s) · ${registrosTotais} registro(s) consolidado(s)</div>
+          <div style="font-size:12px;color:${medidoresCapturados?'var(--green)':'var(--yellow)'};margin-top:6px">
+            ${medidoresCapturados?'✓ '+medidoresCapturados+' placa(s) com último odômetro/horímetro identificado(s).':'Atenção: nenhum odômetro/horímetro absoluto reconhecido neste arquivo. Confira se o relatório contém a leitura acumulada, além de KM Real/Horas.'}
+          </div>
+          ${!medidoresCapturados?'<div style="font-size:11px;color:var(--text3);margin-top:4px">Colunas de medidor encontradas: '+((detalhesMedidores.campos||[]).map(c=>String(c).replace(/[&<>"']/g,'')).join(', ')||'nenhuma')+' · Linhas com data não reconhecida: '+(detalhesMedidores.semData||0)+'</div>':''}
           ${precosAtualizados>0?`<div style="font-size:13px;color:var(--yellow);margin-top:4px">${precosAtualizados} preço(s) de diesel atualizado(s)</div>`:''}
           ${ignoradasExclusao>0?`<div style="font-size:12px;color:var(--text3);margin-top:4px">${ignoradasExclusao} linha(s) ignorada(s) (IEV, manutenção, locação, etc.)</div>`:''}
           ${ignoradasArla>0?`<div style="font-size:12px;color:var(--text3);margin-top:4px">${ignoradasArla} linha(s) de Arla ignorada(s) — tem controle dedicado na aba Arla 32</div>`:''}
@@ -17970,12 +17975,17 @@ function ignisHeaderNorm(v){return String(v||'').normalize('NFD').replace(/[\u03
 function ignisCampoMedidorAbsoluto(header){
   const h=ignisHeaderNorm(header);
   if(!h)return null;
-  // Km Real/KM Produtivo são variações do período, não leitura absoluta do painel.
-  if(/\b(km real|km produtivo|km ideal|media|eficiencia|variacao|var km|km h)\b/.test(h))return null;
-  if(h.includes('horimetro'))return 'Horímetro';
-  if(h.includes('odometro')||h.includes('hodometro'))return 'Odômetro';
-  // Alguns relatórios usam "KM Atual/Anterior/Inicial/Final" para o odômetro.
-  if(/\b(km|quilometragem)\b/.test(h)&&/\b(atual|anterior|inicial|final|leitura)\b/.test(h))return 'Odômetro';
+  // NUNCA interpretar KM real/rodado, horas trabalhadas, eficiência ou consumo como leitura absoluta.
+  if(/\b(km real|km produtivo|km improdutivo|km ideal|km rodado|km percorrido|horas trabalhadas|horas rodadas|horas operadas|media|eficiencia|variacao|var km|km h|consumo|litros|volume|distancia percorrida)\b/.test(h))return null;
+  const hasHor=/\b(horimetro|horometro|hourmeter|horas acumuladas|horas acumulado)\b/.test(h);
+  const hasOdo=/\b(odometro|hodometro|odometer|hodometer|hodometro|hodometro|quilometragem acumulada|km acumulado|km acumulada)\b/.test(h);
+  // Campos de abastecimento combinados, como "Hodômetro/Horímetro", usam o tipo da placa.
+  if(hasHor&&hasOdo)return 'Misto';
+  if(hasHor)return 'Horímetro';
+  if(hasOdo)return 'Odômetro';
+  // Aceitar KM Inicial/Final, mas nunca KM Real ou o volume percorrido no período.
+  if(/\b(km|quilometragem)\b/.test(h)&&/\b(atual|anterior|inicial|final|leitura|acumulado|acumulada|registrado|registrada)\b/.test(h))return 'Odômetro';
+  if(/\b(horas|hora)\b/.test(h)&&/\b(atual|anterior|inicial|final|leitura|acumulado|acumulada)\b/.test(h))return 'Horímetro';
   return null;
 }
 function ignisValorRow(row,norms){
@@ -18017,34 +18027,60 @@ function ignisAnomaliaRegistroValido(r){
   }
   return r.propulsaoOnly===true || r.dieselOnly===true || !r.combustivel || ignisEhCombustivelAnomalia(r.combustivel);
 }
+function ignisDataMedidor(v){
+  // XLSX pode trazer datas como número serial, DD/MM/AAAA, AAAA-MM-DD ou texto com horário.
+  if(v instanceof Date)return Number.isFinite(v.getTime())?v:null;
+  let d=typeof parseDataBR==='function'?parseDataBR(v):null;
+  if(d&&Number.isFinite(d.getTime()))return d;
+  const str=String(v??'').trim();
+  const iso=str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})(?:[T\s]+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+  if(iso){d=new Date(+iso[1],+iso[2]-1,+iso[3],+(iso[4]||0),+(iso[5]||0),+(iso[6]||0));if(Number.isFinite(d.getTime())&&d.getFullYear()===+iso[1]&&d.getMonth()===+iso[2]-1&&d.getDate()===+iso[3])return d;}
+  return null;
+}
 function ignisMesclarMedidoresUltimos(rows){
- const result={};if(!Array.isArray(rows))return 0;
+ const diagnostics={linhas:Array.isArray(rows)?rows.length:0,campos:[],placasValidas:0,atualizadas:0,semData:0,ignoradosTipo:0,placasNoArquivo:0};
+ const result=new Map();
+ if(!Array.isArray(rows)){window._ignisMedidoresDiagnostico=diagnostics;return 0;}
+ const headers=new Set();for(const row of rows.slice(0,50)){if(row&&typeof row==='object')Object.keys(row).forEach(k=>headers.add(k));}
+ diagnostics.campos=[...headers].filter(k=>ignisCampoMedidorAbsoluto(k));
+ const cols=[...headers].filter(k=>ignisCampoMedidorAbsoluto(k)).map(k=>({field:k,kind:ignisCampoMedidorAbsoluto(k),norm:ignisHeaderNorm(k)}));
+ const allPlates=new Set();
+ const dateFields=['data','data abastecimento','data do abastecimento','dt abastecimento','data transacao','data da transacao','data hora','data hora abastecimento','data movimento','data leitura','dt movimento'];
  for(let i=0;i<rows.length;i++){
   const r=rows[i];if(!r||typeof r!=='object')continue;
-  const placa=String(ignisValorRow(r,['placa'])||'').trim().toUpperCase();if(!placa)continue;
-  const parsed=parseDataBR(ignisValorRow(r,['data','data abastecimento','data do abastecimento','dt abastecimento','data transacao']));
-  if(!parsed||!Number.isFinite(parsed.getTime()))continue;
+  const placa=String(ignisValorRow(r,['placa','placa veiculo','placa do veiculo','placa equipamento','placa do equipamento'])||'').trim().toUpperCase().replace(/\s+/g,'');
+  if(!placa)continue;
+  allPlates.add(placa);
+  const parsed=ignisDataMedidor(ignisValorRow(r,dateFields));
+  if(!parsed){diagnostics.semData++;continue;}
   const data=dataParaISO(parsed),time=parsed.getTime();
   const tipo=ignisInferTipoMedidor(placa,String(ignisValorRow(r,['modelo'])||''),String(ignisValorRow(r,['tipo de veiculo','tipo veiculo','tipo'])||''),String(ignisValorRow(r,['operacao'])||''));
   const expected=ignisMedidorNome(tipo);
   const comb=String(ignisValorRow(r,['combustivel','tipo de combustivel','produto','produto combustivel'])||'');
   if(ignisTextoNormAnom(comb).includes('ARLA'))continue;
-  for(const [field,value] of Object.entries(r)){
-   let medidor=ignisCampoMedidorAbsoluto(field);if(!medidor)continue;
-   const h=ignisHeaderNorm(field);if(h.includes('odometro')&&h.includes('horimetro'))medidor=expected;
-   if(medidor!==expected||value===null||value===undefined||String(value).trim()==='')continue;
+  for(const col of cols){
+   const medidor=col.kind==='Misto'?expected:col.kind;
+   if(medidor!==expected){diagnostics.ignoradosTipo++;continue;}
+   const value=r[col.field];if(value===null||value===undefined||String(value).trim()==='')continue;
    const valor=ignisNumeroSeguro(value);if(!(valor>0))continue;
-   const phase=/\b(atual|final)\b/.test(h)?2:/\b(anterior|inicial)\b/.test(h)?0:1;
+   const phase=/\b(atual|final|ultima|ultimo|corrente)\b/.test(col.norm)?2:/\b(anterior|inicial|inicio)\b/.test(col.norm)?0:1;
    const cand={medidor,valor,data,fonte:'Relatório diário',time,phase,i};
-   const prev=result[placa];if(!prev||time>prev.time||(time===prev.time&&(phase>prev.phase||(phase===prev.phase&&i>=prev.i))))result[placa]=cand;
+   const prev=result.get(placa);
+   if(!prev||time>prev.time||(time===prev.time&&(phase>prev.phase||(phase===prev.phase&&i>=prev.i))))result.set(placa,cand);
   }
  }
+ diagnostics.placasNoArquivo=allPlates.size;
+ diagnostics.placasValidas=result.size;
  if(!state.medidoresUltimos||typeof state.medidoresUltimos!=='object')state.medidoresUltimos={};
- let count=0;for(const [placa,row] of Object.entries(result)){
-  const prev=state.medidoresUltimos[placa];if(prev&&String(prev.data||'')>row.data)continue;
-  const {medidor,valor,data,fonte}=row;state.medidoresUltimos[placa]={medidor,valor,data,fonte};count++;
+ for(const [placa,row] of result){
+  const prev=state.medidoresUltimos[placa];
+  if(prev&&String(prev.data||'')>row.data)continue;
+  const {medidor,valor,data,fonte}=row;
+  state.medidoresUltimos[placa]={medidor,valor,data,fonte};
+  diagnostics.atualizadas++;
  }
- return count;
+ window._ignisMedidoresDiagnostico=diagnostics;
+ return diagnostics.atualizadas;
 }
 
 function ignisTooltipMedidor(placa,atividade,isKmL){
@@ -20942,6 +20978,6 @@ function ctaOnShow(){
 
 </script>
 
-<script src="planejamento2027.js?v=20261113"></script>
+<script src="planejamento2027.js?v=20261113b"></script>
 </body>
 </html>
