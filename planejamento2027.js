@@ -78,7 +78,10 @@ function ignisPlanRegisterState(t){
   return t.statusRegistro||({'Pendente':'Registrada','Em andamento':'Em acompanhamento','Resolvido':'Concluída'}[t.status]||'Registrada');
 }
 function ignisPlanLocalDate(){const now=new Date();return now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');}
-function ignisPlanOverdue(t,today=ignisPlanLocalDate()){
+function ignisPlanOverdue(t){
+  // Callback seguro para Array.filter/Array.some: o segundo argumento dessas APIs
+  // é o índice, não uma data de referência.
+  const today=ignisPlanLocalDate();
   return Boolean(t&&ignisPlanActionState(t)!=='realizada'&&/^\d{4}-\d{2}-\d{2}$/.test(String(t.prazo||''))&&t.prazo<today);
 }
 function ignisPlanFmtDate(date){
