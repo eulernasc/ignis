@@ -556,9 +556,27 @@ window.fbSave = async function(data) {
       const latestData = latestSnap.exists() ? (latestSnap.data() || {}) : {};
       const latestRevision = String(latestData._revision || '');
       if(saveMode==='light'){
-        // Merge atômico somente dos campos realmente alterados pelo navegador atual.
-        // Campos pesados e alterações leves de outros usuários são preservados.
-        tx.set(mainRef, { ...latestData, ...lightPatch, _revision:version, _storageVersion:Number(latestData._storageVersion||FB_STORAGE_VERSION) });
+        // Preserve campos leves não alterados por outros usuários.
+        const appliedLight={...lightPatch};
+        if(Object.prototype.hasOwnProperty.call(appliedLight,'planejamento2027')){
+          // Mescla casos por identificador + carimbo de alteração para não perder
+          // tratativas paralelas de usuários diferentes.
+          const current=latestData.planejamento2027||{},incoming=appliedLight.planejamento2027||{};
+          const cases=new Map((Array.isArray(current.tratativas)?current.tratativas:[]).filter(t=>t?.id).map(t=>[t.id,t]));
+          (Array.isArray(incoming.tratativas)?incoming.tratativas:[]).forEach(t=>{
+            if(!t?.id)return;const existing=cases.get(t.id);
+            if(!existing||String(t.atualizadoEm||'')>=String(existing.atualizadoEm||''))cases.set(t.id,t);
+          });
+          const metas={...(current.metas||{})},timestamps={...(current.metasRevisadas||{})};
+          Object.entries(incoming.metas||{}).forEach(([g,v])=>{
+            const stamp=String(incoming.metasRevisadas?.[g]||'');
+            if(!Object.prototype.hasOwnProperty.call(metas,g)||stamp&&stamp>=String(timestamps[g]||'')){
+              metas[g]=v;if(stamp)timestamps[g]=stamp;
+            }
+          });
+          appliedLight.planejamento2027={...current,...incoming,metas,metasRevisadas:timestamps,tratativas:[...cases.values()]};
+        }
+        tx.set(mainRef, { ...latestData, ...appliedLight, _revision:version, _storageVersion:Number(latestData._storageVersion||FB_STORAGE_VERSION) });
         return;
       }
       if ((latestRevision || expectedRevision) && latestRevision !== expectedRevision) {

@@ -52,7 +52,7 @@ function ignisPlanSummary(month){
     if(!x){x={placa,grupo,operacao:getMaquina(placa)?.operacao||a.operacao||'',litros:0,atividade:0,meta:0,metasoma:0,metapeso:0};groups.set(key,x);}
     const l=Number(a.litros)||0,h=Number(a.horas)||0;if(l<=0||h<=0)continue;
     x.litros+=l;x.atividade+=h;
-    const m=Number(getMaquina(placa)?.meta||a.metaIdeal||0);
+    const m=Number(a.metaIdeal||getMaquina(placa)?.meta||0);
     if(m>0){x.metasoma+=m*l;x.metapeso+=l;}
   }
   const all=[...groups.values()].filter(x=>x.litros>0&&x.atividade>0).map(x=>{
@@ -177,8 +177,10 @@ async function ignisPlanSubmit(ev,encoded,grupo){
 async function ignisPlanMetaChange(grupo,value){
   const num=Number(value);if(!Number.isFinite(num)||num<1||num>150){showToast('Informe um percentual entre 1 e 150.','error');ignisPlanRender();return;}
   const c=ignisPlanConfig(),before=c.metas[grupo];c.metas[grupo]=num;
+  if(!c.metasRevisadas||typeof c.metasRevisadas!=='object')c.metasRevisadas={};
+  const oldStamp=c.metasRevisadas[grupo];c.metasRevisadas[grupo]=new Date().toISOString();
   try{const ok=await saveState({mode:'light',immediate:true});if(!ok)throw new Error('Firebase não confirmou a alteração.');showToast('Limite de performance atualizado.','success');}
-  catch(e){c.metas[grupo]=before;showToast('Não foi possível confirmar a meta na nuvem.','error');}
+  catch(e){c.metas[grupo]=before;if(oldStamp)c.metasRevisadas[grupo]=oldStamp;else delete c.metasRevisadas[grupo];showToast('Não foi possível confirmar a meta na nuvem.','error');}
   ignisPlanRender();
 }
 window.addEventListener('ignis:data-ready',()=>{if(document.getElementById('page-planejamento')?.classList.contains('active'))ignisPlanRender();});
