@@ -13,18 +13,22 @@ async function main(){
     {placa:'RHT5F20',data:'2026-11-11',tipoIgnis:'pesada',litros:100,horas:100,metaIdeal:1.5,operacao:'Ribas'}
   ]};
   const page={innerHTML:''},modal={innerHTML:''};
+  let extendedPanel=null;
   const document={
-    getElementById:id=>id==='page-planejamento'?page:id==='p27-editor-root'?modal:null,
+    getElementById:id=>id==='page-planejamento'?page:id==='p27-editor-root'?modal:id.startsWith('p27-extend-')?extendedPanel:null,
     querySelector:()=>null,
     body:{classList:{add(){},remove(){}}}
   };
   const window={addEventListener(){},_authUser:{nome:'Instrutor (teste)'}};
   let saves=0,shouldSave=true;
+  const saveOptions=[];
   const notifications=[];
   class FakeFormData{constructor(form){this.values=form.values;}get(name){return this.values[name]??null;}}
   const context={state,document,window,FormData:FakeFormData,
     getTipoIgnis:a=>a.tipoIgnis,getMaquina:()=>({meta:1.5}),
-    saveState:async()=>{saves++;return shouldSave;},
+    saveState:async(opts)=>{saves++;saveOptions.push(opts);return shouldSave;},
+    confirm:()=>true,
+    console:{info(){},error(){}},
     showToast:(msg,kind)=>notifications.push([msg,kind])};
   vm.createContext(context);
   vm.runInContext(source,context,{filename:'planejamento2027.js'});
