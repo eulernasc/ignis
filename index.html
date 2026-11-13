@@ -530,7 +530,10 @@ window.fbSave = async function(data) {
       : saveMode==='fuel' ? {
           _savedAt: restData._savedAt,
           dieselPrecos: restData.dieselPrecos ?? antigo.dieselPrecos,
-          combustivelPrecos: restData.combustivelPrecos ?? antigo.combustivelPrecos
+          combustivelPrecos: restData.combustivelPrecos ?? antigo.combustivelPrecos,
+          medidoresUltimos: Object.fromEntries(Object.entries({...antigo.medidoresUltimos,...(restData.medidoresUltimos||{})}).map(([placa,leitura])=>{
+            const prev=antigo.medidoresUltimos?.[placa];return [placa,prev&&String(prev.data||'')>String(leitura?.data||'')?prev:leitura];
+          }))
         }
       : { _savedAt: restData._savedAt };
     const manifest = {
@@ -2603,6 +2606,7 @@ input[type="checkbox"]:indeterminate{background:rgba(233,95,50,.2);border-color:
 @media(max-width:900px){.postos-coord-stats{grid-template-columns:repeat(3,minmax(0,1fr))}.postos-coord-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.postos-coord-row{grid-template-columns:1fr}.postos-coord-actions{min-width:0;justify-content:flex-start}}
 @media(max-width:620px){.postos-coord-period,.postos-coord-toolbar{grid-template-columns:1fr}.postos-coord-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.postos-coord-actions .postos-location-action{flex:1 1 calc(50% - 8px)}}
 </style>
+<link rel="stylesheet" href="planejamento2027.css?v=20261113">
 </head>
 <body>
 <div id="ignis-sync-banner" class="ignis-sync-banner" data-state="syncing" role="status" aria-live="polite" aria-atomic="true">
@@ -3134,6 +3138,9 @@ input[type="checkbox"]:indeterminate{background:rgba(233,95,50,.2);border-color:
       <div id="ranking-list"><div class="empty"><div class="empty-icon">🏆</div><div class="empty-text">Sem dados</div></div></div>
     </div>
   </div>
+
+  <!-- PLANEJAMENTO 2027 -->
+  <div id="page-planejamento" class="page"></div>
 
   <!-- COMPARATIVO -->
   <div id="page-comparativo" class="page">
@@ -5528,7 +5535,7 @@ window.addEventListener('ignis:firebase-secondary', (ev)=>{
 // trocar de aba podia executar milhões de comparações. Estes índices são
 // reconstruídos somente quando os dados mudam e transformam buscas por placa em O(1).
 const _IGNIS_EMPTY = Object.freeze([]);
-const _IGNIS_PAGES = ['dashboard','pendencias','fechamento','anomalias','comparativo','abastecimentos','cta','postos','maquinas','motoristas','relatorio','excluir','arla','kmcomp','metarota','recon','config'];
+const _IGNIS_PAGES = ['dashboard','planejamento','pendencias','fechamento','anomalias','comparativo','abastecimentos','cta','postos','maquinas','motoristas','relatorio','excluir','arla','kmcomp','metarota','recon','config'];
 const _ignisPerf = {
   dirty: true,
   version: 0,
@@ -6425,6 +6432,7 @@ function navIconSvg(name) {
     postos:'<svg class="ui-icon" viewBox="0 0 24 24"><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></svg>',
     maquinas:'<svg class="ui-icon" viewBox="0 0 24 24"><rect x="3" y="5" width="7" height="6" rx="1.5"/><rect x="14" y="5" width="7" height="6" rx="1.5"/><rect x="7" y="15" width="10" height="5" rx="1.5"/></svg>',
     motoristas:'<svg class="ui-icon" viewBox="0 0 24 24"><circle cx="12" cy="7" r="3"/><path d="M5 21v-2a7 7 0 0 1 14 0v2"/><path d="M8 14h8"/></svg>',
+    planejamento:'<svg class="ui-icon" viewBox="0 0 24 24"><path d="M4 5h16v16H4z"/><path d="M8 3v5M16 3v5M4 10h16"/><path d="m8 16 2 2 5-5"/></svg>',
     relatorio:'<svg class="ui-icon" viewBox="0 0 24 24"><path d="M5 3h14v18H5z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>',
     excluir:'<svg class="ui-icon" viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M7 7l1 14h8l1-14"/><path d="M10 11v6M14 11v6"/></svg>',
     arla:'<svg class="ui-icon" viewBox="0 0 24 24"><path d="M9 3h6"/><path d="M10 3v5l-5 9a3 3 0 0 0 2.6 4.5h8.8A3 3 0 0 0 19 17l-5-9V3"/><path d="M7.5 16h9"/></svg>',
@@ -6445,6 +6453,7 @@ const AUTH_PAGES = [
   { id:'cta',           label:'CTA',                   group:'Operação' },
   { id:'postos',        label:'Rede de Postos',        group:'Operação' },
   { id:'maquinas',      label:'Frota e Equipamentos',  group:'Operação' },
+  { id:'planejamento', label:'Planejamento 2027',      group:'Operação' },
   { id:'motoristas',    label:'Motoristas',             group:'Operação' },
   { id:'relatorio',     label:'Relatório',             group:'Inteligência' },
   { id:'excluir',       label:'A Excluir',             group:'Inteligência' },
@@ -6745,7 +6754,7 @@ function authRenderNav() {
   const u = window._authUser;
   if (!u) return;
   const perms = u.role === 'adm' ? AUTH_PAGES.map(p=>p.id) : [...(u.perms || [])];
-  if (u.role === 'admin') ['pendencias','fechamento','anomalias'].forEach(p=>{if(!perms.includes(p))perms.push(p);});
+  if (u.role === 'admin') ['pendencias','fechamento','anomalias','planejamento'].forEach(p=>{if(!perms.includes(p))perms.push(p);});
   const nav = document.querySelector('.nav');
   nav.innerHTML = '';
   let ultimoGrupo = '';
@@ -7063,6 +7072,8 @@ function showBarTooltip(el, raw) {
       <div class="ignis-tip-row"><span>Média realizada</span><strong>${media}</strong></div>
       <div class="ignis-tip-row"><span>Meta</span><strong>${meta}</strong></div>
       <div class="ignis-tip-row"><span>Eficiência</span><strong class="${statusClass}">${eficiencia}</strong></div>
+      ${parts.find(p=>p.startsWith('Trabalhado no período:'))?`<div class="ignis-tip-row"><span>Trabalhado no período</span><strong>${parts.find(p=>p.startsWith('Trabalhado no período:')).replace('Trabalhado no período: ','')}</strong></div>`:''}
+      ${parts.find(p=>p.startsWith('Último '))?`<div class="ignis-tip-row"><span>Última leitura</span><strong>${parts.find(p=>p.startsWith('Último '))}</strong></div>`:''}
     </div>`;
   t.style.display = 'block';
 }
@@ -7471,6 +7482,7 @@ function showPage(page,el) {
     requestAnimationFrame(()=>setTimeout(()=>{if(document.getElementById('page-motoristas')?.classList.contains('active'))renderMotoristas();},0));
   }else if(renders[page] && precisaAtualizar) renders[page]();
 
+  if(page==='planejamento' && typeof ignisPlanRender==='function') {ignisPlanRender(); _markPageClean(page);}
   if(page==='fechamento') { renderFechamento(); _markPageClean(page); }
   if(page==='anomalias') { renderAnomalias(); _markPageClean(page); }
 
@@ -8389,7 +8401,7 @@ function renderBarChart(list, isKmL=false) {
     const efic=it.efic;
     const color=efic===null?'var(--text3)':efic>=98?'var(--green)':efic>=90?'var(--yellow)':'var(--red)';
     const barH=efic===null?4:Math.max(4,Math.min(H,efic/135*H));
-    const tip=`${it.placa} | ${(it.op||'—').replace(/_/g,' ')} | ${it.litros.toFixed(0)} L | ${it.media.toFixed(2)} ${unidadeMedia}${it.meta>0?' | meta '+it.meta.toFixed(2):''}${efic!==null?' | eficiência '+efic.toFixed(1)+'%':''}`;
+    const tip=`${it.placa} | ${(it.op||'—').replace(/_/g,' ')} | ${it.litros.toFixed(0)} L | ${it.media.toFixed(2)} ${unidadeMedia}${it.meta>0?' | meta '+it.meta.toFixed(2):''}${efic!==null?' | eficiência '+efic.toFixed(1)+'%':''} | ${ignisTooltipMedidor(it.placa,it.horas,isKmL)}`;
     return `<div class="efficiency-column" onmouseenter="showBarTooltip(this,'${tip.replace(/'/g,"&apos;")}')" onmouseleave="hideBarTooltip()">
       <div class="efficiency-value" style="color:${color}">${it.media.toFixed(2)}</div>
       <div class="efficiency-bar-zone"><div class="efficiency-target" style="bottom:${baseline}px"></div><div class="efficiency-bar" style="height:${barH}px;background:${color}"></div></div>
@@ -8431,7 +8443,7 @@ function renderRanking(list, isKmL=false) {
       alertColor='var(--red)'; alertIcon=''; alertLabel=`Crítico · ${item.efic.toFixed(1)}%`; barColor='var(--red)';
     }
     const barW=item.meta>0?Math.min(Math.max((item.media/item.meta)*60,8),100):0;
-    return `<div class="ranking-item" style="flex-direction:column;align-items:stretch;gap:6px;padding:10px 12px">
+    return `<div class="ranking-item" title="${ignisTooltipMedidor(item.placa,byMaq[item.placa]?.horas||0,isKmL)}" style="flex-direction:column;align-items:stretch;gap:6px;padding:10px 12px">
       <div style="display:flex;align-items:center;gap:10px">
         <div class="rank-num">${i+1}</div>
         <div style="flex:1">
@@ -11591,6 +11603,8 @@ Continuar?`)){
       }
 
       ignisImportProgress(previewEl,86,'Salvando dados','Análises concluídas. Sincronizando com o Firebase');await ignisNextFrame();
+      // Lê o medidor absoluto da última data por placa, sem somar KM Real/Horas.
+      ignisMesclarMedidoresUltimos(raw);
       const savePromise = saveState({ immediate: true, mode:'fuel', changedPeriodIds:newPeriodIds, removedPeriodIds }); // salva só as semanas alteradas + séries auxiliares
       renderHistoricoPeriodos();
       updateFilters(true);
@@ -17985,6 +17999,47 @@ function ignisAnomaliaRegistroValido(r){
   }
   return r.propulsaoOnly===true || r.dieselOnly===true || !r.combustivel || ignisEhCombustivelAnomalia(r.combustivel);
 }
+function ignisMesclarMedidoresUltimos(rows){
+ const result={};if(!Array.isArray(rows))return 0;
+ for(let i=0;i<rows.length;i++){
+  const r=rows[i];if(!r||typeof r!=='object')continue;
+  const placa=String(ignisValorRow(r,['placa'])||'').trim().toUpperCase();if(!placa)continue;
+  const parsed=parseDataBR(ignisValorRow(r,['data','data abastecimento','data do abastecimento','dt abastecimento','data transacao']));
+  if(!parsed||!Number.isFinite(parsed.getTime()))continue;
+  const data=dataParaISO(parsed),time=parsed.getTime();
+  const tipo=ignisInferTipoMedidor(placa,String(ignisValorRow(r,['modelo'])||''),String(ignisValorRow(r,['tipo de veiculo','tipo veiculo','tipo'])||''),String(ignisValorRow(r,['operacao'])||''));
+  const expected=ignisMedidorNome(tipo);
+  const comb=String(ignisValorRow(r,['combustivel','tipo de combustivel','produto','produto combustivel'])||'');
+  if(ignisTextoNormAnom(comb).includes('ARLA'))continue;
+  for(const [field,value] of Object.entries(r)){
+   let medidor=ignisCampoMedidorAbsoluto(field);if(!medidor)continue;
+   const h=ignisHeaderNorm(field);if(h.includes('odometro')&&h.includes('horimetro'))medidor=expected;
+   if(medidor!==expected||value===null||value===undefined||String(value).trim()==='')continue;
+   const valor=ignisNumeroSeguro(value);if(!(valor>0))continue;
+   const phase=/\b(atual|final)\b/.test(h)?2:/\b(anterior|inicial)\b/.test(h)?0:1;
+   const cand={medidor,valor,data,fonte:'Relatório diário',time,phase,i};
+   const prev=result[placa];if(!prev||time>prev.time||(time===prev.time&&(phase>prev.phase||(phase===prev.phase&&i>=prev.i))))result[placa]=cand;
+  }
+ }
+ if(!state.medidoresUltimos||typeof state.medidoresUltimos!=='object')state.medidoresUltimos={};
+ let count=0;for(const [placa,row] of Object.entries(result)){
+  const prev=state.medidoresUltimos[placa];if(prev&&String(prev.data||'')>row.data)continue;
+  const {medidor,valor,data,fonte}=row;state.medidoresUltimos[placa]={medidor,valor,data,fonte};count++;
+ }
+ return count;
+}
+
+function ignisTooltipMedidor(placa,atividade,isKmL){
+ const fmt=n=>Number(n).toLocaleString('pt-BR',{minimumFractionDigits:0,maximumFractionDigits:2});
+ const worked='Trabalhado no período: '+fmt(atividade)+' '+(isKmL?'km':'h');
+ const row=state.medidoresUltimos?.[String(placa||'').trim().toUpperCase()];
+ const kind=isKmL?'Odômetro':'Horímetro';
+ const value=row&&row.medidor===kind&&Number(row.valor)>0
+  ? 'Último '+kind+': '+fmt(row.valor)+' '+(isKmL?'km':'h')+' ('+String(row.data||'').split('-').reverse().join('/')+')'
+  : 'Último '+kind+': sem leitura registrada';
+ return worked+' | '+value;
+}
+
 function ignisDetectarMedidoresRaw(raw,source='Importação'){
   if(!Array.isArray(raw)||!raw.length)return [];
   const headers=[];const headerSeen=new Set();
@@ -20869,5 +20924,6 @@ function ctaOnShow(){
 
 </script>
 
+<script src="planejamento2027.js?v=20261113"></script>
 </body>
 </html>
