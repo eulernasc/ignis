@@ -84,6 +84,34 @@ async function main(){
   await submit({...base,categoria:'Parâmetro',descricaoCausa:'Ajuste de parâmetro'});
   assert.equal(conf.tratativas.length,before,'falha no Firebase deve reverter o caso');
   shouldSave=true;
+  assert.match(page.innerHTML,/Prorrogar/,'prorrogar na tabela');
+  assert.match(page.innerHTML,/Concluir/,'concluir na tabela');
+  assert.match(page.innerHTML,/Excluir/,'excluir na tabela');
+  extendedPanel={
+    querySelector(selector){return {value:selector.includes('date')?'2027-01-01':'Oficina aguardando peças de reposição'};},
+    hidden:false
+  };
+  const firstKey=encodeURIComponent(first.id);
+  await context.ignisPlanExtend(firstKey);
+  assert.equal(conf.tratativas.find(x=>x.id===first.id).prazo,'2027-01-01');
+  assert.ok(conf.tratativas.find(x=>x.id===first.id).historico.some(x=>x.tipo==='Prazo prorrogado'));
+  await context.ignisPlanQuickFinish(firstKey);
+  assert.equal(conf.tratativas.find(x=>x.id===first.id).acaoRealizada,true);
+  assert.ok(conf.tratativas.find(x=>x.id===first.id).historico.some(x=>x.tipo==='Ação corretiva concluída'));
+  const secondId=conf.tratativas.find(x=>x.id!==first.id).id;
+  shouldSave=false;
+  await context.ignisPlanDeleteCase(encodeURIComponent(secondId));
+  assert.ok(conf.tratativas.some(x=>x.id===secondId),'erro de gravação deve reverter exclusão');
+  shouldSave=true;
+  await context.ignisPlanDeleteCase(encodeURIComponent(secondId));
+  assert.equal(conf.tratativas.length,1);
+  assert.ok(conf.excluidas[secondId],'exclusão mantém tombstone contra restauração por outra sessão');
+  assert.ok(saveOptions.every(o=>Array.isArray(o.keys)&&o.keys.length===1&&o.keys[0]==='planejamento2027'),
+    'salvamento deve ser restrito ao módulo');
+  const index=fs.readFileSync(path.resolve(__dirname,'../index.html'),'utf8');
+  assert.ok(index.includes("const scopedPlanning=mode==='light'"),'fluxo segmentado está disponível');
+  assert.ok(index.includes('const excluidas={...(current.excluidas||{})}'),'merge Firestore conserva exclusões');
+  assert.ok(index.includes('excluidas,tratativas:[...cases.values()]'),'Firestore não ressuscita as exclusões');
   const legacy={id:'2026-11|pesada|ABCD123',mes:'2026-11',placa:'ABCD123',grupo:'pesada',
     categoria:'Treinamento',prazo:'2026-01-01',status:'Resolvido'};
   assert.equal(context.ignisPlanActionState(legacy),'não verificada');
