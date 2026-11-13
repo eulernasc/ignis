@@ -1,4 +1,4 @@
-/* IGNIS · Planejamento 2027 — tratativas por placa, metas configuráveis e filtros mensais.
+/* IGNIS · Acompanhamento de Performance — tratativas por placa, limites inferior/superior e filtros mensais.
    O estado desta tela usa o salvamento leve já existente do IGNIS. */
 'use strict';
 function ignisPlanEsc(value){return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
@@ -10,6 +10,7 @@ function ignisPlanConfig(){
   for(const [group,def] of Object.entries({pesada:90,leve:93,maquinas:95})){
     const n=Number(c.metas[group]);if(!Number.isFinite(n)||n<=0||n>150)c.metas[group]=def;
   }
+  if(!Number.isFinite(Number(c.limiteSuperior))||Number(c.limiteSuperior)<=100||Number(c.limiteSuperior)>200)c.limiteSuperior=110;
   if(!Array.isArray(c.tratativas))c.tratativas=[];
   return c;
 }
@@ -60,8 +61,8 @@ function ignisPlanSummary(month){
     const media=kmL?x.atividade/x.litros:x.litros/x.atividade;
     const meta=x.metapeso>0?x.metasoma/x.metapeso:0;
     const eficiencia=meta>0?(kmL?media/meta*100:meta/media*100):null;
-    const limite=Number(conf.metas[x.grupo]);
-    return {...x,media,meta,eficiencia,limite,unidade:kmL?'km/L':'L/h',atividadeUnidade:kmL?'km':'h',abaixo:eficiencia!==null&&eficiencia<limite};
+    const limite=Number(conf.metas[x.grupo]),limiteSuperior=Number(conf.limiteSuperior);
+    return {...x,media,meta,eficiencia,limite,limiteSuperior,unidade:kmL?'km/L':'L/h',atividadeUnidade:kmL?'km':'h',abaixo:eficiencia!==null&&eficiencia<limite,acima:eficiencia!==null&&eficiencia>limiteSuperior};
   });
   return all;
 }
@@ -76,11 +77,12 @@ function ignisPlanRender(){
   }
   const mon=window._ignisPlanMonth,groupFilter=window._ignisPlanGroup||'',statusFilter=window._ignisPlanStatus||'',q=String(window._ignisPlanQuery||'').trim().toUpperCase();
   const list=ignisPlanSummary(mon),byId=new Map(conf.tratativas.filter(t=>t.mes===mon).map(t=>[t.id,t]));
-  const rows=list.filter(x=>x.abaixo||byId.has(mon+'|'+x.grupo+'|'+x.placa));
+  const rows=list.filter(x=>x.abaixo||x.acima||byId.has(mon+'|'+x.grupo+'|'+x.placa));
   for(const t of conf.tratativas.filter(t=>t.mes===mon)){
-    if(!rows.some(x=>x.grupo===t.grupo&&x.placa===t.placa))rows.push({placa:t.placa,grupo:t.grupo,operacao:t.operacao||'',media:0,meta:0,eficiencia:null,limite:conf.metas[t.grupo]||0,unidade:t.grupo==='maquinas'?'L/h':'km/L',atividade:0,atividadeUnidade:t.grupo==='maquinas'?'h':'km',abaixo:false,semDados:true});
+    if(!rows.some(x=>x.grupo===t.grupo&&x.placa===t.placa))rows.push({placa:t.placa,grupo:t.grupo,operacao:t.operacao||'',media:0,meta:0,eficiencia:null,limite:conf.metas[t.grupo]||0,limiteSuperior:Number(conf.limiteSuperior),unidade:t.grupo==='maquinas'?'L/h':'km/L',atividade:0,atividadeUnidade:t.grupo==='maquinas'?'h':'km',abaixo:false,acima:false,semDados:true});
   }
-  rows.sort((a,b)=>(a.eficiencia??999)-(b.eficiencia??999)||a.placa.localeCompare(b.placa));
+  const desvio=x=>x.eficiencia===null?0:x.abaixo?x.limite-x.eficiencia:x.acima?x.eficiencia-x.limiteSuperior:0;
+  rows.sort((a,b)=>desvio(b)-desvio(a)||a.placa.localeCompare(b.placa));
   const pending=rows.filter(x=>!byId.has(mon+'|'+x.grupo+'|'+x.placa)).length;
   const open=conf.tratativas.filter(t=>t.mes===mon&&t.status!=='Resolvido').length;
   const resolved=conf.tratativas.filter(t=>t.mes===mon&&t.status==='Resolvido').length;
@@ -95,16 +97,18 @@ function ignisPlanRender(){
   const label={pesada:'Frota pesada',leve:'Frota leve',maquinas:'Máquinas e tratores'};
   const format=n=>Number(n).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1});
   root.innerHTML=`
-  <div class="page-header"><div class="page-header-title"><div class="page-title">Planejamento 2027</div><div class="page-sub">Tratativas de baixa eficiência por frota, máquina e período</div></div></div>
+  <div class="page-header"><div class="page-header-title"><div class="page-title">Acompanhamento de Performance</div><div class="page-sub">Tratativas por veículo, dentro de toda a operação: abaixo da meta ou acima de 110%</div></div></div>
   <div class="p27-top">
-   <div class="p27-stat"><span>Ativos abaixo do limite</span><strong>${list.filter(x=>x.abaixo).length}</strong><small>No mês selecionado</small></div>
+   <div class="p27-stat"><span>Abaixo da meta</span><strong>${list.filter(x=>x.abaixo).length}</strong><small>Eficiência inferior ao limite</small></div>
+   <div class="p27-stat p27-stat-high"><span>Acima de ${format(conf.limiteSuperior)}%</span><strong>${list.filter(x=>x.acima).length}</strong><small>Eficiência acima da faixa</small></div>
    <div class="p27-stat"><span>Aguardando tratativa</span><strong>${pending}</strong><small>Sem registro de ação</small></div>
    <div class="p27-stat"><span>Em acompanhamento</span><strong>${open}</strong><small>Tratativas não resolvidas</small></div>
    <div class="p27-stat"><span>Resolvidos</span><strong>${resolved}</strong><small>Tratativas concluídas</small></div>
   </div>
-  <div class="p27-panel"><div class="p27-panel-head"><div><strong>Metas de eficiência mínima</strong><p>Valores abaixo do percentual definido entram no acompanhamento.</p></div></div>
+  <div class="p27-panel"><div class="p27-panel-head"><div><strong>Faixa de acompanhamento da eficiência</strong><p>Veículos abaixo da meta do grupo ou acima do limite superior entram automaticamente no acompanhamento. As porcentagens podem ser alteradas.</p></div></div>
    <div class="p27-metas">
     ${Object.entries(label).map(([key,name])=>`<label><span>${name}</span><div><input type="number" min="1" max="150" step="0.5" value="${Number(conf.metas[key])}" onchange="ignisPlanMetaChange('${key}',this.value)"><em>%</em></div></label>`).join('')}
+   <label class="p27-upper"><span>Limite superior de eficiência</span><div><input type="number" min="101" max="200" step="0.5" value="${Number(conf.limiteSuperior)}" onchange="ignisPlanUpperChange(this.value)"><em>%</em></div></label>
    </div>
   </div>
   <div class="p27-panel"><div class="p27-panel-head"><div><strong>Acompanhamento por veículo</strong><p>Indicadores apurados a partir dos abastecimentos importados. Clique em Registrar/Editar para acompanhar cada caso.</p></div></div>
@@ -114,11 +118,11 @@ function ignisPlanRender(){
     <label>Status<select onchange="window._ignisPlanStatus=this.value;ignisPlanRender()"><option value="">Todos</option><option value="pendente" ${statusFilter==='pendente'?'selected':''}>Sem tratativa</option><option value="andamento" ${statusFilter==='andamento'?'selected':''}>Em andamento</option><option value="resolvido" ${statusFilter==='resolvido'?'selected':''}>Resolvidos</option></select></label>
     <label>Busca<input id="p27-search" placeholder="Placa, operação ou responsável" value="${ignisPlanEsc(window._ignisPlanQuery||'')}" oninput="ignisPlanSearch(this.value)"></label>
    </div>
-   <div class="p27-table-wrap"><table class="p27-table"><thead><tr><th>Placa / operação</th><th>Grupo</th><th>Real / meta</th><th>Eficiência</th><th>Limite</th><th>Status / motivo</th><th>Ação</th></tr></thead><tbody>
+   <div class="p27-table-wrap"><table class="p27-table"><thead><tr><th>Placa / operação</th><th>Grupo</th><th>Real / meta</th><th>Eficiência</th><th>Faixa de referência</th><th>Status / motivo</th><th>Ação</th></tr></thead><tbody>
    ${seen.length?seen.map(x=>{const id=mon+'|'+x.grupo+'|'+x.placa,t=byId.get(id);const ef=x.eficiencia===null?'—':format(x.eficiencia)+'%';
    return `<tr><td><strong>${ignisPlanEsc(x.placa)}</strong><small>${ignisPlanEsc(x.operacao||'Sem operação')}</small></td>
     <td>${label[x.grupo]}</td><td>${x.semDados?'Sem dados atuais':`${format(x.media)} / ${x.meta>0?format(x.meta):'—'} ${x.unidade}`}<small>${x.semDados?'':format(x.atividade)+' '+x.atividadeUnidade+' no período'}</small></td>
-    <td><strong class="${x.eficiencia!==null&&x.eficiencia<x.limite?'p27-bad':'p27-good'}">${ef}</strong></td><td>${format(x.limite)}%</td>
+    <td><strong class="${x.abaixo?'p27-bad':x.acima?'p27-high':'p27-good'}">${ef}</strong>${x.acima?'<small class="p27-high">Acima do limite superior</small>':x.abaixo?'<small class="p27-bad">Abaixo da meta</small>':''}</td><td>${format(x.limite)}% a ${format(x.limiteSuperior)}%</td>
     <td><span class="p27-pill ${!t?'p27-pending':t.status==='Resolvido'?'p27-done':'p27-active'}">${!t?'Sem tratativa':ignisPlanEsc(t.status)}</span><small>${ignisPlanEsc(t?.categoria||'')}</small></td>
     <td><button class="p27-action" onclick="ignisPlanOpen('${encodeURIComponent(x.placa)}','${x.grupo}')">${t?'Editar':'Registrar'}</button></td></tr>`;}).join(''):`<tr><td colspan="7" class="p27-empty">${list.length?'Nenhum veículo corresponde aos filtros.':'Nenhum dado de abastecimento encontrado neste mês. Selecione outro período ou importe os relatórios.'}</td></tr>`}
    </tbody></table></div>
@@ -183,4 +187,18 @@ async function ignisPlanMetaChange(grupo,value){
   catch(e){c.metas[grupo]=before;if(oldStamp)c.metasRevisadas[grupo]=oldStamp;else delete c.metasRevisadas[grupo];showToast('Não foi possível confirmar a meta na nuvem.','error');}
   ignisPlanRender();
 }
+
+async function ignisPlanUpperChange(value){
+  const n=Number(value);
+  if(!Number.isFinite(n)||n<=100||n>200){showToast('O limite superior precisa ser maior que 100% e no máximo 200%.','error');ignisPlanRender();return;}
+  const c=ignisPlanConfig(),old=Number(c.limiteSuperior);
+  c.limiteSuperior=n;
+  try{
+    const ok=await saveState({mode:'light',immediate:true});
+    if(!ok)throw new Error('Firebase não confirmou a alteração.');
+    showToast('Limite superior atualizado.','success');
+  }catch(e){c.limiteSuperior=old;showToast('Não foi possível confirmar o limite superior na nuvem.','error');}
+  ignisPlanRender();
+}
+
 window.addEventListener('ignis:data-ready',()=>{if(document.getElementById('page-planejamento')?.classList.contains('active'))ignisPlanRender();});
