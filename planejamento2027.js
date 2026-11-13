@@ -31,6 +31,7 @@ function ignisPlanMonthChoices(){
   const months=new Set();
   Object.values(state.semanas||{}).forEach(p=>{const m=String(p?.dataFim||p?.dataIni||'').slice(0,7);if(/^\d{4}-\d\d$/.test(m))months.add(m);});
   (state.abastecimentos||[]).forEach(a=>{if(!a?.periodoId){const m=String(a?.data||'').slice(0,7);if(/^\d{4}-\d\d$/.test(m))months.add(m);}});
+  ignisPlanConfig().tratativas.forEach(t=>{const m=String(t?.mes||'');if(/^\d{4}-\d{2}$/.test(m))months.add(m);});
   return [...months].sort().reverse();
 }
 
@@ -64,6 +65,43 @@ function ignisPlanSummary(month){
     return {...x,media,meta,eficiencia,limite,limiteSuperior,unidade:kmL?'km/L':'L/h',atividadeUnidade:kmL?'km':'h',abaixo:eficiencia!==null&&eficiencia<limite,acima:eficiencia!==null&&eficiencia>limiteSuperior};
   });
   return all;
+}
+
+function ignisPlanActionState(t){
+  if(!t)return 'sem registro';
+  if(t.acaoRealizada===true||t.acaoRealizada==='sim')return 'realizada';
+  if(t.acaoRealizada===false||t.acaoRealizada==='nao')return 'pendente';
+  return 'não verificada'; // Legados com status "Resolvido" não comprovam a ação
+}
+function ignisPlanRegisterState(t){
+  if(!t)return 'Sem registro';
+  return t.statusRegistro||({'Pendente':'Registrada','Em andamento':'Em acompanhamento','Resolvido':'Concluída'}[t.status]||'Registrada');
+}
+function ignisPlanLocalDate(){const now=new Date();return now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0')+'-'+String(now.getDate()).padStart(2,'0');}
+function ignisPlanOverdue(t,today=ignisPlanLocalDate()){
+  return Boolean(t&&ignisPlanActionState(t)!=='realizada'&&/^\d{4}-\d{2}-\d{2}$/.test(String(t.prazo||''))&&t.prazo<today);
+}
+function ignisPlanFmtDate(date){
+  const s=String(date||'');return /^\d{4}-\d{2}-\d{2}/.test(s)?s.slice(8,10)+'/'+s.slice(5,7)+'/'+s.slice(0,4):'—';
+}
+function ignisPlanCauseName(t){return t?.categoria||'Causa não informada';}
+function ignisPlanCases(mes,grupo,placa){
+  return ignisPlanConfig().tratativas.filter(t=>t.mes===mes&&t.grupo===grupo&&String(t.placa).toUpperCase()===String(placa).toUpperCase())
+    .sort((a,b)=>String(b.criadoEm||'').localeCompare(String(a.criadoEm||'')));
+}
+function ignisPlanSafeParam(s){return encodeURIComponent(String(s||'')).replace(/'/g,'%27');}
+function ignisPlanChangeRecord(before,next){
+  const fields={categoria:'Causa',descricaoCausa:'Descrição da causa',acaoCorretiva:'Ação corretiva',acaoRealizada:'Ação realizada',statusRegistro:'Situação do registro',
+    responsavel:'Responsável',prazo:'Prazo',dataAcao:'Data da resolução',observacao:'Observações'};
+  return Object.entries(fields).filter(([k])=>String(before?.[k]??'')!==String(next?.[k]??'')).map(([key,label])=>({
+    campo:label,anterior:before?.[key]??'',atual:next?.[key]??''
+  }));
+}
+function ignisPlanHistory(t){
+  const arr=Array.isArray(t?.historico)?t.historico:[];
+  return arr.map(h=>'<article class="p27-history-item"><div><strong>'+ignisPlanEsc(h.tipo||'Atualização')+'</strong><span>'+ignisPlanEsc(h.autor||'Não identificado')+' · '+ignisPlanEsc(String(h.quando||'').replace('T',' ').slice(0,16))+'</span></div>'+
+    (h.alteracoes?.length?'<ul>'+h.alteracoes.map(x=>'<li><b>'+ignisPlanEsc(x.campo)+'</b>: '+ignisPlanEsc(String(x.anterior??'—'))+' → '+ignisPlanEsc(String(x.atual??'—'))+'</li>').join('')+'</ul>':'<p>Atualização registrada.</p>')+'</article>').join('')
+  ||'<div class="p27-legacy-note">Ocorrência anterior a esta versão. As alterações antigas não possuem histórico detalhado; as próximas atualizações serão registradas.</div>';
 }
 
 function ignisPlanRender(){
