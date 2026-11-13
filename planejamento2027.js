@@ -488,7 +488,7 @@ async function ignisPlanSubmit(ev,encoded,grupo,caseEncoded='',period=''){
   const btn=f.querySelector('#p27-save-btn'),note=f.querySelector('#p27-save-state');if(btn)btn.disabled=true;
   if(note)note.textContent='Confirmando no Firebase...';
   try{
-    const ok=await saveState({mode:'light',immediate:true});
+    const ok=await saveState({mode:'light',keys:['planejamento2027'],immediate:true});
     if(!ok)throw new Error(window._lastFirebaseSaveError||'A gravação não foi confirmada pelo Firebase.');
     ignisPlanRender();
     showToast('Ocorrência salva e histórico atualizado.','success');
@@ -505,7 +505,7 @@ async function ignisPlanMetaChange(grupo,value){
   const c=ignisPlanConfig(),before=c.metas[grupo];c.metas[grupo]=num;
   if(!c.metasRevisadas||typeof c.metasRevisadas!=='object')c.metasRevisadas={};
   const oldStamp=c.metasRevisadas[grupo];c.metasRevisadas[grupo]=new Date().toISOString();
-  try{const ok=await saveState({mode:'light',immediate:true});if(!ok)throw new Error('Firebase não confirmou a alteração.');showToast('Limite de performance atualizado.','success');}
+  try{const ok=await saveState({mode:'light',keys:['planejamento2027'],immediate:true});if(!ok)throw new Error('Firebase não confirmou a alteração.');showToast('Limite de performance atualizado.','success');}
   catch(e){c.metas[grupo]=before;if(oldStamp)c.metasRevisadas[grupo]=oldStamp;else delete c.metasRevisadas[grupo];showToast('Não foi possível confirmar a meta na nuvem.','error');}
   ignisPlanRender();
 }
@@ -516,7 +516,7 @@ async function ignisPlanUpperChange(value){
   const c=ignisPlanConfig(),old=Number(c.limiteSuperior);
   c.limiteSuperior=n;
   try{
-    const ok=await saveState({mode:'light',immediate:true});
+    const ok=await saveState({mode:'light',keys:['planejamento2027'],immediate:true});
     if(!ok)throw new Error('Firebase não confirmou a alteração.');
     showToast('Limite superior atualizado.','success');
   }catch(e){c.limiteSuperior=old;showToast('Não foi possível confirmar o limite superior na nuvem.','error');}
