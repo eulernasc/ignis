@@ -89,3 +89,32 @@
  .p27-case-list{max-height:65dvh}
  .p27-stat strong{font-size:23px}
 }
+
+
+/* Tratativas diretas na tabela: nenhuma modal para concluir ou pedir mais prazo */
+.p27-table{min-width:1110px}
+.p27-table th:nth-child(6){min-width:330px}
+.p27-inline-list{min-width:310px;display:grid;gap:9px}
+.p27-inline-case{background:rgba(100,125,153,.06);border:1px solid var(--border);
+  border-radius:10px;padding:10px 11px;display:grid;gap:8px}
+.p27-inline-head{display:flex;justify-content:space-between;align-items:center;gap:7px;flex-wrap:wrap}
+.p27-inline-head strong{font-size:12px;font-weight:750;line-height:1.5;color:var(--text)}
+.p27-inline-badge{border-radius:30px;padding:4px 8px;font-size:10px;line-height:1.3;font-weight:750;white-space:nowrap}
+.p27-inline-info{font-size:11px;color:var(--text2);display:flex;flex-wrap:wrap;column-gap:10px;row-gap:4px}
+.p27-inline-info b{color:var(--text);font-size:12px}
+.p27-inline-buttons{display:flex;align-items:center;flex-wrap:wrap;gap:6px}
+.p27-mini{font:inherit;cursor:pointer;color:var(--text);border:1px solid var(--border);background:var(--bg2,#141d29);
+  padding:6px 9px;font-weight:750;font-size:11px;border-radius:7px;line-height:1.25;min-height:30px}
+.p27-mini:hover{filter:brightness(1.2)}
+.p27-mini.primary{background:var(--accent,#ff6938);color:#fff;border-color:transparent}
+.p27-mini.danger{color:#ff9a9f;border-color:rgba(255,124,135,.34)}
+.p27-extend{background:var(--bg2,#141d29);padding:10px;border:1px dashed var(--border);border-radius:8px;
+  display:grid;grid-template-columns:1fr;gap:7px}
+.p27-extend[hidden]{display:none!important}
+.p27-extend label{font-size:11px;display:grid;gap:5px;color:var(--text2)}
+.p27-extend input{width:100%;box-sizing:border-box;padding:9px 10px;font-size:13px;color:var(--text);background:var(--bg3,#172332);
+  border:1px solid var(--border);border-radius:7px}
+.p27-inline-save{color:var(--text2);min-height:0;font-size:12px;margin-bottom:6px}
+@media(max-width:760px){.p27-table th:nth-child(6){min-width:285px}.p27-inline-list{min-width:270px}
+  .p27-inline-buttons{gap:4px}.p27-mini{font-size:10px}
+}
