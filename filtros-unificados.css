@@ -182,3 +182,54 @@
   #page-planejamento .ignis-filterbar .ignis-filter-dates{flex-wrap:wrap}
   #page-planejamento .ignis-filterbar .ignis-filter-dates input{flex:1 1 140px}
 }
+
+
+/* Filtros específicos que ainda utilizavam controles nativos antigos. */
+#page-pendencias #pend-month,
+#page-relatorio :is(#rel-data-ini,#rel-data-fim,#exec-data-ini,#exec-data-fim,#relg-ops-busca,#relg-lista-busca),
+#page-arla :is(#arla-mes-sel,#arla-busca,#arla-egr-busca,#arla-grupo-ops-busca),
+#page-anomalias :is(#anom-efic-limit,#anom-efic-low-limit),
+#page-kmcomp #rc-busca,
+#page-maquinas :is(#maq-busca,#maq-op-filter),
+#page-excluir #excluir-busca,
+#page-postos :is(#postos-cidade,#postos-origem,#postos-destino,#postos-results-search,#postos-results-scope),
+#page-cta #cta-search{
+  border:1px solid var(--ignis-filter-stroke);
+  border-radius:11px;background-color:var(--ignis-filter-bg);
+  color:var(--ignis-filter-text);
+  min-height:42px;box-sizing:border-box;
+  font:600 13px 'DM Sans',sans-serif;
+  outline:none;
+  transition:background .15s,border-color .15s,box-shadow .15s;
+}
+#page-pendencias #pend-month:focus-visible,
+#page-relatorio :is(#rel-data-ini,#rel-data-fim,#exec-data-ini,#exec-data-fim):focus-visible,
+#page-postos :is(#postos-cidade,#postos-origem,#postos-destino):focus-visible,
+#page-cta #cta-search:focus-visible,
+#page-anomalias :is(#anom-efic-limit,#anom-efic-low-limit):focus-visible{
+  border-color:rgba(255,107,44,.6);
+  box-shadow:0 0 0 3px rgba(255,107,44,.10);
+}
+#page-anomalias .anom-type-tab,
+#page-motoristas .mot-state-btn,
+#page-cta .cta-filter-btn,
+#page-postos .postos-mode-btn,
+#page-relatorio :is(.rel-tipo-btn,.exec-tipo-btn){
+  border-radius:9px;
+  min-height:36px;
+  font-weight:750;
+  transition:background .16s,color .16s,border-color .16s;
+}
+#page-relatorio :is(.rel-tipo-btn,.exec-tipo-btn).active,
+#page-anomalias .anom-type-tab.active,
+#page-cta .cta-filter-btn.active,
+#page-motoristas .mot-state-btn.active{
+  box-shadow:inset 0 0 0 1px rgba(233,95,50,.25);
+}
+#page-relatorio :is(.rel-tipo-btn,.exec-tipo-btn):focus-visible,
+#page-anomalias .anom-type-tab:focus-visible,
+#page-cta .cta-filter-btn:focus-visible,
+#page-motoristas .mot-state-btn:focus-visible{
+  outline:2px solid var(--ignis-filter-active);
+  outline-offset:2px;
+}
