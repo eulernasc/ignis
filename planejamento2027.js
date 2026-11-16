@@ -40,10 +40,68 @@ function ignisPlanMonthLabel(month){
   return (names[Number(m)-1]||month)+' de '+year;
 }
 
-function ignisPlanSummary(month){
-  const groups=new Map(), conf=ignisPlanConfig();
+function ignisPlanPeriodSpec(){
+  const months=ignisPlanMonthChoices();
+  if(!window._ignisPlanMonth||!months.includes(window._ignisPlanMonth))
+    window._ignisPlanMonth=months[0]||ignisPlanLocalDate().slice(0,7);
+  const month=window._ignisPlanMonth;
+  const mode=window._ignisPlanPeriodMode==='custom'?'custom':'month';
+  const last=new Date(Number(month.slice(0,4)),Number(month.slice(5,7)),0).getDate();
+  const monthStart=month+'-01',monthEnd=month+'-'+String(last).padStart(2,'0');
+  if(!window._ignisPlanStart)window._ignisPlanStart=monthStart;
+  if(!window._ignisPlanEnd)window._ignisPlanEnd=monthEnd;
+  const start=mode==='custom'?window._ignisPlanStart:monthStart;
+  const end=mode==='custom'?window._ignisPlanEnd:monthEnd;
+  const valid=/^\d{4}-\d{2}-\d{2}$/.test(start)&&/^\d{4}-\d{2}-\d{2}$/.test(end)&&start<=end;
+  const rangeStart=valid?start:monthStart,rangeEnd=valid?end:monthEnd;
+  const matchingMonths=[];
+  let current=rangeStart.slice(0,7)+'-01',i=0;
+  while(current.slice(0,7)<=rangeEnd.slice(0,7)&&i++<240){
+    matchingMonths.push(current.slice(0,7));
+    const y=Number(current.slice(0,4)),m=Number(current.slice(5,7));
+    current=new Date(Date.UTC(y,m,1)).toISOString().slice(0,10);
+  }
+  return {mode,month,months:matchingMonths,start:rangeStart,end:rangeEnd,caseMonth:mode==='custom'?rangeEnd.slice(0,7):month,valid};
+}
+function ignisPlanSetPeriodMode(mode){
+  if(!['month','custom'].includes(mode))return;
+  window._ignisPlanPeriodMode=mode;
+  ignisPlanRender();
+}
+function ignisPlanSetMonth(month){
+  if(!/^\d{4}-\d{2}$/.test(month))return;
+  window._ignisPlanMonth=month;
+  const last=new Date(Number(month.slice(0,4)),Number(month.slice(5,7)),0).getDate();
+  window._ignisPlanStart=month+'-01';
+  window._ignisPlanEnd=month+'-'+String(last).padStart(2,'0');
+  ignisPlanRender();
+}
+function ignisPlanSetCustomDate(field,value){
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(value))return;
+  const start=field==='start'?value:window._ignisPlanStart;
+  const end=field==='end'?value:window._ignisPlanEnd;
+  if(start&&end&&start>end){
+    showToast('A data inicial não pode ser posterior à data final.','error');
+    ignisPlanRender();return;
+  }
+  window[field==='start'?'_ignisPlanStart':'_ignisPlanEnd']=value;
+  window._ignisPlanPeriodMode='custom';
+  ignisPlanRender();
+}
+function ignisPlanRawDate(a){
+  const date=String(a?.data||'').slice(0,10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(date)?date:'';
+}
+function ignisPlanSummary(period){
+  const groups=new Map(),conf=ignisPlanConfig();
+  const isCustom=period&&typeof period==='object';
+  const selectedMonth=isCustom?'':String(period||'');
   for(const a of state.abastecimentos||[]){
-    if(ignisPlanMonthOf(a)!==month)continue;
+    if(isCustom){
+      // Apenas datas reais de cada abastecimento entram no período exato.
+      const actual=ignisPlanRawDate(a);
+      if(!actual||actual<period.start||actual>period.end)continue;
+    }else if(ignisPlanMonthOf(a)!==selectedMonth)continue;
     const placa=String(a.placa||'').trim().toUpperCase();
     if(!placa)continue;
     const tipo=typeof getTipoIgnis==='function'?getTipoIgnis(a):String(a.tipoIgnis||'');
@@ -56,15 +114,21 @@ function ignisPlanSummary(month){
     const m=Number(a.metaIdeal||getMaquina(placa)?.meta||0);
     if(m>0){x.metasoma+=m*l;x.metapeso+=l;}
   }
-  const all=[...groups.values()].filter(x=>x.litros>0&&x.atividade>0).map(x=>{
+  return [...groups.values()].filter(x=>x.litros>0&&x.atividade>0).map(x=>{
     const kmL=x.grupo==='pesada'||x.grupo==='leve';
     const media=kmL?x.atividade/x.litros:x.litros/x.atividade;
     const meta=x.metapeso>0?x.metasoma/x.metapeso:0;
     const eficiencia=meta>0?(kmL?media/meta*100:meta/media*100):null;
     const limite=Number(conf.metas[x.grupo]),limiteSuperior=Number(conf.limiteSuperior);
-    return {...x,media,meta,eficiencia,limite,limiteSuperior,unidade:kmL?'km/L':'L/h',atividadeUnidade:kmL?'km':'h',abaixo:eficiencia!==null&&eficiencia<limite,acima:eficiencia!==null&&eficiencia>limiteSuperior};
+    return {...x,media,meta,eficiencia,limite,limiteSuperior,unidade:kmL?'km/L':'L/h',
+      atividadeUnidade:kmL?'km':'h',abaixo:eficiencia!==null&&eficiencia<limite,
+      acima:eficiencia!==null&&eficiencia>limiteSuperior};
   });
-  return all;
+}
+function ignisPlanCasesInMonths(months,grupo,placa){
+  const set=new Set(months);
+  return ignisPlanConfig().tratativas.filter(t=>set.has(t.mes)&&t.grupo===grupo&&String(t.placa).toUpperCase()===String(placa).toUpperCase())
+    .sort((a,b)=>String(b.criadoEm||'').localeCompare(String(a.criadoEm||'')));
 }
 
 function ignisPlanActionState(t){
