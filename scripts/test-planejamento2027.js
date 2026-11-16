@@ -10,7 +10,8 @@ async function main(){
   const source=fs.readFileSync(path.resolve(__dirname,'../planejamento2027.js'),'utf8');
   new Function(source);
   const state={planejamento2027:{},semanas:{},abastecimentos:[
-    {placa:'RHT5F20',data:'2026-11-11',tipoIgnis:'pesada',litros:100,horas:100,metaIdeal:1.5,operacao:'Ribas'}
+    {placa:'RHT5F20',data:'2026-11-11',tipoIgnis:'pesada',litros:100,horas:100,metaIdeal:1.5,operacao:'Ribas'},
+    {placa:'AAB1234',data:'2026-11-10',tipoIgnis:'pesada',litros:100,horas:200,metaIdeal:1.5,operacao:'Betim'}
   ]};
   const page={innerHTML:''},modal={innerHTML:''};
   let extendedPanel=null;
@@ -49,6 +50,49 @@ async function main(){
   context.ignisPlanRender();
   assert.match(page.innerHTML,/Acompanhamento de Performance/);
   assert.match(page.innerHTML,/Nova ocorrência/);
+  assert.match(page.innerHTML,/Faixa de performance/);
+  assert.match(page.innerHTML,/Personalizado/);
+  assert.match(page.innerHTML,/ignis-filterbar/);
+  assert.match(page.innerHTML,/Todas as operações/);
+  assert.match(page.innerHTML,/Todas as placas/);
+  assert.equal(context.ignisPlanSummary('2026-11').length,2);
+  assert.equal(context.ignisPlanSummary('2026-11').filter(x=>x.acima).length,1);
+  window._ignisPlanFaixa='acima';
+  context.ignisPlanRender();
+  let tableHtml=page.innerHTML.split('<tbody>')[1].split('</tbody>')[0];
+  assert.match(tableHtml,/AAB1234/,'faixa acima seleciona veículo acima da meta superior');
+  assert.doesNotMatch(tableHtml,/RHT5F20/,'faixa acima não inclui veículo abaixo');
+  window._ignisPlanFaixa='abaixo';
+  context.ignisPlanRender();
+  tableHtml=page.innerHTML.split('<tbody>')[1].split('</tbody>')[0];
+  assert.match(tableHtml,/RHT5F20/,'faixa abaixo seleciona veículo abaixo da meta');
+  assert.doesNotMatch(tableHtml,/AAB1234/);
+  window._ignisPlanFaixa='ambos';
+  window._ignisPlanOperacao='Betim';
+  context.ignisPlanRender();
+  tableHtml=page.innerHTML.split('<tbody>')[1].split('</tbody>')[0];
+  assert.match(tableHtml,/AAB1234/);
+  assert.doesNotMatch(tableHtml,/RHT5F20/);
+  window._ignisPlanOperacao='';
+  window._ignisPlanPlaca='RHT5F20';
+  context.ignisPlanRender();
+  tableHtml=page.innerHTML.split('<tbody>')[1].split('</tbody>')[0];
+  assert.match(tableHtml,/RHT5F20/);
+  assert.doesNotMatch(tableHtml,/AAB1234/);
+  window._ignisPlanPlaca='';
+  const periodSpec=context.ignisPlanPeriodSpec();
+  assert.equal(periodSpec.mode,'month');
+  context.ignisPlanSetPeriodMode('custom');
+  context.ignisPlanSetCustomDate('start','2026-11-10');
+  context.ignisPlanSetCustomDate('end','2026-11-10');
+  assert.match(page.innerHTML,/type="date"/);
+  assert.deepEqual(context.ignisPlanSummary({start:'2026-11-10',end:'2026-11-10'}).map(x=>x.placa),['AAB1234']);
+  tableHtml=page.innerHTML.split('<tbody>')[1].split('</tbody>')[0];
+  assert.match(tableHtml,/AAB1234/);
+  assert.doesNotMatch(tableHtml,/RHT5F20/,'intervalo personalizado respeita a data individual');
+  context.ignisPlanSetPeriodMode('month');
+  context.ignisPlanResetFilters();
+
   await submit(base);
   assert.equal(conf.tratativas.length,1);
   const first=conf.tratativas[0];
@@ -110,6 +154,13 @@ async function main(){
     'salvamento deve ser restrito ao módulo');
   const index=fs.readFileSync(path.resolve(__dirname,'../index.html'),'utf8');
   assert.ok(index.includes("const scopedPlanning=mode==='light'"),'fluxo segmentado está disponível');
+  assert.match(index,/filtros-unificados\.css\?v=/,'CSS global de filtros carregado');
+  assert.match(index,/planejamento2027\.js\?v=20261116a/,'novo módulo sem cache antigo');
+  const filterCss=fs.readFileSync(path.resolve(__dirname,'../filtros-unificados.css'),'utf8');
+  assert.match(filterCss,/button\.dash-dropdown-done/,'botão Concluir possui padrão visual');
+  for(const pageId of ['page-dashboard','page-abastecimentos','page-arla','page-comparativo','page-motoristas','page-fechamento'])
+    assert.ok(filterCss.includes('#'+pageId)||filterCss.includes('.page .filter-'),'padronização de '+pageId);
+
   assert.ok(index.includes('const excluidas={...(current.excluidas||{})}'),'merge Firestore conserva exclusões');
   assert.ok(index.includes('excluidas,tratativas:[...cases.values()]'),'Firestore não ressuscita as exclusões');
   const legacy={id:'2026-11|pesada|ABCD123',mes:'2026-11',placa:'ABCD123',grupo:'pesada',
