@@ -275,30 +275,42 @@ async function ignisPlanDeleteCase(encoded){
   },'Ocorrência excluída.');
 }
 
+function ignisPlanResetFilters(){
+  window._ignisPlanGroup='';window._ignisPlanStatus='';window._ignisPlanQuery='';
+  window._ignisPlanFaixa='ambos';window._ignisPlanOperacao='';window._ignisPlanPlaca='';
+  window._ignisPlanPeriodMode='month';ignisPlanRender();
+}
 function ignisPlanRender(){
   const root=document.getElementById('page-planejamento');if(!root)return;
-  const conf=ignisPlanConfig(), months=ignisPlanMonthChoices();
-  if(!window._ignisPlanMonth||!months.includes(window._ignisPlanMonth)){
-    window._ignisPlanMonth=months[0]||ignisPlanLocalDate().slice(0,7);
-  }
-  const mon=window._ignisPlanMonth,groupFilter=window._ignisPlanGroup||'',statusFilter=window._ignisPlanStatus||'',q=String(window._ignisPlanQuery||'').trim().toUpperCase();
-  const list=ignisPlanSummary(mon),cases=conf.tratativas.filter(t=>t.mes===mon);
+  const conf=ignisPlanConfig(),period=ignisPlanPeriodSpec(),months=ignisPlanMonthChoices();
+  const mon=period.month,caseMonth=period.caseMonth;
+  const groupFilter=window._ignisPlanGroup||'',statusFilter=window._ignisPlanStatus||'',
+    faixaFilter=window._ignisPlanFaixa||'ambos',operacaoFilter=window._ignisPlanOperacao||'',
+    placaFilter=window._ignisPlanPlaca||'',q=String(window._ignisPlanQuery||'').trim().toUpperCase();
+  const list=ignisPlanSummary(period.mode==='custom'?period:mon),
+    includedMonths=new Set(period.months),cases=conf.tratativas.filter(t=>includedMonths.has(t.mes));
   const allOverdue=conf.tratativas.filter(ignisPlanOverdue);
   const rows=list.filter(x=>x.abaixo||x.acima||cases.some(t=>t.placa===x.placa&&t.grupo===x.grupo))
-    .map(x=>({...x,ocorrencias:ignisPlanCases(mon,x.grupo,x.placa)}));
+    .map(x=>({...x,ocorrencias:ignisPlanCasesInMonths(period.months,x.grupo,x.placa)}));
   for(const t of cases){
     if(rows.some(x=>x.grupo===t.grupo&&x.placa===t.placa))continue;
     rows.push({placa:t.placa,grupo:t.grupo,operacao:t.operacao||'',media:0,meta:0,eficiencia:null,
       limite:conf.metas[t.grupo]||0,limiteSuperior:Number(conf.limiteSuperior),
       unidade:t.grupo==='maquinas'?'L/h':'km/L',atividade:0,atividadeUnidade:t.grupo==='maquinas'?'h':'km',
-      abaixo:false,acima:false,semDados:true,ocorrencias:ignisPlanCases(mon,t.grupo,t.placa)});
+      abaixo:false,acima:false,semDados:true,ocorrencias:ignisPlanCasesInMonths(period.months,t.grupo,t.placa)});
   }
   const desvio=x=>x.eficiencia===null?0:x.abaixo?x.limite-x.eficiencia:x.acima?x.eficiencia-x.limiteSuperior:0;
   rows.sort((a,b)=>desvio(b)-desvio(a)||a.placa.localeCompare(b.placa));
+  const operations=[...new Set(rows.map(x=>String(x.operacao||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
+  const placas=[...new Set(rows.map(x=>x.placa))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
   const uncovered=rows.filter(x=>!x.ocorrencias.length).length;
   const unresolved=cases.filter(t=>ignisPlanActionState(t)!=='realizada').length;
   const done=cases.filter(t=>ignisPlanActionState(t)==='realizada').length;
   const seen=rows.filter(x=>{
+    if(faixaFilter==='abaixo'&&!x.abaixo)return false;
+    if(faixaFilter==='acima'&&!x.acima)return false;
+    if(operacaoFilter&&operacaoFilter!==x.operacao)return false;
+    if(placaFilter&&placaFilter!==x.placa)return false;
     if(groupFilter&&groupFilter!==x.grupo)return false;
     if(statusFilter==='sem-tratativa'&&x.ocorrencias.length)return false;
     if(statusFilter==='pendente'&&!x.ocorrencias.some(t=>ignisPlanActionState(t)!=='realizada'))return false;
