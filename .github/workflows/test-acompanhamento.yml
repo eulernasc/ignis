@@ -5,6 +5,8 @@ on:
     paths:
       - 'planejamento2027.js'
       - 'planejamento2027.css'
+      - 'filtros-unificados.css'
+      - 'index.html'
       - 'scripts/test-planejamento2027.js'
       - '.github/workflows/test-acompanhamento.yml'
   workflow_dispatch:
