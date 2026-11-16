@@ -86,7 +86,7 @@ async function main(){
   context.ignisPlanSetCustomDate('start','2026-11-10');
   context.ignisPlanSetCustomDate('end','2026-11-10');
   assert.match(page.innerHTML,/type="date"/);
-  assert.deepEqual(context.ignisPlanSummary({start:'2026-11-10',end:'2026-11-10'}).map(x=>x.placa),['AAB1234']);
+  assert.equal(Array.from(context.ignisPlanSummary({start:'2026-11-10',end:'2026-11-10'}).map(x=>x.placa)).join(','),'AAB1234');
   tableHtml=page.innerHTML.split('<tbody>')[1].split('</tbody>')[0];
   assert.match(tableHtml,/AAB1234/);
   assert.doesNotMatch(tableHtml,/RHT5F20/,'intervalo personalizado respeita a data individual');
