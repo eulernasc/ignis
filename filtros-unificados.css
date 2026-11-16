@@ -1,0 +1,184 @@
+/* IGNIS · Sistema visual único de filtros
+   Referência: barra de filtros do Painel de Consumo.
+   Mantém todas as funções/IDs/eventos existentes nas demais abas. */
+:root{
+  --ignis-filter-bg:#111720;
+  --ignis-filter-panel:#11171e;
+  --ignis-filter-stroke:rgba(255,255,255,.105);
+  --ignis-filter-text:#eef3f8;
+  --ignis-filter-muted:#8998aa;
+  --ignis-filter-active:#e95f32;
+}
+#page-planejamento .p27-filterbar{
+  display:flex;align-items:flex-end;flex-wrap:wrap;gap:12px;
+  margin:0 0 12px;padding:15px;
+  border:1px solid var(--border,rgba(255,255,255,.1));
+  border-radius:16px;
+  background:linear-gradient(180deg,rgba(17,22,29,.96),rgba(14,19,25,.96));
+  box-shadow:0 10px 34px rgba(0,0,0,.12),inset 0 1px rgba(255,255,255,.025);
+}
+.ignis-filterbar .ignis-filter-control{display:flex;flex-direction:column;gap:8px;flex:1 1 145px;min-width:0;max-width:100%}
+.ignis-filterbar .ignis-filter-caption,
+#page-planejamento .ignis-filterbar .ignis-filter-caption{
+  font-family:inherit;font-weight:800;font-size:10px;line-height:1.1;
+  letter-spacing:.105em;text-transform:uppercase;color:var(--ignis-filter-muted);
+  padding-left:2px;
+}
+#page-planejamento .ignis-filterbar .ignis-filter-field,
+#page-planejamento .ignis-filterbar select,
+#page-planejamento .ignis-filterbar input{
+  width:100%;min-width:0;max-width:100%;height:44px;box-sizing:border-box;
+  border:1px solid var(--ignis-filter-stroke);
+  border-radius:11px;background:var(--ignis-filter-bg);
+  color:var(--ignis-filter-text);
+  font:600 13px 'DM Sans',sans-serif;
+  padding:0 12px;outline:none;
+  color-scheme:dark;
+  transition:border-color .15s,box-shadow .15s,background .15s;
+}
+#page-planejamento .ignis-filterbar select:hover,
+#page-planejamento .ignis-filterbar input:hover{background:#151d26;border-color:rgba(255,255,255,.18)}
+#page-planejamento .ignis-filterbar :is(select,input):focus-visible{
+  border-color:rgba(255,107,44,.6);box-shadow:0 0 0 3px rgba(255,107,44,.10);
+}
+#page-planejamento .ignis-filterbar :is(input,select)::placeholder{color:#7e8b9d;opacity:1}
+#page-planejamento .ignis-filterbar option{background:#111720;color:#eff3f8}
+.ignis-filterbar .ignis-filter-period-mode{flex:0 1 225px}
+.ignis-filterbar .ignis-filter-month{flex:1 1 180px}
+.ignis-filterbar .ignis-filter-level{flex:0 1 235px}
+.ignis-filterbar .ignis-filter-operation{flex:1 1 195px}
+.ignis-filterbar .ignis-filter-plate{flex:1 1 160px}
+.ignis-filterbar .ignis-filter-group{flex:1 1 160px}
+.ignis-filterbar .ignis-filter-status{flex:1 1 170px}
+.ignis-filterbar .ignis-filter-search{flex:1 1 230px}
+.ignis-filterbar .ignis-filter-range{flex:1 1 355px}
+.ignis-filterbar .ignis-filter-dates{display:flex;gap:8px;align-items:center;min-width:0}
+.ignis-filterbar .ignis-filter-dates input{flex:1 1 0;min-width:0}
+.ignis-filterbar .ignis-filter-dates span{font-size:11px;color:var(--ignis-filter-muted);flex:none}
+.ignis-filterbar .ignis-filter-segments{
+  min-height:44px;display:flex;align-items:center;gap:3px;padding:3px;
+  border-radius:11px;border:1px solid var(--ignis-filter-stroke);
+  box-sizing:border-box;background:#0f151c;
+}
+#page-planejamento .ignis-filterbar .ignis-filter-segments button{
+  flex:1;min-width:0;min-height:36px;border:1px solid transparent;
+  border-radius:8px;padding:0 10px;background:transparent;color:#8b98a8;
+  font:700 12px 'DM Sans',sans-serif;cursor:pointer;
+  transition:color .15s,background .15s,border-color .15s;
+}
+#page-planejamento .ignis-filterbar .ignis-filter-segments button:hover{color:#fff;background:rgba(255,255,255,.055)}
+#page-planejamento .ignis-filterbar .ignis-filter-segments button.active{
+  border-color:rgba(255,255,255,.11);background:#1c2733;
+  color:#f9fbfe;box-shadow:inset 0 1px rgba(255,255,255,.04);
+}
+#page-planejamento .ignis-filterbar .ignis-filter-clear{
+  flex:0 0 auto;align-self:flex-end;min-height:44px;
+  border:1px solid rgba(233,95,50,.3);border-radius:10px;padding:0 13px;
+  background:rgba(233,95,50,.10);color:#ff986e;font:800 12px 'DM Sans',sans-serif;
+  cursor:pointer;white-space:nowrap;
+}
+#page-planejamento .ignis-filterbar .ignis-filter-clear:hover{background:rgba(233,95,50,.2)}
+#page-planejamento .p27-period-hint{padding:4px 4px 10px;margin:0;font-size:11px;line-height:1.6;color:var(--text3,#8290a0)}
+#page-planejamento .p27-results-count{font-size:11px;color:var(--text2);font-weight:650;margin:3px 0 10px}
+
+/* Painel · corrige o Concluir sem estilo (operações, placas e modelos). */
+#page-dashboard .dash-dropdown-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:nowrap}
+#page-dashboard .dash-dropdown-heading>div{min-width:0;flex:1 1 auto}
+#page-dashboard button.dash-dropdown-done{
+  appearance:none;-webkit-appearance:none;display:inline-flex;flex:0 0 auto;
+  align-items:center;justify-content:center;min-width:89px;min-height:36px;
+  margin:0;padding:0 12px;border:1px solid rgba(233,95,50,.36);
+  border-radius:9px;background:rgba(233,95,50,.15);
+  color:#ff9a72;font:800 12px 'DM Sans',sans-serif!important;
+  line-height:1;cursor:pointer;box-shadow:none;
+}
+#page-dashboard button.dash-dropdown-done:hover{background:rgba(233,95,50,.25);border-color:rgba(233,95,50,.65)}
+#page-dashboard button.dash-dropdown-done:focus-visible{outline:2px solid var(--ignis-filter-active);outline-offset:2px}
+
+/* Controles de consulta nas demais telas: mesmo esquema visual, sem reestruturar funções. */
+.page .filters,
+#page-motoristas .mot-filterbar,
+#page-motoristas .mot-periodbar,
+#page-motoristas .idt-toolbar,
+#page-fechamento .fech-toolbar,
+#page-abastecimentos .filters,
+#page-arla .filters,
+#page-comparativo .header-actions,
+#page-anomalias .anom-header-tools,
+#page-pendencias .pend-header-actions,
+#page-cta .cta-toolbar{
+  gap:10px;
+}
+.page .filter-select,.page .filter-input,
+.page .fech-select,.page .mot-date-input,
+.page .dash-filter-trigger,.page .dash-select-shell,
+#page-postos :is(#postos-results-search,#postos-results-scope,#postos-coverage-search,#postos-coverage-filter),
+#page-config :is(#config-users-search,#config-users-role-filter){
+  box-sizing:border-box;border:1px solid var(--ignis-filter-stroke);
+  border-radius:11px;background-color:var(--ignis-filter-bg);
+  color:var(--ignis-filter-text);
+  min-height:44px;padding:10px 12px;
+  font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;
+  outline:none;transition:border-color .15s,background .15s,box-shadow .15s;
+}
+.page .filter-select:hover,.page .filter-input:hover,
+.page .fech-select:hover,.page .mot-date-input:hover,
+.page .dash-filter-trigger:hover,.page .dash-select-shell:hover,
+#page-postos :is(#postos-results-search,#postos-results-scope,#postos-coverage-search,#postos-coverage-filter):hover,
+#page-config :is(#config-users-search,#config-users-role-filter):hover{
+  border-color:rgba(255,255,255,.2);background-color:#171f2a;
+}
+.page :is(.filter-select,.filter-input,.fech-select,.mot-date-input,.dash-filter-trigger):focus-visible,
+#page-postos :is(#postos-results-search,#postos-results-scope,#postos-coverage-search,#postos-coverage-filter):focus-visible,
+#page-config :is(#config-users-search,#config-users-role-filter):focus-visible{
+  border-color:rgba(255,107,44,.6);
+  box-shadow:0 0 0 3px rgba(255,107,44,.10);
+}
+.page :is(.filter-input,.mot-date-input)::placeholder,
+#page-config #config-users-search::placeholder{color:#8491a2}
+.page :is(.filters,.mot-filterbar,.fech-toolbar) .btn.btn-secondary.btn-sm,
+.page :is(.filters,.mot-filterbar,.fech-toolbar) .btn.btn-primary.btn-sm{
+  border-radius:10px;min-height:40px;font-weight:750;
+}
+#page-comparativo :is(#comp-op-dropdown-btn,#comp-maq-btn),
+#page-arla #arla-op-dropdown-btn{
+  appearance:none;border:1px solid var(--ignis-filter-stroke)!important;
+  border-radius:11px!important;min-height:44px!important;
+  background-color:var(--ignis-filter-bg)!important;
+  color:var(--ignis-filter-text)!important;
+  font-weight:650!important;
+}
+#page-comparativo :is(#comp-op-dropdown-btn,#comp-maq-btn):hover,
+#page-arla #arla-op-dropdown-btn:hover{
+  background-color:#171f2a!important;border-color:rgba(255,255,255,.2)!important;
+}
+#page-motoristas .mot-state-tabs,
+#page-motoristas .mot-period-mode,
+#page-dashboard .tab-group{
+  border:1px solid var(--ignis-filter-stroke);background:#0f151c;
+  border-radius:11px;padding:3px;
+}
+#page-motoristas .mot-state-btn.active,
+#page-dashboard .tab-btn.active{
+  border-radius:8px;
+}
+@media(min-width:770px){
+  #page-abastecimentos .filters,#page-arla .filters{flex-direction:row;flex-wrap:wrap;align-items:center}
+  #page-abastecimentos .filters>:is(input,select),
+  #page-arla .filters>:is(input,select){flex:1 1 160px;width:auto}
+}
+@media(max-width:760px){
+  #page-planejamento .p27-filterbar{padding:11px;gap:9px}
+  #page-planejamento .ignis-filterbar .ignis-filter-control{flex:1 1 calc(50% - 10px)}
+  #page-planejamento .ignis-filterbar .ignis-filter-range,
+  #page-planejamento .ignis-filterbar .ignis-filter-search,
+  #page-planejamento .ignis-filterbar .ignis-filter-level{flex-basis:100%}
+  #page-planejamento .ignis-filterbar .ignis-filter-clear{flex:1 1 100%}
+  #page-planejamento .ignis-filterbar :is(input,select){font-size:16px!important}
+  .page .filters{flex-direction:column;align-items:stretch}
+}
+@media(max-width:480px){
+  #page-planejamento .ignis-filterbar .ignis-filter-control{flex:1 1 100%}
+  #page-planejamento .ignis-filterbar .ignis-filter-dates{flex-wrap:wrap}
+  #page-planejamento .ignis-filterbar .ignis-filter-dates input{flex:1 1 140px}
+}
