@@ -275,6 +275,57 @@ async function ignisPlanDeleteCase(encoded){
   },'Ocorrência excluída.');
 }
 
+function ignisPlanFilterMarkup({period,months,mon,faixaFilter,groupFilter,statusFilter,operacaoFilter,placaFilter,operations,placas,labels}){
+ const selectOptions=(arr,value)=>arr.map(([v,l])=>`<option value="${ignisPlanEsc(v)}" ${value===v?'selected':''}>${ignisPlanEsc(l)}</option>`).join('');
+ const segmented=(options,current,action)=>options.map(([v,l])=>`<button type="button" class="${current===v?'active':''}" aria-pressed="${current===v}" onclick="${action(v)}">${l}</button>`).join('');
+ return `<div class="ignis-filterbar p27-filterbar" aria-label="Filtros de Acompanhamento de Performance">
+   <div class="ignis-filter-control ignis-filter-period-mode"><span class="ignis-filter-caption">Período</span>
+     <div class="ignis-filter-segments" role="group" aria-label="Tipo de período">
+       ${segmented([['month','Mensal'],['custom','Personalizado']],period.mode,v=>`ignisPlanSetPeriodMode('${v}')`)}
+     </div></div>
+   ${period.mode==='month'?`<label class="ignis-filter-control ignis-filter-month">
+     <span class="ignis-filter-caption">Mês</span>
+     <select class="ignis-filter-field" id="p27-month" onchange="ignisPlanSetMonth(this.value)">
+       ${selectOptions(months.map(m=>[m,ignisPlanMonthLabel(m)]),mon)}
+     </select></label>`:
+     `<div class="ignis-filter-control ignis-filter-range"><span class="ignis-filter-caption">De / Até</span>
+       <div class="ignis-filter-dates">
+         <input class="ignis-filter-field" aria-label="Data inicial" type="date" value="${period.start}" onchange="ignisPlanSetCustomDate('start',this.value)">
+         <span>até</span>
+         <input class="ignis-filter-field" aria-label="Data final" type="date" value="${period.end}" onchange="ignisPlanSetCustomDate('end',this.value)">
+       </div></div>`}
+   <div class="ignis-filter-control ignis-filter-level"><span class="ignis-filter-caption">Faixa de performance</span>
+     <div class="ignis-filter-segments" role="group" aria-label="Faixa de performance">
+       ${segmented([['ambos','Ambos'],['abaixo','Abaixo'],['acima','Acima']],faixaFilter,v=>`window._ignisPlanFaixa='${v}';ignisPlanRender()`)}
+     </div></div>
+   <label class="ignis-filter-control ignis-filter-operation"><span class="ignis-filter-caption">Operação</span>
+     <select class="ignis-filter-field" onchange="window._ignisPlanOperacao=this.value;ignisPlanRender()">
+       ${selectOptions([['','Todas as operações'],...operations.map(op=>[op,op])],operacaoFilter)}
+     </select></label>
+   <label class="ignis-filter-control ignis-filter-plate"><span class="ignis-filter-caption">Placa / equipamento</span>
+     <select class="ignis-filter-field" onchange="window._ignisPlanPlaca=this.value;ignisPlanRender()">
+       ${selectOptions([['','Todas as placas'],...placas.map(placa=>[placa,placa])],placaFilter)}
+     </select></label>
+   <label class="ignis-filter-control ignis-filter-group"><span class="ignis-filter-caption">Tipo de veículo</span>
+     <select class="ignis-filter-field" onchange="window._ignisPlanGroup=this.value;ignisPlanRender()">
+       ${selectOptions([['','Todos os tipos'],...Object.entries(labels)],groupFilter)}
+     </select></label>
+   <label class="ignis-filter-control ignis-filter-status"><span class="ignis-filter-caption">Situação</span>
+     <select class="ignis-filter-field" onchange="window._ignisPlanStatus=this.value;ignisPlanRender()">
+       ${selectOptions([
+         ['','Todas as situações'],['sem-tratativa','Sem registro'],['pendente','Ações pendentes'],
+         ['vencido','Prazos vencidos'],['resolvido','Ações realizadas'],['registro-concluido','Registros concluídos']
+       ],statusFilter)}
+     </select></label>
+   <label class="ignis-filter-control ignis-filter-search"><span class="ignis-filter-caption">Busca</span>
+     <input class="ignis-filter-field" type="search" id="p27-search" placeholder="Placa, operação, causa ou responsável"
+       value="${ignisPlanEsc(window._ignisPlanQuery||'')}" oninput="ignisPlanSearch(this.value)">
+   </label>
+   <button class="ignis-filter-clear" type="button" onclick="ignisPlanResetFilters()">Limpar filtros</button>
+ </div>
+ ${period.mode==='custom'?'<p class="p27-period-hint">A eficiência usa as datas individuais de abastecimento dentro do intervalo. Ocorrências dos meses abrangidos permanecem acessíveis.</p>':''}`;
+}
+
 function ignisPlanResetFilters(){
   window._ignisPlanGroup='';window._ignisPlanStatus='';window._ignisPlanQuery='';
   window._ignisPlanFaixa='ambos';window._ignisPlanOperacao='';window._ignisPlanPlaca='';
@@ -344,18 +395,8 @@ function ignisPlanRender(){
   </div>
   <div class="p27-panel"><div class="p27-panel-head"><div><strong>Acompanhamento por veículo</strong>
     <p>Cada veículo pode ter várias ocorrências, com causas, responsáveis e prazos independentes.</p></div></div>
-    <div class="p27-filters">
-      <label>Período<select id="p27-month" onchange="window._ignisPlanMonth=this.value;ignisPlanRender()">${months.map(m=>`<option value="${m}" ${m===mon?'selected':''}>${ignisPlanMonthLabel(m)}</option>`).join('')}</select></label>
-      <label>Grupo<select onchange="window._ignisPlanGroup=this.value;ignisPlanRender()"><option value="">Todos</option>${Object.entries(labels).map(([k,l])=>`<option value="${k}" ${groupFilter===k?'selected':''}>${l}</option>`).join('')}</select></label>
-      <label>Situação<select onchange="window._ignisPlanStatus=this.value;ignisPlanRender()">
-        <option value="">Todas</option>
-        <option value="sem-tratativa" ${statusFilter==='sem-tratativa'?'selected':''}>Sem registro</option>
-        <option value="pendente" ${statusFilter==='pendente'?'selected':''}>Ações pendentes</option>
-        <option value="vencido" ${statusFilter==='vencido'?'selected':''}>Prazos vencidos</option>
-        <option value="resolvido" ${statusFilter==='resolvido'?'selected':''}>Ações realizadas</option>
-        <option value="registro-concluido" ${statusFilter==='registro-concluido'?'selected':''}>Registros concluídos</option></select></label>
-      <label>Busca<input id="p27-search" placeholder="Placa, operação, causa ou responsável" value="${ignisPlanEsc(window._ignisPlanQuery||'')}" oninput="ignisPlanSearch(this.value)"></label>
-    </div>
+    ${ignisPlanFilterMarkup({period,months,mon,faixaFilter,groupFilter,statusFilter,operacaoFilter,placaFilter,operations,placas,labels})}
+    <div class="p27-results-count">${seen.length} veículo(s) encontrado(s)</div>
     <div class="p27-table-wrap"><table class="p27-table"><thead><tr>
       <th>Placa / operação</th><th>Grupo</th><th>Real / meta</th><th>Eficiência</th>
       <th>Faixa de referência</th><th>Ocorrências / situação</th><th>Ações</th></tr></thead><tbody>
@@ -371,8 +412,8 @@ function ignisPlanRender(){
             ${x.abaixo?'<small class="p27-bad">Abaixo da meta</small>':x.acima?'<small class="p27-high">Acima do limite</small>':''}</td>
           <td>${format(x.limite)}% a ${format(x.limiteSuperior)}%</td>
           <td><div class="p27-inline-list">${x.ocorrencias.length?x.ocorrencias.map(ignisPlanInlineCase).join(""):'<span class="p27-pill p27-pending">Sem ocorrência</span>'}</div></td>
-          <td><div class="p27-actions"><button class="p27-action" onclick="ignisPlanOpen('${id}','${x.grupo}','','${mon}')">Nova ocorrência</button></div></td></tr>`;
-      }).join(''):`<tr><td colspan="7" class="p27-empty">${list.length?'Nenhum veículo corresponde aos filtros.':'Nenhum dado de abastecimento encontrado neste mês. Selecione outro período ou importe relatórios.'}</td></tr>`}
+          <td><div class="p27-actions"><button class="p27-action" onclick="ignisPlanOpen('${id}','${x.grupo}','','${caseMonth}')">Nova ocorrência</button></div></td></tr>`;
+      }).join(''):`<tr><td colspan="7" class="p27-empty">${list.length?'Nenhum veículo corresponde aos filtros.':'Nenhum dado de abastecimento encontrado no período selecionado. Ajuste as datas ou importe relatórios.'}</td></tr>`}
     </tbody></table></div>
   </div>
   <div id="p27-editor-root"></div>`;
