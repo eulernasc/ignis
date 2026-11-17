@@ -355,6 +355,19 @@ async function fbReadChunkSeries(prefix, version, total) {
     if(!snap.exists())throw new Error(prefix+': chunk '+(i+1)+'/'+total+' não encontrado');
     return snap;
   };
+  const rememberGroup=group=>{
+    const entries=group.map(i=>{
+      const snap=snapshots[i];
+      if(!snap?.exists())return null;
+      const payload=snap.data()||{};
+      if(Number(payload.chunk)!==i || String(payload.version)!==String(version)
+        || !Array.isArray(payload.registros))return null;
+      return {id:ids[i],payload};
+    }).filter(Boolean);
+    // Persiste grupos íntegros imediatamente para permitir retomar a próxima carga
+    // após eventual falha em outro grupo ou série.
+    if(entries.length)fbChunkCacheWrite(entries).catch(()=>{});
+  };
   const readGroup = async group => {
     if(fbChunkBatchQueriesAllowed && group.length>1){
       try {
@@ -366,6 +379,7 @@ async function fbReadChunkSeries(prefix, version, total) {
         result.forEach(snap=>found.set(snap.id,snap));
         if(found.size===group.length && group.every(i=>found.has(ids[i]))){
           group.forEach(i=>{snapshots[i]=found.get(ids[i]);});
+          rememberGroup(group);
           return group.length;
         }
         fbChunkBatchQueriesAllowed=false;
@@ -379,6 +393,7 @@ async function fbReadChunkSeries(prefix, version, total) {
     }
     const fetched=await Promise.all(group.map(readOne));
     group.forEach((i,off)=>{snapshots[i]=fetched[off];});
+    rememberGroup(group);
     return group.length;
   };
   const waveSize=groupSize*parallelGroups;
@@ -388,16 +403,6 @@ async function fbReadChunkSeries(prefix, version, total) {
     for(let i=0;i<wave.length;i+=groupSize)groups.push(wave.slice(i,i+groupSize));
     const counts=await Promise.all(groups.map(readGroup));
     networkDone+=counts.reduce((sum,n)=>sum+n,0);
-    // Preserva progresso verificado mesmo se um chunk futuro falhar, para que
-    // a próxima tentativa não precise baixar novamente o início da série.
-    const waveCache=wave.map(i=>{
-      const snap=snapshots[i];
-      if(!snap?.exists())return null;
-      const payload=snap.data()||{};
-      return Number(payload.chunk)===i && String(payload.version)===String(version)
-        && Array.isArray(payload.registros) ? {id:ids[i],payload} : null;
-    }).filter(Boolean);
-    if(waveCache.length)fbChunkCacheWrite(waveCache).catch(()=>{});
     fbEmitProgress(prefix,Math.min(cachedCount+networkDone,total),total);
     await fbSleep(0);
   }
