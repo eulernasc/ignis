@@ -40,7 +40,7 @@ async function run({count=25,cache=5,denyBatch=false,invalid=-1,missing=-1}={}){
   }));
   const find=id=>snapshots.find(s=>s.id===id);
   const context=vm.createContext({
-    Array,Map,Promise,Number,String,Date,console:{info(){},warn(){}},
+    Array,Map,Promise,Number,String,Date,FB_MAX_CHUNKS:800,console:{info(){},warn(){}},
     fbIsMobileDevice:()=>false,
     fbEmitProgress:(p,n,t)=>history.progress.push([p,n,t]),
     fbSleep:async()=>{},
