@@ -109,4 +109,10 @@ await assert.rejects(corrupted.read(),/pertence a outra versão/,'Versões troca
 const absent=await run({count:9,cache:0,missing:4});
 await assert.rejects(absent.read(),/chunk 5\/9 não encontrado/,'Chunks ausentes devem ser recusados');
 
+// Quando um grupo remoto falha, grupos já confirmados devem ficar preservados
+// no cache auxiliar, sem liberar a sincronização parcial para o usuário.
+const partial=await run({count:25,cache:0,missing:19});
+await assert.rejects(partial.read(),/chunk 20\/25 não encontrado/);
+assert.ok(partial.cacheStore.size>=12,'Chunks anteriores à falha devem continuar em cache');
+
 console.log('IGNIS: sintaxe, cache em memória, IDB, limite de consultas, versão, fallback, integridade e bloqueios validados.');
