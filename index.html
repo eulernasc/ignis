@@ -5,7 +5,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <!-- IGNIS v46 · correção de travamento Motoristas PX + cache de nomes + renderização única -->
-<meta name="ignis-build" content="2026-09-18-firebase-load-cache-v64">
+<meta name="ignis-build" content="2026-11-17-firebase-multiclient-v65">
 <title>Ignis — Gestão Inteligente de Frotas e Equipamentos</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23ff6b2c'/%3E%3Cpath d='M36 9c1 8-4 11-7 15-3 4-5 8-2 14 2-4 5-6 9-8-1 8 5 11 5 17 6-4 9-10 8-17-1-10-7-17-13-21Z' fill='none' stroke='white' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -388,6 +388,16 @@ async function fbReadChunkSeries(prefix, version, total) {
     for(let i=0;i<wave.length;i+=groupSize)groups.push(wave.slice(i,i+groupSize));
     const counts=await Promise.all(groups.map(readGroup));
     networkDone+=counts.reduce((sum,n)=>sum+n,0);
+    // Preserva progresso verificado mesmo se um chunk futuro falhar, para que
+    // a próxima tentativa não precise baixar novamente o início da série.
+    const waveCache=wave.map(i=>{
+      const snap=snapshots[i];
+      if(!snap?.exists())return null;
+      const payload=snap.data()||{};
+      return Number(payload.chunk)===i && String(payload.version)===String(version)
+        && Array.isArray(payload.registros) ? {id:ids[i],payload} : null;
+    }).filter(Boolean);
+    if(waveCache.length)fbChunkCacheWrite(waveCache).catch(()=>{});
     fbEmitProgress(prefix,Math.min(cachedCount+networkDone,total),total);
     await fbSleep(0);
   }
@@ -11937,7 +11947,8 @@ function updateSyncStatus(status) {
   }else if(statusVisual==='maintenance'){
     ignisSyncBannerShow('Manutenção global ativa. Aguarde para alterar dados.',null,'syncing');
   }else if(statusVisual==='error'){
-    ignisSyncBannerShow('Falha na sincronização com o Firebase.',null,'error');
+    const detalhe=String(window._lastFirebaseLoadError||window._lastFirebaseSaveError||'').slice(0,120);
+    ignisSyncBannerShow('Falha na sincronização com o Firebase.'+(detalhe?' '+detalhe:''),null,'error');
   }else if(statusVisual==='conflict'){
     ignisSyncBannerShow('Conflito de sincronização. Atualize a página antes de continuar.',null,'conflict');
   }else if(statusVisual==='connected'||statusVisual==='idle'){
