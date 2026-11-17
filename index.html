@@ -15,7 +15,7 @@
 <script async src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 <script type="module" async>
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, query, where, documentId, getDocs, getDocsFromCache, doc, setDoc, getDoc, getDocFromCache, deleteDoc, writeBatch, runTransaction, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, initializeFirestore, memoryLocalCache, persistentLocalCache, persistentMultipleTabManager, collection, query, where, documentId, getDocs, getDocsFromCache, doc, setDoc, getDoc, getDocFromCache, deleteDoc, writeBatch, runTransaction, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBdfrSrif-vThP3WqWJF76hhKE7FXGFpL0",
@@ -29,10 +29,29 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 let db;
+// O estado compartilhado do Firestore multi-aba usa localStorage. Quando essa
+// origem está perto do limite, o SDK pode falhar antes mesmo de ler os dados.
+// Não apagamos dados locais nem alterações pendentes: somente nesta sessão usamos
+// cache em memória. O backup IndexedDB do IGNIS continua independente.
+function fbLocalStorageHasHeadroom(){
+  const key='__ignis_firestore_quota_probe__';
+  try{
+    localStorage.setItem(key,'0'.repeat(384*1024));
+    localStorage.removeItem(key);
+    return true;
+  }catch(e){
+    try{localStorage.removeItem(key);}catch(_){}
+    return false;
+  }
+}
+const fbUsePersistentCache=fbLocalStorageHasHeadroom();
 try {
-  // v39: os chunks são versionados/imutáveis. O cache persistente do Firestore faz
-  // uma segunda abertura no iPhone reaproveitar os mesmos documentos localmente.
-  db = initializeFirestore(app,{localCache:persistentLocalCache({tabManager:persistentMultipleTabManager()})});
+  db = initializeFirestore(app,{
+    localCache:fbUsePersistentCache
+      ? persistentLocalCache({tabManager:persistentMultipleTabManager()})
+      : memoryLocalCache()
+  });
+  if(!fbUsePersistentCache) console.warn('IGNIS: armazenamento local próximo do limite; Firestore iniciado com cache em memória, sem excluir dados.');
 } catch(e) {
   console.warn('IGNIS: cache persistente do Firestore indisponível; usando cache em memória.',e);
   db = getFirestore(app);
@@ -42,11 +61,15 @@ window._firebaseFuelSignature = ''; // identifica a versão das séries de abast
 window._firebaseArlaSignature = '';
 window._lastFirebaseSaveError = '';
 
-// Wrapper com timeout para evitar hang infinito
-const withTimeout = (promise, ms) => Promise.race([
-  promise,
-  new Promise((_, rej) => setTimeout(() => rej(new Error('Firebase timeout '+ms+'ms')), ms))
-]);
+// Cancela o relógio após a resposta. Antes, cada leitura rápida deixava um
+// setTimeout pendente (até milhares deles em sincronizações grandes).
+function withTimeout(promise, ms){
+  let timer;
+  return Promise.race([
+    Promise.resolve(promise),
+    new Promise((_,rej)=>{timer=setTimeout(()=>rej(new Error('Firebase timeout '+ms+'ms')),ms);})
+  ]).finally(()=>clearTimeout(timer));
+}
 
 // ── DADOS: documento separado de usuários ────────────────────────
 // fueltracker/dados  → abastecimentos, máquinas, períodos, configs
@@ -79,7 +102,7 @@ function fbIsMobileDevice(){
 function fbEmitProgress(prefix, done, total){
   try {
     const p=String(prefix||'');
-    if(!/(?:abast|abpatch|maq)$/.test(p)) return;
+    if(!/(?:abast|abpatch|maq|med|efic|arla)$/.test(p)) return;
     window.dispatchEvent(new CustomEvent('ignis:firebase-progress',{detail:{prefix:p,done:Number(done||0),total:Number(total||0)}}));
   } catch(e) {}
 }
@@ -207,7 +230,9 @@ async function fbWriteChunkSeries(prefix, version, items, chunkSize) {
   return total;
 }
 
+let fbChunkBatchQueriesAllowed=true;
 async function fbReadChunkSeries(prefix, version, total) {
+  const startedAt=Date.now();
   total = Number(total || 0);
   if (!total) return [];
   if (!Number.isInteger(total) || total < 0 || total > FB_MAX_CHUNKS) {
@@ -250,25 +275,54 @@ async function fbReadChunkSeries(prefix, version, total) {
   // da versão do manifesto foram confirmados.
   const missing = [];
   for (let i=0;i<total;i++) if (!snapshots[i]) missing.push(i);
-  const networkBatch = isMobile ? 20 : 36;
+  // Agrupa documentos por ID: 1 consulta para até 12 chunks substitui até
+  // 12 consultas individuais e reduz os targets gravados pelo SDK no localStorage.
+  // Algumas regras permitem get, mas não list: o fallback preserva essas bases.
+  const groupSize = isMobile ? 10 : 12;
+  const parallelGroups = isMobile ? 2 : 3;
   const timeoutMs = isMobile ? 14000 : 15000;
   let networkDone = 0;
-
-  for (let base = 0; base < missing.length; base += networkBatch) {
-    const batch = missing.slice(base, base + networkBatch);
-    const fetched = await Promise.all(batch.map(i =>
-      fbRetry(
-        () => withTimeout(getDoc(doc(db,'fueltracker',ids[i])), timeoutMs),
-        2, 300
-      )
-    ));
-    fetched.forEach((snap,off) => {
-      const i = batch[off];
-      if (!snap.exists()) throw new Error(`${prefix}: chunk ${i+1}/${total} não encontrado`);
-      snapshots[i] = snap;
-      networkDone++;
-    });
-    fbEmitProgress(prefix,Math.min(cachedCount + networkDone,total),total);
+  const readOne = async i => {
+    const snap=await fbRetry(
+      () => withTimeout(getDoc(doc(db,'fueltracker',ids[i])),timeoutMs),
+      2,300
+    );
+    if(!snap.exists())throw new Error(prefix+': chunk '+(i+1)+'/'+total+' não encontrado');
+    return snap;
+  };
+  const readGroup = async group => {
+    if(fbChunkBatchQueriesAllowed && group.length>1){
+      try {
+        const wanted=group.map(i=>ids[i]);
+        const result=await withTimeout(getDocs(query(
+          collection(db,'fueltracker'),where(documentId(),'in',wanted)
+        )),11000);
+        const found=new Map();
+        result.forEach(snap=>found.set(snap.id,snap));
+        if(found.size===group.length && group.every(i=>found.has(ids[i]))){
+          group.forEach(i=>{snapshots[i]=found.get(ids[i]);});
+          return group.length;
+        }
+        console.warn('IGNIS: consulta agrupada incompleta; conferindo cada chunk individualmente.');
+      }catch(e){
+        if(e?.code==='permission-denied'||e?.code==='failed-precondition'){
+          fbChunkBatchQueriesAllowed=false;
+        }
+        console.warn('IGNIS: leitura agrupada indisponível; usando leitura individual.',e?.code||e?.message||e);
+      }
+    }
+    const fetched=await Promise.all(group.map(readOne));
+    group.forEach((i,off)=>{snapshots[i]=fetched[off];});
+    return group.length;
+  };
+  const waveSize=groupSize*parallelGroups;
+  for(let base=0;base<missing.length;base+=waveSize){
+    const wave=missing.slice(base,base+waveSize);
+    const groups=[];
+    for(let i=0;i<wave.length;i+=groupSize)groups.push(wave.slice(i,i+groupSize));
+    const counts=await Promise.all(groups.map(readGroup));
+    networkDone+=counts.reduce((sum,n)=>sum+n,0);
+    fbEmitProgress(prefix,Math.min(cachedCount+networkDone,total),total);
     await fbSleep(0);
   }
 
@@ -284,6 +338,7 @@ async function fbReadChunkSeries(prefix, version, total) {
     out.push(...(data.registros || []));
   }
   fbEmitProgress(prefix,total,total);
+  console.info('IGNIS Firestore:',prefix,total+' chunks,',cachedCount+' em cache,',networkDone+' pela rede,',(Date.now()-startedAt)+' ms');
   return out;
 }
 
@@ -690,27 +745,6 @@ window.fbLoad = async function() {
       abastecimentos = await fbApplyAbastPatches(abastecimentos, dados._abastPatches);
     }
     dados.abastecimentos = abastecimentos;
-
-    // As leituras já aconteceram em paralelo com os abastecimentos. A espera aqui
-    // apenas garante que o state oficial esteja completo antes de liberar edições.
-    if (storageV >= 3) {
-      const [maqs,meds,efics,arla,revisoes]=await Promise.all([
-        maqPromise || fbReadChunkSeries(seriesPrefix+'maq', dados._maqVersion, dados._maqChunks),
-        medPromise || fbReadChunkSeries(seriesPrefix+'med', dados._medVersion, dados._medChunks),
-        eficPromise || fbReadChunkSeries(seriesPrefix+'efic', dados._eficVersion, dados._eficChunks),
-        arlaPromise || fbReadChunkSeries(seriesPrefix+'arla', dados._arlaVersion, dados._arlaChunks),
-        revisoesPromise
-      ]);
-      dados.maquinas = maqs;
-      dados.medidorAnomalias = meds;
-      dados.eficienciaAnomalias = efics;
-      dados.arlaMeses = arla;
-      dados.anomaliaRevisoes = revisoes;
-    }else{
-      dados.anomaliaRevisoes = await revisoesPromise;
-    }
-    // Em storage v1/v2, esses campos continuam inline e são mantidos como vieram.
-
     // Reconstrói registros das semanas em UMA passada.
     if (dados.semanas) {
       const porPeriodo = new Map(), semPeriodo=[];
@@ -734,6 +768,36 @@ window.fbLoad = async function() {
         periodo.count = regs.length;
       });
     }
+
+    // Frota e abastecimentos já liberam indicadores em modo somente leitura.
+    // Edições permanecem bloqueadas até o restante da carga terminar.
+    if(storageV>=3 && maqPromise)dados.maquinas=await maqPromise;
+    try{
+      window.dispatchEvent(new CustomEvent('ignis:firebase-core-ready',{
+        detail:{abastecimentos:dados.abastecimentos,maquinas:dados.maquinas||[],semanas:dados.semanas||{}}
+      }));
+    }catch(e){console.warn('IGNIS: visualização progressiva indisponível.',e);}
+
+    // As leituras já aconteceram em paralelo com os abastecimentos. A espera aqui
+    // apenas garante que o state oficial esteja completo antes de liberar edições.
+    if (storageV >= 3) {
+      const [maqs,meds,efics,arla,revisoes]=await Promise.all([
+        maqPromise || fbReadChunkSeries(seriesPrefix+'maq', dados._maqVersion, dados._maqChunks),
+        medPromise || fbReadChunkSeries(seriesPrefix+'med', dados._medVersion, dados._medChunks),
+        eficPromise || fbReadChunkSeries(seriesPrefix+'efic', dados._eficVersion, dados._eficChunks),
+        arlaPromise || fbReadChunkSeries(seriesPrefix+'arla', dados._arlaVersion, dados._arlaChunks),
+        revisoesPromise
+      ]);
+      dados.maquinas = maqs;
+      dados.medidorAnomalias = meds;
+      dados.eficienciaAnomalias = efics;
+      dados.arlaMeses = arla;
+      dados.anomaliaRevisoes = revisoes;
+    }else{
+      dados.anomaliaRevisoes = await revisoesPromise;
+    }
+    // Em storage v1/v2, esses campos continuam inline e são mantidos como vieram.
+
 
     // A revisão viaja separada do state de negócio e é usada para impedir
     // sobrescrita por cache antigo em outro computador/usuário.
@@ -5515,10 +5579,25 @@ window.addEventListener('ignis:firebase-progress', (ev)=>{
   const dot=document.getElementById('sync-dot');
   if(!label||!dot||!dot.classList.contains('syncing')) return;
   const p=String(d.prefix||'');
-  const nome=p.endsWith('maq')?'frota':p.endsWith('abpatch')?'atualizações':'abastecimentos';
+  const nome=p.endsWith('maq')?'frota':p.endsWith('abpatch')?'atualizações':p.endsWith('med')?'anomalias de medidor':p.endsWith('efic')?'anomalias de eficiência':p.endsWith('arla')?'Arla':'abastecimentos';
   const texto=`Carregando ${nome} ${pct}%`;
   label.textContent=texto;
   ignisSyncBannerShow(texto, pct, 'syncing');
+});
+window.addEventListener('ignis:firebase-core-ready', (ev)=>{
+  try{
+    if(window._dadosCarregados===true)return;
+    const d=ev.detail||{};
+    if(!Array.isArray(d.abastecimentos)||!Array.isArray(d.maquinas))return;
+    state.abastecimentos=d.abastecimentos;
+    state.maquinas=d.maquinas;
+    if(d.semanas&&typeof d.semanas==='object')state.semanas=d.semanas;
+    markIgnisDataDirty('firebase-core-ready');
+    updateFilters(true);
+    const activeId=document.querySelector('.page.active')?.id||'';
+    if(activeId==='page-dashboard'&&typeof renderDashboard==='function')renderDashboard();
+    // A confirmação do Firebase e as edições continuam bloqueadas até fbLoad acabar.
+  }catch(e){console.warn('IGNIS: painel progressivo indisponível.',e);}
 });
 window.addEventListener('ignis:firebase-metadata', (ev)=>{
   try{
