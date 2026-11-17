@@ -18,8 +18,11 @@ try{
   execFileSync(process.execPath,['--check',temp],{stdio:'pipe'});
 }finally{try{fs.unlinkSync(temp);}catch{}}
 
-assert.match(moduleSource,/memoryLocalCache\(\)/,'Fallback de quota ausente');
-assert.match(moduleSource,/fbLocalStorageHasHeadroom/,'Sonda de quota ausente');
+assert.match(moduleSource,/localCache:memoryLocalCache\(\)/,'Cache Firestore em memória não configurado');
+assert.doesNotMatch(moduleSource,/persistentMultipleTabManager\(\)/,'Cache multi-aba com localStorage ainda está ativo');
+assert.match(moduleSource,/fbChunkCacheRead\(ids\)/,'Cache auxiliar de chunks ausente');
+assert.match(moduleSource,/fbChunkNetworkSlot\(/,'Limite global de consultas ausente');
+assert.match(moduleSource,/fbChunkCachePrune\(/,'Limpeza de versões antigas ausente');
 assert.match(moduleSource,/finally\(\(\)=>clearTimeout\(timer\)\)/,'Timers não são cancelados');
 assert.match(moduleSource,/ignis:firebase-core-ready/,'Prévia dos indicadores ausente');
 assert.match(source,/if\(window\._dadosCarregados!==true&&!options\?\.recovery&&!options\?\.internalLoad\)/,'Bloqueio de gravações incompletas ausente');
@@ -31,7 +34,8 @@ assert.ok(begin>0&&end>begin,'Função de leitura de chunks não encontrada');
 const readSource=moduleSource.slice(begin,end);
 
 async function run({count=25,cache=5,denyBatch=false,invalid=-1,missing=-1}={}){
-  const history={batched:0,individual:0,cache:0,progress:[]};
+  const history={batched:0,individual:0,cache:0,progress:[],writes:0};
+  const cacheStore=new Map();
   const prefix='v4_abast',version='test';
   const snapshots=Array.from({length:count},(_,i)=>({
     id:prefix+'_'+version+'_'+i,
@@ -39,6 +43,7 @@ async function run({count=25,cache=5,denyBatch=false,invalid=-1,missing=-1}={}){
     data:()=>({chunk:i,version:i===invalid?'old':version,registros:[{i}]})
   }));
   const find=id=>snapshots.find(s=>s.id===id);
+  snapshots.slice(0,cache).forEach(s=>cacheStore.set(s.id,s.data()));
   const context=vm.createContext({
     Array,Map,Promise,Number,String,Date,FB_MAX_CHUNKS:800,console:{info(){},warn(){}},
     fbIsMobileDevice:()=>false,
@@ -48,12 +53,15 @@ async function run({count=25,cache=5,denyBatch=false,invalid=-1,missing=-1}={}){
     withTimeout:async value=>value,
     doc:(_db,_col,id)=>id,
     db:{},
-    getDocFromCache:async id=>{
+    fbChunkCacheRead:async ids=>{
       history.cache++;
-      const i=Number(id.split('_').at(-1));
-      if(i>=cache)throw Error('cache-miss');
-      return find(id);
+      return new Map(ids.filter(id=>cacheStore.has(id)).map(id=>[id,cacheStore.get(id)]));
     },
+    fbChunkCacheWrite:async items=>{
+      history.writes++;
+      items.forEach(item=>cacheStore.set(item.id,item.payload));
+    },
+    fbChunkNetworkSlot:async fn=>fn(),
     getDoc:async id=>{
       history.individual++;
       return find(id);
@@ -71,7 +79,7 @@ async function run({count=25,cache=5,denyBatch=false,invalid=-1,missing=-1}={}){
     }
   });
   vm.runInContext(readSource,context,{filename:'fbReadChunkSeries.js'});
-  return {context,history,read:()=>vm.runInContext("fbReadChunkSeries('"+prefix+"','"+version+"',"+count+")",context)};
+  return {context,history,cacheStore,read:()=>vm.runInContext("fbReadChunkSeries('"+prefix+"','"+version+"',"+count+")",context)};
 }
 
 const normal=await run();
@@ -80,6 +88,10 @@ assert.deepEqual(Array.from(ordered,r=>r.i),Array.from({length:25},(_,i)=>i),'Le
 assert.equal(normal.history.batched,2,'20 chunks faltantes devem ser agrupados em 2 consultas');
 assert.equal(normal.history.individual,0,'Consulta agrupada bem-sucedida não precisa de getDoc individual');
 assert.deepEqual(normal.history.progress.at(-1),['v4_abast',25,25]);
+assert.equal(normal.cacheStore.size,25,'Chunks verificados devem ficar no cache auxiliar');
+const batchesBeforeReload=normal.history.batched;
+assert.equal((await normal.read()).length,25);
+assert.equal(normal.history.batched,batchesBeforeReload,'Segundo acesso à mesma versão não deve baixar chunks novamente');
 
 const fallback=await run({count:14,cache:2,denyBatch:true});
 assert.equal((await fallback.read()).length,14,'Fallback deve carregar todos os chunks');
@@ -97,4 +109,4 @@ await assert.rejects(corrupted.read(),/pertence a outra versão/,'Versões troca
 const absent=await run({count:9,cache:0,missing:4});
 await assert.rejects(absent.read(),/chunk 5\/9 não encontrado/,'Chunks ausentes devem ser recusados');
 
-console.log('IGNIS: sintaxe, agrupamento, fallback, cache, integridade e bloqueios validados.');
+console.log('IGNIS: sintaxe, cache em memória, IDB, limite de consultas, versão, fallback, integridade e bloqueios validados.');
