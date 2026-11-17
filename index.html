@@ -15,7 +15,7 @@
 <script async src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 <script type="module" async>
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, initializeFirestore, memoryLocalCache, persistentLocalCache, persistentMultipleTabManager, collection, query, where, documentId, getDocs, getDocsFromCache, doc, setDoc, getDoc, getDocFromCache, deleteDoc, writeBatch, runTransaction, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, initializeFirestore, memoryLocalCache, collection, query, where, documentId, getDocs, getDocsFromCache, doc, setDoc, getDoc, deleteDoc, writeBatch, runTransaction, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyBdfrSrif-vThP3WqWJF76hhKE7FXGFpL0",
@@ -29,32 +29,15 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 let db;
-// O estado compartilhado do Firestore multi-aba usa localStorage. Quando essa
-// origem está perto do limite, o SDK pode falhar antes mesmo de ler os dados.
-// Não apagamos dados locais nem alterações pendentes: somente nesta sessão usamos
-// cache em memória. O backup IndexedDB do IGNIS continua independente.
-function fbLocalStorageHasHeadroom(){
-  const key='__ignis_firestore_quota_probe__';
-  try{
-    localStorage.setItem(key,'0'.repeat(384*1024));
-    localStorage.removeItem(key);
-    return true;
-  }catch(e){
-    try{localStorage.removeItem(key);}catch(_){}
-    return false;
-  }
-}
-const fbUsePersistentCache=fbLocalStorageHasHeadroom();
-try {
-  db = initializeFirestore(app,{
-    localCache:fbUsePersistentCache
-      ? persistentLocalCache({tabManager:persistentMultipleTabManager()})
-      : memoryLocalCache()
-  });
-  if(!fbUsePersistentCache) console.warn('IGNIS: armazenamento local próximo do limite; Firestore iniciado com cache em memória, sem excluir dados.');
-} catch(e) {
-  console.warn('IGNIS: cache persistente do Firestore indisponível; usando cache em memória.',e);
-  db = getFirestore(app);
+// O SDK Firestore 10.12 mantém estado de consultas multi-aba no localStorage.
+// Em computadores com muitas versões de chunks este estado ultrapassava a quota,
+// derrubando o cliente. Usamos cache Firestore em memória e um cache IndexedDB
+// PRÓPRIO, versionado por ID imutável do chunk, sem alterar os backups do IGNIS.
+try{
+  db=initializeFirestore(app,{localCache:memoryLocalCache()});
+}catch(e){
+  console.warn('IGNIS: inicialização do Firestore com cache em memória falhou.',e);
+  db=getFirestore(app);
 }
 window._firebaseRevision = null; // revisão compartilhada da base para impedir que um computador desatualizado sobrescreva a nuvem
 window._firebaseFuelSignature = ''; // identifica a versão das séries de abastecimentos/máquinas/anomalias
@@ -230,6 +213,99 @@ async function fbWriteChunkSeries(prefix, version, items, chunkSize) {
   return total;
 }
 
+// Cache independente das consultas internas do Firestore. Os IDs incluem a versão
+// imutável de cada série. A base da nuvem continua sendo o manifesto autoritativo.
+// Quando IndexedDB estiver bloqueado ou sem quota, a sincronização usa a rede.
+const FB_CHUNK_CACHE_DB='ignis_verified_chunks_v1';
+const FB_CHUNK_CACHE_STORE='chunks';
+let fbChunkCacheDbPromise=null;
+function fbChunkCacheOpen(){
+  if(fbChunkCacheDbPromise)return fbChunkCacheDbPromise;
+  if(typeof indexedDB==='undefined')return Promise.resolve(null);
+  fbChunkCacheDbPromise=new Promise(resolve=>{
+    let finished=false,request=null;
+    const finish=db=>{
+      if(finished){try{db?.close();}catch(e){}return;}
+      finished=true;clearTimeout(timer);resolve(db);
+    };
+    const timer=setTimeout(()=>finish(null),3500);
+    try{
+      request=indexedDB.open(FB_CHUNK_CACHE_DB,1);
+      request.onupgradeneeded=()=>{
+        const opened=request.result;
+        if(!opened.objectStoreNames.contains(FB_CHUNK_CACHE_STORE)){
+          opened.createObjectStore(FB_CHUNK_CACHE_STORE,{keyPath:'id'});
+        }
+      };
+      request.onsuccess=()=>finish(request.result);
+      request.onerror=()=>finish(null);
+      request.onblocked=()=>finish(null);
+    }catch(e){finish(null);}
+  });
+  return fbChunkCacheDbPromise;
+}
+async function fbChunkCacheRead(ids){
+  const db=await fbChunkCacheOpen();
+  if(!db||!ids.length)return new Map();
+  return new Promise(resolve=>{
+    const found=new Map();
+    try{
+      const tx=db.transaction(FB_CHUNK_CACHE_STORE,'readonly');
+      const store=tx.objectStore(FB_CHUNK_CACHE_STORE);
+      ids.forEach(id=>{
+        const r=store.get(id);
+        r.onsuccess=()=>{if(r.result?.payload)found.set(id,r.result.payload);};
+      });
+      tx.oncomplete=()=>resolve(found);
+      tx.onerror=tx.onabort=()=>resolve(new Map());
+    }catch(e){resolve(new Map());}
+  });
+}
+async function fbChunkCacheWrite(entries){
+  if(!entries.length)return;
+  const db=await fbChunkCacheOpen();
+  if(!db)return;
+  return new Promise(resolve=>{
+    try{
+      const tx=db.transaction(FB_CHUNK_CACHE_STORE,'readwrite');
+      const store=tx.objectStore(FB_CHUNK_CACHE_STORE);
+      entries.forEach(entry=>store.put(entry));
+      tx.oncomplete=()=>resolve(true);
+      tx.onerror=tx.onabort=()=>resolve(false);
+    }catch(e){resolve(false);}
+  });
+}
+async function fbChunkCachePrune(keepIds){
+  const db=await fbChunkCacheOpen();
+  if(!db)return;
+  try{
+    const tx=db.transaction(FB_CHUNK_CACHE_STORE,'readwrite');
+    const cursor=tx.objectStore(FB_CHUNK_CACHE_STORE).openCursor();
+    cursor.onsuccess=()=>{
+      const item=cursor.result;
+      if(!item)return;
+      if(!keepIds.has(String(item.key)))item.delete();
+      item.continue();
+    };
+  }catch(e){console.warn('IGNIS: manutenção do cache adiada.',e);}
+}
+let fbChunkActiveRequests=0;
+const fbChunkPendingRequests=[];
+function fbChunkNetworkSlot(fn){
+  return new Promise((resolve,reject)=>{
+    const begin=()=>{
+      fbChunkActiveRequests++;
+      Promise.resolve().then(fn).then(resolve,reject).finally(()=>{
+        fbChunkActiveRequests--;
+        const next=fbChunkPendingRequests.shift();
+        if(next)next();
+      });
+    };
+    const limit=fbIsMobileDevice()?6:10;
+    if(fbChunkActiveRequests<limit)begin();
+    else fbChunkPendingRequests.push(begin);
+  });
+}
 let fbChunkBatchQueriesAllowed=true;
 async function fbReadChunkSeries(prefix, version, total) {
   const startedAt=Date.now();
@@ -244,30 +320,19 @@ async function fbReadChunkSeries(prefix, version, total) {
   const snapshots = new Array(total).fill(null);
   fbEmitProgress(prefix,0,total);
 
-  // v64: caminho rápido e conservador.
-  // Primeiro tenta cada chunk diretamente no cache persistente do Firestore. O modelo
-  // anterior fazia uma query por prefixo; em alguns ambientes essa query podia ficar
-  // aguardando timeout/list permission e, quando falhava, baixava TODOS os chunks de
-  // novo mesmo que a maioria já estivesse no cache. Agora só vai para a rede o que
-  // realmente estiver faltando, sem alterar qualquer regra de salvamento.
-  const cacheBatch = isMobile ? 24 : 48;
-  let cachedCount = 0;
-  for (let base = 0; base < total; base += cacheBatch) {
-    const size = Math.min(cacheBatch, total - base);
-    const cached = await Promise.allSettled(Array.from({length:size}, (_,off) => {
-      const i = base + off;
-      return withTimeout(getDocFromCache(doc(db,'fueltracker',ids[i])), 3000);
-    }));
-    cached.forEach((res,off) => {
-      const i = base + off;
-      if (res.status === 'fulfilled' && res.value?.exists()) {
-        snapshots[i] = res.value;
-        cachedCount++;
-      }
-    });
-    if (cachedCount) fbEmitProgress(prefix,cachedCount,total);
-    await fbSleep(0);
-  }
+  // Uma única transação IndexedDB substitui centenas de getDocFromCache.
+  // Se o navegador nunca acessou esta versão, a rede baixa os blocos ausentes.
+  let cachedCount=0;
+  const cached=await withTimeout(fbChunkCacheRead(ids),4500).catch(()=>new Map());
+  ids.forEach((id,i)=>{
+    const payload=cached.get(id);
+    if(payload && Number(payload.chunk)===i && String(payload.version)===String(version)
+      && Array.isArray(payload.registros)){
+      snapshots[i]={id,exists:()=>true,data:()=>payload};
+      cachedCount++;
+    }
+  });
+  if(cachedCount)fbEmitProgress(prefix,cachedCount,total);
 
   // Busca somente os chunks ausentes. Mantemos lotes moderados para evitar saturar
   // Safari/iPhone e, no desktop, aumentamos um pouco o paralelismo. Cada documento
@@ -284,7 +349,7 @@ async function fbReadChunkSeries(prefix, version, total) {
   let networkDone = 0;
   const readOne = async i => {
     const snap=await fbRetry(
-      () => withTimeout(getDoc(doc(db,'fueltracker',ids[i])),timeoutMs),
+      () => fbChunkNetworkSlot(()=>withTimeout(getDoc(doc(db,'fueltracker',ids[i])),timeoutMs)),
       2,300
     );
     if(!snap.exists())throw new Error(prefix+': chunk '+(i+1)+'/'+total+' não encontrado');
@@ -294,20 +359,21 @@ async function fbReadChunkSeries(prefix, version, total) {
     if(fbChunkBatchQueriesAllowed && group.length>1){
       try {
         const wanted=group.map(i=>ids[i]);
-        const result=await withTimeout(getDocs(query(
+        const result=await fbChunkNetworkSlot(()=>withTimeout(getDocs(query(
           collection(db,'fueltracker'),where(documentId(),'in',wanted)
-        )),11000);
+        )),7500));
         const found=new Map();
         result.forEach(snap=>found.set(snap.id,snap));
         if(found.size===group.length && group.every(i=>found.has(ids[i]))){
           group.forEach(i=>{snapshots[i]=found.get(ids[i]);});
           return group.length;
         }
-        console.warn('IGNIS: consulta agrupada incompleta; conferindo cada chunk individualmente.');
+        fbChunkBatchQueriesAllowed=false;
+        console.warn('IGNIS: consulta agrupada incompleta; usando leitura individual.');
       }catch(e){
-        if(e?.code==='permission-denied'||e?.code==='failed-precondition'){
-          fbChunkBatchQueriesAllowed=false;
-        }
+        // Não repetir a consulta que já falhou em outras séries. Quando as
+        // regras do Firebase proíbem list, a próxima leitura usa getDoc direto.
+        fbChunkBatchQueriesAllowed=false;
         console.warn('IGNIS: leitura agrupada indisponível; usando leitura individual.',e?.code||e?.message||e);
       }
     }
@@ -327,7 +393,7 @@ async function fbReadChunkSeries(prefix, version, total) {
   }
 
   // Segurança final: nunca reconstrói uma série pela metade ou fora da ordem.
-  const out=[];
+  const out=[], verifiedForCache=[];
   for (let i=0;i<total;i++) {
     const snap=snapshots[i];
     if (!snap?.exists()) throw new Error(`${prefix}: chunk ${i+1}/${total} não confirmado`);
@@ -335,8 +401,12 @@ async function fbReadChunkSeries(prefix, version, total) {
     if ((data.chunk !== undefined && data.chunk !== null && Number(data.chunk) !== i) || (data.version && String(data.version)!==String(version))) {
       throw new Error(`${prefix}: chunk ${i+1}/${total} pertence a outra versão`);
     }
-    out.push(...(data.registros || []));
+    if(!Array.isArray(data.registros))throw new Error(prefix+': estrutura de chunk inválida '+(i+1)+'/'+total);
+    out.push(...data.registros);
+    if(!cached.has(ids[i]))verifiedForCache.push({id:ids[i],payload:data});
   }
+  // Cache auxiliar: falha de quota não invalida dados já confirmados da nuvem.
+  if(verifiedForCache.length)fbChunkCacheWrite(verifiedForCache).catch(e=>console.warn('IGNIS cache de chunks:',e));
   fbEmitProgress(prefix,total,total);
   console.info('IGNIS Firestore:',prefix,total+' chunks,',cachedCount+' em cache,',networkDone+' pela rede,',(Date.now()-startedAt)+' ms');
   return out;
@@ -677,6 +747,7 @@ window.fbSave = async function(data) {
 
 window.fbLoad = async function() {
   window._fbLoadFailed = false;
+  window._lastFirebaseLoadError='';
   try {
     let snap = await withTimeout(getDoc(doc(db, 'fueltracker', FB_MAIN_DOC)), 10000);
     let usingV4 = snap.exists();
@@ -806,6 +877,23 @@ window.fbLoad = async function() {
     dados._cloudFuelSignature = usingV4 ? (()=>{const ps=Array.isArray(dados._abastPatches)?dados._abastPatches.map(p=>String(p?.version||'')).join(','):'';return [dados._abastVersion||'',...(ps?[ps]:[]),dados._maqVersion||'',dados._medVersion||'',dados._eficVersion||''].join('|');})() : '';
     dados._cloudArlaSignature = usingV4 ? String(dados._arlaVersion || '') : '';
 
+    // Descarte opcional apenas do cache auxiliar de chunks que não estão mais
+    // referenciados pelo manifesto, sem afetar backups ou dados na nuvem.
+    if(storageV>=3 && usingV4){
+      const keepIds=new Set();
+      const include=(key,version,count)=>{
+        for(let i=0;i<Number(count||0);i++)keepIds.add(key+'_'+version+'_'+i);
+      };
+      include(seriesPrefix+'abast',dados._abastVersion,dados._abastChunks);
+      include(seriesPrefix+'maq',dados._maqVersion,dados._maqChunks);
+      include(seriesPrefix+'med',dados._medVersion,dados._medChunks);
+      include(seriesPrefix+'efic',dados._eficVersion,dados._eficChunks);
+      include(seriesPrefix+'arla',dados._arlaVersion,dados._arlaChunks);
+      (Array.isArray(dados._abastPatches)?dados._abastPatches:[]).forEach(p=>{
+        include(seriesPrefix+'abpatch',p.version,p.chunks);
+      });
+      fbChunkCachePrune(keepIds).catch(()=>{});
+    }
     // Remove somente metadados internos do storage.
     [
       '_revision','_hasAbast','_storageVersion','_abastVersion','_abastChunks','_abastCount','_abastPatches',
@@ -815,6 +903,7 @@ window.fbLoad = async function() {
     return dados;
   } catch(e) {
     window._fbLoadFailed = true;
+    window._lastFirebaseLoadError=String(e?.code||e?.message||e||'Erro desconhecido');
     console.error('Firebase load error:', e);
     return null;
   }
