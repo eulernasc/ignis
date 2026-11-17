@@ -9,6 +9,13 @@ on:
       - 'index.html'
       - 'scripts/test-planejamento2027.js'
       - '.github/workflows/test-acompanhamento.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'index.html'
+      - 'scripts/test-firebase-sync.js'
+      - 'scripts/test-planejamento2027.js'
+      - '.github/workflows/test-acompanhamento.yml'
   workflow_dispatch:
 jobs:
   validar:
@@ -24,3 +31,5 @@ jobs:
         run: node --check planejamento2027.js
       - name: Executar testes funcionais sem dados reais
         run: node scripts/test-planejamento2027.js
+      - name: Validar leitura e segurança do Firebase
+        run: node scripts/test-firebase-sync.js
