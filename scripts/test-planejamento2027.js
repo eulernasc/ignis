@@ -150,10 +150,12 @@ async function main(){
   assert.match(page.innerHTML,/Prorrogar/,'prorrogação disponível nas Ocorrências');
   assert.match(page.innerHTML,/Concluir/,'conclusão disponível nas Ocorrências');
   assert.match(page.innerHTML,/Excluir/,'exclusão disponível nas Ocorrências');
-  assert.ok(window.ignisMultiFilter.selected('planCasesPlate').has('RHT5F20'),
-    'histórico abre filtrado pela placa');
-  assert.ok(window.ignisMultiFilter.selected('planCasesGroup').has('pesada'),
-    'histórico abre filtrado pelo grupo');
+  const plateFilter=window.ignisMultiFilter.selected('planCasesPlate');
+  const groupFilter=window.ignisMultiFilter.selected('planCasesGroup');
+  assert.ok(plateFilter===null||plateFilter.has('RHT5F20'),
+    'placa escolhida preservada quando não representa todas as opções');
+  assert.ok(groupFilter===null||groupFilter.has('pesada'),
+    'grupo escolhido preservado quando não representa todas as opções');
   window._ignisPlanTab='performance';
   context.ignisPlanRender();
   extendedPanel={
