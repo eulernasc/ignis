@@ -25,6 +25,8 @@ function fail(code,message){throw new HttpsError(code,message);}
 async function context(req){
   if(!req.auth?.uid)fail('unauthenticated','Entre com Firebase Authentication para acessar ocorrências.');
   const master=req.auth.token?.ignisMaster===true;
+  if(!master&&req.auth.token?.email_verified!==true)
+    fail('permission-denied','Verifique o endereço de email do Firebase Authentication.');
   const permission=master?null:(await roles.doc(req.auth.uid).get()).data();
   const access=accessFor({auth:req.auth,permission});
   if(!access.canRead)fail('permission-denied','Usuário sem acesso autorizado às ocorrências.');
@@ -90,10 +92,12 @@ exports.ignisCasesList=onCall(settings,async req=>{
   };
 });
 exports.ignisCaseHistory=onCall(settings,async req=>{
-  await context(req);
+  const p=await context(req);
   const id=caseId(req.data?.id);
   const snap=await cases.doc(id).get();
   if(!snap.exists)fail('not-found','Ocorrência não encontrada.');
+  if(snap.data().deletedAt&&!p.isMaster)
+    fail('not-found','Ocorrência não encontrada.');
   const events=await snap.ref.collection('events').orderBy('at','desc').limit(200).get();
   return {events:events.docs.map(d=>({id:d.id,...serialize(d.data())}))};
 });
@@ -129,6 +133,10 @@ exports.ignisCaseUpdate=onCall(settings,async req=>{
     if(updated.categoria==='Outro'&&(!String(updated.categoriaOutro||'').trim()||String(updated.categoriaOutro).trim().length<3))
       fail('invalid-argument','Especifique a outra causa.');
     if(updated.categoria!=='Outro'&&fields.categoria==='Outro')fail('invalid-argument','Causa inválida.');
+    if(updated.acaoRealizada===true&&!isoDate(updated.dataAcao))
+      fail('invalid-argument','Informe data válida da ação concluída.');
+    if(updated.acaoRealizada!==true&&!isoDate(updated.prazo))
+      fail('invalid-argument','Informe prazo válido para ação pendente.');
     const diff={};
     for(const [key,value] of Object.entries(fields)){
       if(previous[key]!==value)diff[key]={before:previous[key]??null,after:value};
@@ -158,14 +166,23 @@ exports.ignisCaseDelete=onCall(settings,async req=>{
 exports.ignisCaseGrantAccess=onCall(settings,async req=>{
   if(!req.auth?.uid||req.auth.token?.ignisMaster!==true)
     fail('permission-denied','Somente o ADM Master concede permissões.');
+  const email=safeText(req.data?.email,254).toLowerCase();
   const uid=safeText(req.data?.uid,128);
-  if(!/^[^/]{1,128}$/.test(uid))fail('invalid-argument','UID inválido.');
-  // Só contas existentes e verificadas pelo Firebase Authentication podem receber acesso.
-  await getAuth().getUser(uid);
+  if(!email&&!uid)fail('invalid-argument','Informe email ou UID.');
+  const user=email?await getAuth().getUserByEmail(email):await getAuth().getUser(uid);
+  if(uid&&uid!==user.uid)fail('invalid-argument','UID não confere com o email.');
+  if(user.disabled)fail('failed-precondition','Usuário desativado.');
+  if(!user.emailVerified)fail('failed-precondition','Usuário precisa verificar o email antes de receber permissões.');
   const active=req.data?.active===true;
   const editAll=active&&req.data?.editAll===true;
   const deleteCases=active&&req.data?.deleteCases===true;
-  await roles.doc(uid).set({active,editAll,deleteCases,
-    updatedByUid:req.auth.uid,updatedAt:FieldValue.serverTimestamp()});
-  return {uid,active,editAll,deleteCases};
+  const docRef=roles.doc(user.uid);
+  const auditRef=db.collection('ignis_case_role_events').doc();
+  const batch=db.batch();
+  batch.set(docRef,{active,editAll,deleteCases,updatedByUid:req.auth.uid,
+    updatedAt:FieldValue.serverTimestamp()});
+  batch.create(auditRef,{uid:user.uid,actorUid:req.auth.uid,
+    active,editAll,deleteCases,at:FieldValue.serverTimestamp()});
+  await batch.commit();
+  return {uid:user.uid,email:user.email,active,editAll,deleteCases};
 });
