@@ -7802,6 +7802,12 @@ function updateFilters(force=false) {
       const checked=document.querySelectorAll('.op-check:checked');
       allCheck.checked=checks.length===checked.length;
       allCheck.indeterminate=checked.length>0&&checked.length<checks.length;
+      const opLabel=document.getElementById('op-dropdown-label');
+      if(opLabel){
+        opLabel.textContent=checked.length===0||checked.length===checks.length
+          ?'Todas as Operações':checked.length===1
+          ?checked[0].value.replace(/_/g,' '):checked.length+' operações';
+      }
     }
   }
   // Filtro operação único nos outros lugares
@@ -8043,6 +8049,10 @@ function populatePlacaDropdown() {
     </label>`
   ).join('');
   sincPlacaAllCheck();
+  const all=[...cont.querySelectorAll('.placa-check')],checked=all.filter(c=>c.checked);
+  const label=document.getElementById('placa-dropdown-label');
+  if(label)label.textContent=!checked.length||checked.length===all.length
+    ?'Todas as Placas':checked.length===1?checked[0].value:checked.length+' placas';
 }
 
 function filtrarPlacasDropdown() {
@@ -17770,6 +17780,10 @@ function selectDashType(value){
   window.ignisMultiFilter?.setSelection('dashType',value?[value]:null);
 }
 function renderDashMixedSummary(list){
+  ['kpi-litros','kpi-maquinas','kpi-horas','kpi-media'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el&&el._kpiTimer)clearInterval(el._kpiTimer);
+  });
   const fmt=n=>Number(n||0).toLocaleString('pt-BR',{maximumFractionDigits:2});
   const safe=v=>String(v??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
   const groups=new Map(),byPlate=new Map(),byOp=new Map();
@@ -17801,6 +17815,7 @@ function renderDashMixedSummary(list){
   const mediaUnit=document.getElementById('kpi-media-unit'),metaUnit=document.getElementById('kpi-meta-unit');
   if(mediaUnit)mediaUnit.textContent='';if(metaUnit)metaUnit.textContent='';
   const metaSub=document.getElementById('kpi-meta-sub'),eficSub=document.getElementById('kpi-efic-sub'),maqDelta=document.getElementById('kpi-maq-delta');
+  const oldMeta=document.getElementById('kpi-media-meta');if(oldMeta)oldMeta.textContent='';
   if(metaSub)metaSub.textContent='Metas por tipo abaixo';
   if(eficSub)eficSub.textContent='Unidades distintas: km/L e L/h';
   if(maqDelta)maqDelta.textContent='Tipos de frota combinados';
