@@ -38,7 +38,7 @@ function caseId(input){
 function makeFields(input,create=false){
   if(!input||typeof input!=='object'||Array.isArray(input))fail('invalid-argument','Dados inválidos.');
   const fields={
-    placa:120,grupo:40,operacao:180,categoria:100,
+    placa:120,grupo:40,operacao:180,categoria:100,categoriaOutro:120,
     descricaoCausa:1500,acaoCorretiva:1200,responsavel:120,
     prazo:10,dataAcao:10,statusRegistro:50,observacao:1500
   };
@@ -55,9 +55,13 @@ function makeFields(input,create=false){
   if(Object.prototype.hasOwnProperty.call(input,'acaoRealizada'))out.acaoRealizada=input.acaoRealizada;
   if('prazo'in out&&out.prazo&&!isoDate(out.prazo))fail('invalid-argument','Prazo inválido.');
   if('dataAcao'in out&&out.dataAcao&&!isoDate(out.dataAcao))fail('invalid-argument','Data de conclusão inválida.');
+  if('categoria'in out&&!['Problema mecânico','Dirigibilidade','Parâmetro','Outro'].includes(out.categoria))
+    fail('invalid-argument','Causa inválida.');
   if('grupo'in out&&!['pesada','leve','maquinas'].includes(out.grupo))fail('invalid-argument','Grupo inválido.');
   if('statusRegistro'in out&&!['Registrada','Em acompanhamento','Concluída'].includes(out.statusRegistro))fail('invalid-argument','Situação inválida.');
   if(create){
+    if(out.categoria==='Outro'&&(!out.categoriaOutro||out.categoriaOutro.length<3))
+      fail('invalid-argument','Especifique a outra causa.');
     for(const key of ['placa','grupo','categoria','descricaoCausa','acaoCorretiva','responsavel']){
       if(!out[key])fail('invalid-argument','Campo obrigatório: '+key);
     }
@@ -121,6 +125,10 @@ exports.ignisCaseUpdate=onCall(settings,async req=>{
     const previous=snap.data();
     if(!canEditCase(p,req.auth,previous))fail('permission-denied','Só o autor ou editor autorizado pode alterar esta ocorrência.');
     if(previous.version!==req.data.expectedVersion)fail('aborted','A ocorrência foi alterada por outra pessoa. Recarregue.');
+    const updated={...previous,...fields};
+    if(updated.categoria==='Outro'&&(!String(updated.categoriaOutro||'').trim()||String(updated.categoriaOutro).trim().length<3))
+      fail('invalid-argument','Especifique a outra causa.');
+    if(updated.categoria!=='Outro'&&fields.categoria==='Outro')fail('invalid-argument','Causa inválida.');
     const diff={};
     for(const [key,value] of Object.entries(fields)){
       if(previous[key]!==value)diff[key]={before:previous[key]??null,after:value};
