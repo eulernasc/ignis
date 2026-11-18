@@ -230,6 +230,23 @@ async function main(){
   assert.equal(context.ignisPlanRegisterState(legacy),'Concluída');
   assert.equal(context.ignisPlanOverdue(legacy),true);
   assert.ok(saves>=4);
+  context.ignisPlanOpen('RHT5F20','pesada','','2026-11');
+  assert.match(modal.innerHTML,/<option value="Outro"/,'causa Outro disponível no seletor');
+  assert.match(modal.innerHTML,/name="categoriaOutro"/,'detalhamento específico oferecido');
+  const savesBeforeOther=saves;
+  await submit({...base,categoria:'Outro',categoriaOutro:'',descricaoCausa:'Queda de pressão inesperada'});
+  assert.equal(saves,savesBeforeOther,'Outro sem descrição não salva');
+  await submit({...base,categoria:'Outro',categoriaOutro:'Falha no equipamento de abastecimento',
+    descricaoCausa:'Pressão fora do especificado'});
+  const other=conf.tratativas.find(t=>t.categoria==='Outro');
+  assert.ok(other,'ocorrência Outros registrada');
+  assert.equal(other.categoriaOutro,'Falha no equipamento de abastecimento');
+  assert.match(context.ignisPlanCauseName(other),/Outro: Falha no equipamento de abastecimento/);
+  assert.match(other.historico[0].alteracoes.map(x=>x.campo).join(','),/Outra causa especificada/);
+  const otherId=other.id;
+  await submit({...base,categoria:'Problema mecânico',descricaoCausa:'Problema mecânico confirmado'},otherId);
+  assert.equal(conf.tratativas.find(t=>t.id===otherId).categoriaOutro,'','detalhamento Outro limpo ao mudar de causa');
+  console.log('OK: opção Outro, detalhamento obrigatório e histórico de alterações.');
   console.log('OK: metas, baixa performance, múltiplas causas, registro separado da ação,');
   console.log('histórico, vencidos, filtros, edição, legado e rollback de salvamento.');
 }
