@@ -1,0 +1,25 @@
+name: Validar regras de ocorrências (backend preparado)
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'security/functions/**'
+      - '.github/workflows/test-occurrence-security.yml'
+  pull_request:
+    paths:
+      - 'security/functions/**'
+      - '.github/workflows/test-occurrence-security.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node --check security/functions/index.cjs
+      - run: node --check security/functions/lib/occurrence-access.cjs
+      - run: node --test security/functions/test/occurrence-access.test.cjs
