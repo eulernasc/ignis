@@ -175,14 +175,18 @@ function ignisPlanOverdue(t){
 function ignisPlanFmtDate(date){
   const s=String(date||'');return /^\d{4}-\d{2}-\d{2}/.test(s)?s.slice(8,10)+'/'+s.slice(5,7)+'/'+s.slice(0,4):'—';
 }
-function ignisPlanCauseName(t){return t?.categoria||'Causa não informada';}
+function ignisPlanCauseName(t){
+  if(t?.categoria==='Outro'&&String(t?.categoriaOutro||'').trim())
+    return 'Outro: '+String(t.categoriaOutro).trim();
+  return t?.categoria||'Causa não informada';
+}
 function ignisPlanCases(mes,grupo,placa){
   return ignisPlanConfig().tratativas.filter(t=>t.grupo===grupo&&String(t.placa).toUpperCase()===String(placa).toUpperCase())
     .sort((a,b)=>String(b.criadoEm||'').localeCompare(String(a.criadoEm||'')));
 }
 function ignisPlanSafeParam(s){return encodeURIComponent(String(s||'')).replace(/'/g,'%27');}
 function ignisPlanChangeRecord(before,next){
-  const fields={categoria:'Causa',descricaoCausa:'Descrição da causa',acaoCorretiva:'Ação corretiva',acaoRealizada:'Ação realizada',statusRegistro:'Situação do registro',
+  const fields={categoria:'Causa',categoriaOutro:'Outra causa especificada',descricaoCausa:'Descrição da causa',acaoCorretiva:'Ação corretiva',acaoRealizada:'Ação realizada',statusRegistro:'Situação do registro',
     responsavel:'Responsável',prazo:'Prazo',dataAcao:'Data da resolução',observacao:'Observações'};
   return Object.entries(fields).filter(([k])=>String(before?.[k]??'')!==String(next?.[k]??'')).map(([key,label])=>({
     campo:label,anterior:before?.[key]??'',atual:next?.[key]??''
@@ -538,7 +542,7 @@ function ignisPlanCasesView(root,conf){
     if(status==='abertas'&&!ignisPlanCaseActive(t))return false;
     if(status==='concluidas'&&ignisPlanCaseActive(t))return false;
     if(status==='vencidas'&&!ignisPlanOverdue(t))return false;
-    return !query||[t.placa,ignisPlanCaseOperation(t),t.categoria,t.descricaoCausa,t.acaoCorretiva,t.responsavel,t.observacao]
+    return !query||[t.placa,ignisPlanCaseOperation(t),t.categoria,t.categoriaOutro,t.descricaoCausa,t.acaoCorretiva,t.responsavel,t.observacao]
       .join(' ').toUpperCase().includes(query);
   });
   const pending=all.filter(ignisPlanCaseActive).length,overdue=all.filter(ignisPlanOverdue).length;
@@ -666,7 +670,7 @@ function ignisPlanRender(){
     if(statusFilter==='vencido'&&!x.ocorrencias.some(ignisPlanOverdue))return false;
     if(statusFilter==='resolvido'&&!x.ocorrencias.some(t=>ignisPlanActionState(t)==='realizada'))return false;
     if(statusFilter==='registro-concluido'&&!x.ocorrencias.some(t=>ignisPlanRegisterState(t)==='Concluída'))return false;
-    return !q||(x.placa+' '+x.operacao+' '+x.ocorrencias.map(t=>t.responsavel+' '+t.categoria).join(' ')).toUpperCase().includes(q);
+    return !q||(x.placa+' '+x.operacao+' '+x.ocorrencias.map(t=>t.responsavel+' '+ignisPlanCauseName(t)).join(' ')).toUpperCase().includes(q);
   });
   const historyByPlate=new Map();
   for(const t of conf.tratativas){
@@ -806,9 +810,16 @@ function ignisPlanFields(){
   const info={
     'Problema mecânico':['Descreva o problema identificado *','O problema mecânico foi resolvido? *','Ação para corrigir o problema *'],
     'Dirigibilidade':['Descreva a necessidade de reciclagem *','A reciclagem do motorista/operador foi realizada? *','Treinamento ou reciclagem prevista *'],
-    'Parâmetro':['Justificativa para alteração do parâmetro *','O parâmetro de consumo já foi alterado? *','Alteração de parâmetro proposta *']
+    'Parâmetro':['Justificativa para alteração do parâmetro *','O parâmetro de consumo já foi alterado? *','Alteração de parâmetro proposta *'],
+    'Outro':['Descreva o problema específico *','Esse problema já foi resolvido? *','Ação corretiva para o problema *']
   };
   const fields=info[categoria];
+  const other=frm.querySelector('[data-p27-other-cause]');
+  if(other){
+    other.hidden=categoria!=='Outro';
+    const input=other.querySelector('input');
+    if(input){input.required=categoria==='Outro';input.disabled=categoria!=='Outro';}
+  }
   if(desc)desc.textContent=fields?.[0]||'Descrição da causa *';
   if(question)question.textContent=fields?.[1]||'A ação corretiva foi realizada? *';
   if(proposal)proposal.textContent=fields?.[2]||'Ação corretiva planejada *';
@@ -827,7 +838,7 @@ function ignisPlanOpen(encoded,grupo,caseEncoded='',period=''){
   const conf=ignisPlanConfig(),original=caseId?conf.tratativas.find(t=>t.id===caseId):null;
   if(caseId&&!original){showToast('Esta ocorrência não foi encontrada. Atualize a aba.','error');return;}
   const old=original||{},root=ignisPlanModalRoot();
-  const known=['Problema mecânico','Dirigibilidade','Parâmetro'];
+  const known=['Problema mecânico','Dirigibilidade','Parâmetro','Outro'];
   const categoria=known.includes(old.categoria)?old.categoria:'';
   const action=ignisPlanActionState(old);
   const actionValue=action==='realizada'?'sim':action==='pendente'?'nao':'';
@@ -839,12 +850,15 @@ function ignisPlanOpen(encoded,grupo,caseEncoded='',period=''){
       <div class="p27-editor-head"><div><strong>${original?'Editar ocorrência':'Nova ocorrência'} · ${ignisPlanEsc(placa)}</strong>
         <small>${ignisPlanMonthLabel(mes)} · eficiência ${efficiency}</small></div>
         <button type="button" onclick="ignisPlanClose()" aria-label="Fechar">×</button></div>
-      ${original&&!categoria?`<p class="p27-legacy-note">Categoria anterior: ${ignisPlanEsc(old.categoria||'Não informada')}. Reclassifique para uma das três causas abaixo. O texto antigo será preservado.</p>`:''}
+      ${original&&!categoria?`<p class="p27-legacy-note">Categoria anterior: ${ignisPlanEsc(old.categoria||'Não informada')}. Reclassifique para uma das causas disponíveis. O texto antigo será preservado.</p>`:''}
       <label>Causa identificada *
         <select name="categoria" required onchange="ignisPlanFields()">
           <option value="">Selecione uma causa</option>
           ${known.map(x=>`<option value="${x}" ${categoria===x?'selected':''}>${x}</option>`).join('')}
         </select></label>
+      <label data-p27-other-cause hidden>Especifique a outra causa *
+        <input name="categoriaOutro" maxlength="120" value="${ignisPlanEsc(old.categoriaOutro||'')}"
+          placeholder="Ex.: falha de abastecimento, condição operacional..." autocomplete="off"></label>
       <label><span data-p27-description>Descrição da causa *</span>
         <textarea name="descricaoCausa" maxlength="1500" rows="3" required placeholder="Registre as evidências e a causa identificada">${ignisPlanEsc(old.descricaoCausa||old.observacao||'')}</textarea></label>
       <label><span data-p27-proposed-action>Ação corretiva planejada *</span>
@@ -889,17 +903,21 @@ async function ignisPlanSubmit(ev,encoded,grupo,caseEncoded='',period=''){
   if(caseEncoded&&!old){showToast('Ocorrência não encontrada.','error');return;}
   const before=JSON.stringify(conf.tratativas),now=new Date().toISOString();
   const categoria=String(form.get('categoria')||''),acao=String(form.get('acaoRealizada')||'');
+  const categoriaOutro=categoria==='Outro'?String(form.get('categoriaOutro')||'').trim():'';
   const responsavel=String(form.get('responsavel')||'').trim(),prazo=String(form.get('prazo')||''),dataAcao=String(form.get('dataAcao')||'');
   const descricaoCausa=String(form.get('descricaoCausa')||'').trim(),acaoCorretiva=String(form.get('acaoCorretiva')||'').trim();
-  if(!['Problema mecânico','Dirigibilidade','Parâmetro'].includes(categoria)||!descricaoCausa||!acaoCorretiva||!responsavel||!['sim','nao'].includes(acao)){
+  if(!['Problema mecânico','Dirigibilidade','Parâmetro','Outro'].includes(categoria)||!descricaoCausa||!acaoCorretiva||!responsavel||!['sim','nao'].includes(acao)){
     showToast('Preencha a causa, descrição, ação, responsável e confirmação.','error');return;
+  }
+  if(categoria==='Outro'&&(categoriaOutro.length<3||categoriaOutro.length>120)){
+    showToast('Especifique a outra causa com pelo menos 3 caracteres.','error');return;
   }
   if(acao==='nao'&&!/^\d{4}-\d{2}-\d{2}$/.test(prazo)){showToast('Defina o prazo para a ação pendente.','error');return;}
   if(acao==='sim'&&!/^\d{4}-\d{2}-\d{2}$/.test(dataAcao)){showToast('Informe a data em que a ação foi realizada.','error');return;}
   const current=ignisPlanSummary(mes).find(x=>x.grupo===grupo&&x.placa===placa);
   const author=String(window._authUser?.nome||window._authUser?.id||'Usuário autenticado');
   const next={...old,id,placa,mes,grupo,
-    operacao:old?.operacao||current?.operacao||'',categoria,descricaoCausa,acaoCorretiva,
+    operacao:old?.operacao||current?.operacao||'',categoria,categoriaOutro,descricaoCausa,acaoCorretiva,
     acaoRealizada:acao==='sim',responsavel,prazo:acao==='nao'?prazo:(old?.prazo||''),
     dataAcao:acao==='sim'?dataAcao:'',
     statusRegistro:String(form.get('statusRegistro')||'Registrada'),
