@@ -16,6 +16,7 @@ async function main(){
   const page={innerHTML:''},modal={innerHTML:''};
   let extendedPanel=null;
   const document={
+    addEventListener(){},
     getElementById:id=>id==='page-planejamento'?page:id==='p27-editor-root'?modal:id.startsWith('p27-extend-')?extendedPanel:null,
     querySelector:()=>null,
     body:{classList:{add(){},remove(){}}}
@@ -32,6 +33,7 @@ async function main(){
     console:{info(){},error(){}},
     showToast:(msg,kind)=>notifications.push([msg,kind])};
   vm.createContext(context);
+  vm.runInContext(fs.readFileSync(path.resolve(__dirname,'../ignis-multiselect.js'),'utf8'),context,{filename:'ignis-multiselect.js'});
   vm.runInContext(source,context,{filename:'planejamento2027.js'});
   const submit=(values,id='')=>context.ignisPlanSubmit({
     preventDefault(){},
@@ -53,6 +55,9 @@ async function main(){
   assert.match(page.innerHTML,/Faixa de performance/);
   assert.match(page.innerHTML,/Personalizado/);
   assert.match(page.innerHTML,/ignis-filterbar/);
+  assert.match(page.innerHTML,/imf-planOperation/);
+  assert.match(page.innerHTML,/imf-planPlate/);
+  assert.match(page.innerHTML,/imf-planGroup/);
   assert.match(page.innerHTML,/Todas as operações/);
   assert.match(page.innerHTML,/Todas as placas/);
   assert.equal(context.ignisPlanSummary('2026-11').length,2);
@@ -68,18 +73,16 @@ async function main(){
   assert.match(tableHtml,/RHT5F20/,'faixa abaixo seleciona veículo abaixo da meta');
   assert.doesNotMatch(tableHtml,/AAB1234/);
   window._ignisPlanFaixa='ambos';
-  window._ignisPlanOperacao='Betim';
-  context.ignisPlanRender();
+  window.ignisMultiFilter.setSelection('planOperation',['Betim']);
   tableHtml=page.innerHTML.split('<tbody>')[1].split('</tbody>')[0];
   assert.match(tableHtml,/AAB1234/);
   assert.doesNotMatch(tableHtml,/RHT5F20/);
-  window._ignisPlanOperacao='';
-  window._ignisPlanPlaca='RHT5F20';
-  context.ignisPlanRender();
+  window.ignisMultiFilter.reset('planOperation');
+  window.ignisMultiFilter.setSelection('planPlate',['RHT5F20']);
   tableHtml=page.innerHTML.split('<tbody>')[1].split('</tbody>')[0];
   assert.match(tableHtml,/RHT5F20/);
   assert.doesNotMatch(tableHtml,/AAB1234/);
-  window._ignisPlanPlaca='';
+  window.ignisMultiFilter.reset('planPlate');
   const periodSpec=context.ignisPlanPeriodSpec();
   assert.equal(periodSpec.mode,'month');
   context.ignisPlanSetPeriodMode('custom');
@@ -155,7 +158,7 @@ async function main(){
   const index=fs.readFileSync(path.resolve(__dirname,'../index.html'),'utf8');
   assert.ok(index.includes("const scopedPlanning=mode==='light'"),'fluxo segmentado está disponível');
   assert.match(index,/filtros-unificados\.css\?v=/,'CSS global de filtros carregado');
-  assert.match(index,/planejamento2027\.js\?v=20261116a/,'novo módulo sem cache antigo');
+  assert.match(index,/planejamento2027\.js\?v=20261118a/,'novo módulo sem cache antigo');
   const filterCss=fs.readFileSync(path.resolve(__dirname,'../filtros-unificados.css'),'utf8');
   assert.match(filterCss,/button\.dash-dropdown-done/,'botão Concluir possui padrão visual');
   for(const pageId of ['page-dashboard','page-abastecimentos','page-arla','page-comparativo','page-motoristas','page-fechamento'])
