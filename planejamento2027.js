@@ -200,7 +200,7 @@ function ignisPlanCompactCaseSummary(placa,grupo,records){
   const pending=records.filter(ignisPlanCaseActive);
   const completed=records.length-pending.length;
   const late=pending.filter(ignisPlanOverdue).length;
-  const next=pending.filter(t=>/^\\d{4}-\\d{2}-\\d{2}$/.test(String(t.prazo||'')))
+  const next=pending.filter(t=>/^\d{4}-\d{2}-\d{2}$/.test(String(t.prazo||'')))
     .sort((a,b)=>String(a.prazo).localeCompare(String(b.prazo)))[0];
   return `<div class="p27-compact-cases">
     <div class="p27-compact-badges">
