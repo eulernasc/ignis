@@ -2801,8 +2801,8 @@ input[type="checkbox"]:indeterminate{background:rgba(233,95,50,.2);border-color:
 @media(max-width:900px){.postos-coord-stats{grid-template-columns:repeat(3,minmax(0,1fr))}.postos-coord-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.postos-coord-row{grid-template-columns:1fr}.postos-coord-actions{min-width:0;justify-content:flex-start}}
 @media(max-width:620px){.postos-coord-period,.postos-coord-toolbar{grid-template-columns:1fr}.postos-coord-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.postos-coord-actions .postos-location-action{flex:1 1 calc(50% - 8px)}}
 </style>
-<link rel="stylesheet" href="planejamento2027.css?v=20261116a">
-<link rel="stylesheet" href="filtros-unificados.css?v=20261118a">
+<link rel="stylesheet" href="planejamento2027.css?v=20261118b">
+<link rel="stylesheet" href="filtros-unificados.css?v=20261116b">
 </head>
 <body>
 <div id="ignis-sync-banner" class="ignis-sync-banner" data-state="syncing" role="status" aria-live="polite" aria-atomic="true">
@@ -3224,9 +3224,17 @@ input[type="checkbox"]:indeterminate{background:rgba(233,95,50,.2);border-color:
         </div>
       </div>
 
-      <!-- Tipo: o mesmo filtro compartilhado do Acompanhamento -->
-      <select id="dash-maq-filter" style="display:none"><option value="">Todos os tipos</option></select>
-      <div class="dash-filter-control dash-native-control" id="dash-type-wrap"></div>
+      <!-- Tipo -->
+      <div class="dash-filter-control dash-native-control" id="dash-type-wrap">
+        <span class="dash-filter-caption">Tipo de veículo</span>
+        <select id="dash-maq-filter" style="display:none"><option value="">Todos os tipos</option></select>
+        <button class="dash-filter-trigger dash-type-trigger" id="dash-type-btn" type="button" onclick="toggleDashTypeDropdown()" aria-haspopup="true">
+          <span class="dash-filter-trigger-icon" id="dash-type-icon" aria-hidden="true"></span>
+          <span class="dash-filter-value" id="dash-type-label">Todos os tipos</span>
+          <svg class="dash-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg>
+        </button>
+        <div class="dash-dropdown dash-type-menu" id="dash-type-menu" style="display:none"></div>
+      </div>
 
       <!-- Modelo -->
       <div class="dash-filter-control" id="modelo-dropdown-wrap" style="display:none">
@@ -7747,15 +7755,6 @@ function getMaquina(placa) {
 // Filtra uma lista de operações pra mostrar só as que têm veículos do tipo selecionado
 // tipoFiltro: '' (sem filtro), '__maquinas__'/'__tratores__'/'__pesada__'/'__leve__'/'__empilhadeiras__' (categoria), ou uma placa específica
 function filtrarOpsPorTipo(tipoFiltro, opsBase) {
-  if(tipoFiltro instanceof Set){
-    if(!tipoFiltro.size)return opsBase;
-    const mapping={'__maquinas__':'maquina','__tratores__':'trator','__pesada__':'pesada','__leve__':'leve','__empilhadeiras__':'empilhadeira'};
-    const targets=new Set([...tipoFiltro].map(id=>mapping[id]).filter(Boolean));
-    const found=new Set(state.abastecimentos.filter(a=>targets.has(getTipoIgnis(a)))
-      .map(a=>getMaquina(a.placa)?.operacao||a.operacao||'').filter(Boolean));
-    const result=opsBase.filter(op=>found.has(op));
-    return result.length?result:opsBase;
-  }
   if (!tipoFiltro) return opsBase;
   if (tipoFiltro === '__maquinas__' || tipoFiltro === '__tratores__' || tipoFiltro === '__pesada__' || tipoFiltro === '__leve__' || tipoFiltro === '__empilhadeiras__') {
     const tipoAlvo = tipoFiltro === '__maquinas__' ? 'maquina' : tipoFiltro === '__tratores__' ? 'trator' : tipoFiltro === '__pesada__' ? 'pesada' : tipoFiltro === '__leve__' ? 'leve' : 'empilhadeira';
@@ -7779,9 +7778,9 @@ function updateFilters(force=false) {
   const ops=getOperacoes();
 
   // Filtra operações conforme o filtro de máquina selecionado no dashboard
-  const maqFiltro = typeof getSelectedDashTypes==='function' ? getSelectedDashTypes() : document.getElementById('dash-maq-filter')?.value||'';
+  const maqFiltro = document.getElementById('dash-maq-filter')?.value || '';
   const compMaqFiltro = document.getElementById('comp-maq-filter')?.value || '';
-  const signature = String(_ignisPerf.version)+"|"+(maqFiltro instanceof Set?[...maqFiltro].sort().join(","):maqFiltro||"*")+"|"+compMaqFiltro;
+  const signature = `${_ignisPerf.version}|${maqFiltro}|${compMaqFiltro}`;
   if (!force && _ignisPerf.filtersSignature === signature) return;
   _ignisPerf.filtersSignature = signature;
   const opsFiltradas = filtrarOpsPorTipo(maqFiltro, ops);
@@ -7802,12 +7801,6 @@ function updateFilters(force=false) {
       const checked=document.querySelectorAll('.op-check:checked');
       allCheck.checked=checks.length===checked.length;
       allCheck.indeterminate=checked.length>0&&checked.length<checks.length;
-      const opLabel=document.getElementById('op-dropdown-label');
-      if(opLabel){
-        opLabel.textContent=checked.length===0||checked.length===checks.length
-          ?'Todas as Operações':checked.length===1
-          ?checked[0].value.replace(/_/g,' '):checked.length+' operações';
-      }
     }
   }
   // Filtro operação único nos outros lugares
@@ -7909,15 +7902,12 @@ function populateModeloDropdown() {
   const wrap = document.getElementById('modelo-dropdown-wrap');
   if (!btn || !cont) return;
 
-  const maqTypes=typeof getSelectedDashTypes==='function'?getSelectedDashTypes():null;
-  const maqF=maqTypes instanceof Set && maqTypes.size===1 ? [...maqTypes][0] : '';
-  if (!(maqTypes instanceof Set) || !maqTypes.size) { btn.style.display = 'none'; if (wrap) wrap.style.display = 'none'; return; }
+  const maqF = document.getElementById('dash-maq-filter')?.value || '';
+  if (!maqF) { btn.style.display = 'none'; if (wrap) wrap.style.display = 'none'; return; }
 
   const byTipo = state.abastecimentos.filter(a => {
     const ti = getTipoIgnis(a);
     if (ti === 'ignorado') return false;
-    const mapping={'__maquinas__':'maquina','__tratores__':'trator','__pesada__':'pesada','__leve__':'leve','__empilhadeiras__':'empilhadeira'};
-    if(maqTypes instanceof Set && maqTypes.size>1)return [...maqTypes].some(id=>mapping[id]===ti);
     if (maqF === '__maquinas__')      return ti === 'maquina';
     if (maqF === '__tratores__')      return ti === 'trator';
     if (maqF === '__pesada__')        return ti === 'pesada';
@@ -8019,19 +8009,13 @@ function getSelectedModelos() {
 function populatePlacaDropdown() {
   const cont = document.getElementById('placa-checkboxes');
   if(!cont) return;
-  const maqTypes=typeof getSelectedDashTypes==='function'?getSelectedDashTypes():null;
-  const maqF=maqTypes instanceof Set && maqTypes.size===1 ? [...maqTypes][0] : '';
+  const maqF = document.getElementById('dash-maq-filter')?.value||'';
   // Usa lista filtrada pelo tipo atual
   const placas = [...new Set(
     state.abastecimentos
       .filter(a => {
+        if(!maqF) return getTipoIgnis(a) !== 'ignorado';
         const t = getTipoIgnis(a);
-        if(t==='ignorado')return false;
-        if(maqTypes instanceof Set && maqTypes.size>1){
-          const mapping={'__maquinas__':'maquina','__tratores__':'trator','__pesada__':'pesada','__leve__':'leve','__empilhadeiras__':'empilhadeira'};
-          return [...maqTypes].some(id=>mapping[id]===t);
-        }
-        if(!maqF)return true;
         if(maqF==='__maquinas__') return t==='maquina';
         if(maqF==='__tratores__') return t==='trator';
         if(maqF==='__pesada__') return t==='pesada';
@@ -8049,10 +8033,6 @@ function populatePlacaDropdown() {
     </label>`
   ).join('');
   sincPlacaAllCheck();
-  const all=[...cont.querySelectorAll('.placa-check')],checked=all.filter(c=>c.checked);
-  const label=document.getElementById('placa-dropdown-label');
-  if(label)label.textContent=!checked.length||checked.length===all.length
-    ?'Todas as Placas':checked.length===1?checked[0].value:checked.length+' placas';
 }
 
 function filtrarPlacasDropdown() {
@@ -8247,16 +8227,13 @@ function getFilteredAbast(opF,maqF) {
     list = list.filter(a => placasSel.has(a.placa));
   }
 
-  if(maqF instanceof Set){
-    const mapping={'__maquinas__':'maquina','__tratores__':'trator','__pesada__':'pesada','__leve__':'leve','__empilhadeiras__':'empilhadeira'};
-    const wanted=new Set([...maqF].map(id=>mapping[id]).filter(Boolean));
-    if(wanted.size)list=list.filter(a=>wanted.has(getTipoIgnis(a)));
-  } else if(maqF === '__maquinas__')list=list.filter(a=>getTipoIgnis(a)==='maquina');
-  else if(maqF === '__tratores__')list=list.filter(a=>getTipoIgnis(a)==='trator');
-  else if(maqF === '__pesada__')list=list.filter(a=>getTipoIgnis(a)==='pesada');
-  else if(maqF === '__leve__')list=list.filter(a=>getTipoIgnis(a)==='leve');
-  else if(maqF === '__empilhadeiras__')list=list.filter(a=>getTipoIgnis(a)==='empilhadeira');
-  else if(maqF)list=list.filter(a=>a.placa===maqF);
+  if(maqF === '__maquinas__')     list=list.filter(a=>getTipoIgnis(a)==='maquina');
+  else if(maqF === '__tratores__')  list=list.filter(a=>getTipoIgnis(a)==='trator');
+  else if(maqF === '__pesada__')    list=list.filter(a=>getTipoIgnis(a)==='pesada');
+  else if(maqF === '__leve__')      list=list.filter(a=>getTipoIgnis(a)==='leve');
+  else if(maqF === '__empilhadeiras__') list=list.filter(a=>getTipoIgnis(a)==='empilhadeira');
+  else if(maqF) list=list.filter(a=>a.placa===maqF);
+  else return []; // sem filtro = não mostra nada
 
   // Filtro de modelo (dropdown Modelo — multi-select)
   const modelosSel = getSelectedModelos();
@@ -8275,30 +8252,46 @@ function renderDashboard() {
   updateFilters();
   _markPageClean('dashboard');
   const opsSelec=getSelectedOps();
-  const maqF=typeof getSelectedDashTypes==='function'?getSelectedDashTypes():null;
-  const list=getFilteredAbast(opsSelec,maqF);
-  const hasKmL=list.some(a=>{const t=getTipoIgnis(a);return t==='pesada'||t==='leve';});
-  const hasLh=list.some(a=>{const t=getTipoIgnis(a);return t==='maquina'||t==='trator'||t==='empilhadeira';});
-  const isKmL=hasKmL&&!hasLh;
-  const unidadeH=isKmL?'km':'h';
-  const unidadeMedia=isKmL?'km/L':'L/h';
-  const labelHoras=isKmL?'KM Rodados':'Horas Trabalhadas';
-  const labelMedia=isKmL?'Média KM/L':'Média Realizada';
-  const labelMeta=isKmL?'Meta KM/L':'Meta Ideal L/H';
-  const kpiHorasLabelEl=document.getElementById('kpi-horas-label');
-  if(kpiHorasLabelEl)kpiHorasLabelEl.textContent=labelHoras;
-  const kpiHorasUnitEl=document.getElementById('kpi-horas-unit');
-  if(kpiHorasUnitEl)kpiHorasUnitEl.textContent=unidadeH;
-  const kpiHorasIconEl=document.getElementById('kpi-horas-icon');
-  if(kpiHorasIconEl)kpiHorasIconEl.innerHTML=isKmL
+  const maqF=document.getElementById('dash-maq-filter')?.value||'';
+
+  // Se não tem filtro, mostra tela vazia
+  if (!maqF) {
+    document.getElementById('kpi-litros').textContent='—';
+    document.getElementById('kpi-media').textContent='—';
+    document.getElementById('kpi-horas').textContent='—';
+    document.getElementById('kpi-maquinas').textContent='—';
+    document.getElementById('kpi-meta-ideal').textContent='—';
+    document.getElementById('kpi-eficiencia').textContent='—';
+    const c=document.getElementById('dash-content');
+    if(c) c.innerHTML='<div class="empty"><div class="empty-icon">🔍</div><div class="empty-text">Selecione um tipo de frota</div><div class="empty-sub">Escolha Máquinas, Tratores, Frota Pesada, Frota Leve ou Empilhadeiras para visualizar os dados</div></div>';
+    return;
+  }
+
+  // Determina se o filtro é km/L (pesada ou leve) ou L/h (demais)
+  const isKmL = maqF === '__pesada__' || maqF === '__leve__';
+  const unidadeH = isKmL ? 'km' : 'h';
+  const unidadeMedia = isKmL ? 'km/L' : 'L/h';
+  const labelHoras = isKmL ? 'KM Rodados' : 'Horas Trabalhadas';
+  const labelMedia = isKmL ? 'Média KM/L' : 'Média Realizada';
+  const labelMeta  = isKmL ? 'Meta KM/L' : 'Meta Ideal L/H';
+
+  // Atualiza labels dos KPIs dinamicamente
+  const kpiHorasLabelEl = document.getElementById('kpi-horas-label');
+  if(kpiHorasLabelEl) kpiHorasLabelEl.textContent = labelHoras;
+  const kpiHorasUnitEl = document.getElementById('kpi-horas-unit');
+  if(kpiHorasUnitEl) kpiHorasUnitEl.textContent = unidadeH;
+  const kpiHorasIconEl = document.getElementById('kpi-horas-icon');
+  if(kpiHorasIconEl) kpiHorasIconEl.innerHTML = isKmL
     ? '<svg class="ui-icon" viewBox="0 0 24 24"><path d="M7 21 10 3"/><path d="m17 21-3-18"/><path d="M12 6v3"/><path d="M12 13v3"/></svg>'
     : '<svg class="ui-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>';
-  const kpiMediaLabelEl=document.getElementById('kpi-media-label');
-  if(kpiMediaLabelEl)kpiMediaLabelEl.textContent=labelMedia;
-  const kpiMediaUnitEl=document.getElementById('kpi-media-unit');
-  if(kpiMediaUnitEl)kpiMediaUnitEl.textContent=unidadeMedia;
-  const kpiMetaLabelEl=document.getElementById('kpi-meta-label');
-  if(kpiMetaLabelEl)kpiMetaLabelEl.textContent=labelMeta;
+  const kpiMediaLabelEl = document.getElementById('kpi-media-label');
+  if(kpiMediaLabelEl) kpiMediaLabelEl.textContent = labelMedia;
+  const kpiMediaUnitEl = document.getElementById('kpi-media-unit');
+  if(kpiMediaUnitEl) kpiMediaUnitEl.textContent = unidadeMedia;
+  const kpiMetaLabelEl = document.getElementById('kpi-meta-label');
+  if(kpiMetaLabelEl) kpiMetaLabelEl.textContent = labelMeta;
+
+  const list=getFilteredAbast(opsSelec,maqF);
 
   const _animKpi = (id, end, dec=0) => {
     const el = document.getElementById(id); if(!el) return;
@@ -8311,12 +8304,6 @@ function renderDashboard() {
     },14);
   };
 
-  // Não é permitido misturar km/L e L/h em indicadores agregados.
-  if(hasKmL && hasLh){
-    renderDashMixedSummary(list);
-    relChecarReincidencia();
-    return;
-  }
   // Se não há dados, mostra mensagem útil com sugestões
   if (list.length === 0) {
     const sugestoes = {
@@ -17737,7 +17724,6 @@ async function rcExportar() {
 </script>
 
 
-<script src="ignis-multiselect.js?v=20261118a"></script>
 <script id="ignis-stage2-polish-js">
 function getFleetTypeIconSvg(kind){
   const k=String(kind||'').replace(/^__|__$/g,'');
@@ -17750,95 +17736,14 @@ function getFleetTypeIconSvg(kind){
   return `<svg class="${cls}" viewBox="0 0 24 24"><rect x="3" y="5" width="7" height="6" rx="1.5"/><rect x="14" y="5" width="7" height="6" rx="1.5"/><rect x="7" y="15" width="10" height="5" rx="1.5"/></svg>`;
 }
 const DASH_TYPES=[['','Todos os tipos','all'],['__maquinas__','Máquinas','maquina'],['__tratores__','Tratores','trator'],['__pesada__','Frota pesada','pesada'],['__leve__','Frota leve','leve'],['__empilhadeiras__','Empilhadeiras','empilhadeira']];
-function getSelectedDashTypes(){
-  return window.ignisMultiFilter ? window.ignisMultiFilter.selected('dashType') : null;
-}
 function renderDashTypeMenu(){
-  const host=document.getElementById('dash-type-wrap');
-  if(!host||!window.ignisMultiFilter||document.getElementById('imf-dashType'))return;
-  host.innerHTML=window.ignisMultiFilter.render('dashType',{
-    caption:'Tipo de veículo',title:'Tipos de veículo',subtitle:'Selecione um ou mais tipos',
-    allLabel:'Todos os tipos',countLabel:'tipos',placeholder:'Buscar tipo',
-    options:DASH_TYPES.slice(1).map(x=>[x[0],x[1]]),
-    icon:getFleetTypeIconSvg('all'),
-    onApply:selected=>{
-      const select=document.getElementById('dash-maq-filter');
-      if(select)select.value=selected instanceof Set&&selected.size===1?[...selected][0]:'';
-      updateFilters(true);
-      populatePlacaDropdown();
-      populateModeloDropdown();
-      renderDashboard();
-    }
-  });
+  const menu=document.getElementById('dash-type-menu'); const sel=document.getElementById('dash-maq-filter'); if(!menu||!sel)return;
+  menu.innerHTML=DASH_TYPES.map(([v,l,k])=>`<button type="button" class="dash-type-option ${sel.value===v?'selected':''}" onclick="selectDashType('${v}')">${getFleetTypeIconSvg(k)}<span>${l}</span></button>`).join('');
+  const item=DASH_TYPES.find(x=>x[0]===sel.value)||DASH_TYPES[0];
+  const label=document.getElementById('dash-type-label'), icon=document.getElementById('dash-type-icon'); if(label)label.textContent=item[1]; if(icon)icon.innerHTML=getFleetTypeIconSvg(item[2]);
 }
-function toggleDashTypeDropdown(){
-  renderDashTypeMenu();
-  window.ignisMultiFilter?.toggle('dashType');
-}
-function selectDashType(value){
-  renderDashTypeMenu();
-  window.ignisMultiFilter?.setSelection('dashType',value?[value]:null);
-}
-function renderDashMixedSummary(list){
-  ['kpi-litros','kpi-maquinas','kpi-horas','kpi-media'].forEach(id=>{
-    const el=document.getElementById(id);
-    if(el&&el._kpiTimer)clearInterval(el._kpiTimer);
-  });
-  const fmt=n=>Number(n||0).toLocaleString('pt-BR',{maximumFractionDigits:2});
-  const safe=v=>String(v??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
-  const groups=new Map(),byPlate=new Map(),byOp=new Map();
-  const name={maquina:'Máquinas',trator:'Tratores',pesada:'Frota pesada',leve:'Frota leve',empilhadeira:'Empilhadeiras'};
-  const kmType=t=>t==='pesada'||t==='leve';
-  list.forEach(a=>{
-    const type=getTipoIgnis(a),litros=Number(a.litros)||0,horas=Number(a.horas)||0;
-    if(!name[type])return;
-    const op=getMaquina(a.placa)?.operacao||a.operacao||'Sem operação';
-    const add=(map,key)=>{if(!map.has(key))map.set(key,{type,op,litros:0,horas:0,placas:new Set()});const d=map.get(key);d.litros+=litros;d.horas+=horas;d.placas.add(a.placa);};
-    add(groups,type);add(byPlate,type+'|'+a.placa);add(byOp,type+'|'+op);
-  });
-  const metrics=d=>{
-    const isKm=kmType(d.type),unit=isKm?'km/L':'L/h';
-    const media=isKm?(d.litros?d.horas/d.litros:0):(d.horas?d.litros/d.horas:0);
-    const goals=[...d.placas].map(p=>Number(getMaquina(p)?.meta)||0).filter(n=>n>0);
-    const meta=goals.length?goals.reduce((s,n)=>s+n,0)/goals.length:0;
-    const efficiency=meta>0&&media>0?(isKm?media/meta:meta/media)*100:null;
-    return {...d,media,meta,unit,efficiency};
-  };
-  const totalL=list.reduce((sum,a)=>sum+(Number(a.litros)||0),0);
-  const unique=new Set(list.map(a=>a.placa)).size;
-  ['kpi-media','kpi-horas','kpi-meta-ideal','kpi-eficiencia'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent='—';});
-  const liters=document.getElementById('kpi-litros'),count=document.getElementById('kpi-maquinas');
-  if(liters)liters.textContent=fmt(totalL);if(count)count.textContent=fmt(unique);
-  const horasLabel=document.getElementById('kpi-horas-label'),horasUnit=document.getElementById('kpi-horas-unit');
-  if(horasLabel)horasLabel.textContent='Atividade (km e h)';
-  if(horasUnit)horasUnit.textContent='';
-  const mediaUnit=document.getElementById('kpi-media-unit'),metaUnit=document.getElementById('kpi-meta-unit');
-  if(mediaUnit)mediaUnit.textContent='';if(metaUnit)metaUnit.textContent='';
-  const metaSub=document.getElementById('kpi-meta-sub'),eficSub=document.getElementById('kpi-efic-sub'),maqDelta=document.getElementById('kpi-maq-delta');
-  const oldMeta=document.getElementById('kpi-media-meta');if(oldMeta)oldMeta.textContent='';
-  if(metaSub)metaSub.textContent='Metas por tipo abaixo';
-  if(eficSub)eficSub.textContent='Unidades distintas: km/L e L/h';
-  if(maqDelta)maqDelta.textContent='Tipos de frota combinados';
-  const ef=document.getElementById('kpi-eficiencia');if(ef)ef.style.color='var(--text3)';
-  const card=d=>{
-    const x=metrics(d),color=x.efficiency===null?'var(--text3)':x.efficiency>=98?'var(--green)':x.efficiency>=90?'var(--yellow)':'var(--red)';
-    return '<div class="ignis-mixed-card"><strong>'+safe(name[x.type])+'</strong><small>'+safe(x.op||'')+'</small>'
-      +'<div><b>'+fmt(x.media)+'</b> '+x.unit+'</div>'
-      +'<span>'+fmt(x.litros)+' L · '+fmt(x.horas)+(kmType(x.type)?' km':' h')+' · '+x.placas.size+' ativos</span>'
-      +'<small style="color:'+color+'">Meta: '+(x.meta?fmt(x.meta):'—')+' '+x.unit+' · Eficiência: '+(x.efficiency===null?'—':fmt(x.efficiency)+'%')+'</small></div>';
-  };
-  const op=document.getElementById('op-chart-container'),bars=document.getElementById('bar-chart-container'),rank=document.getElementById('ranking-list');
-  if(op)op.innerHTML='<p class="ignis-mixed-note">Exibição por operação e categoria. Médias calculadas separadamente por unidade.</p>'
-    +'<div class="ignis-mixed-grid">'+[...byOp.values()].map(card).join('')+'</div>';
-  if(bars)bars.innerHTML='<div class="ignis-mixed-grid">'+[...groups.values()].map(card).join('')+'</div>';
-  const worst=[...byPlate.values()].map(metrics).sort((a,b)=>(a.efficiency??99999)-(b.efficiency??99999)).slice(0,12);
-  if(rank)rank.innerHTML='<div class="ignis-mixed-grid">'+worst.map(x=>'<div class="ignis-mixed-card"><strong>'
-    +safe([...x.placas][0])+'</strong><small>'+safe(name[x.type])+'</small><div><b>'+fmt(x.media)+'</b> '+x.unit+'</div>'
-    +'<span>Eficiência: '+(x.efficiency===null?'—':fmt(x.efficiency)+'%')+'</span></div>').join('')+'</div>';
-  const legend=document.getElementById('bar-chart-legend');if(legend)legend.innerHTML='';
-  window._dashList=list;window._dashIsKmL=false;
-  if(window._selectedOps)window._selectedOps.clear();
-}
+function toggleDashTypeDropdown(){ const m=document.getElementById('dash-type-menu'); if(!m)return; ['op-dropdown-menu','placa-dropdown-menu','modelo-dropdown-menu'].forEach(id=>{const e=document.getElementById(id);if(e)e.style.display='none'}); renderDashTypeMenu(); m.style.display=m.style.display==='none'?'block':'none'; }
+function selectDashType(value){ const sel=document.getElementById('dash-maq-filter'); if(!sel)return; sel.value=value; const m=document.getElementById('dash-type-menu'); if(m)m.style.display='none'; renderDashTypeMenu(); updateFilters(true); populatePlacaDropdown(); populateModeloDropdown(); renderDashboard(); }
 function decorateCompTypeOptions(){document.querySelectorAll('.comp-type-icon').forEach(el=>{const kind=el.dataset.kind||'';if(el.dataset.iconReady===kind)return;el.innerHTML=getFleetTypeIconSvg(kind);el.dataset.iconReady=kind;});}
 const _oldSetCompMaq=window.setCompMaq;
 window.setCompMaq=function(el){
@@ -21276,6 +21181,7 @@ function ctaOnShow(){
 
 </script>
 
-<script src="planejamento2027.js?v=20261118a"></script>
+<script src="ignis-multiselect.js?v=20261118b"></script>
+<script src="planejamento2027.js?v=20261118b"></script>
 </body>
 </html>
