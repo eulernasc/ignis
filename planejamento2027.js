@@ -51,7 +51,7 @@ function ignisPlanMonthOf(a){
 }
 
 function ignisPlanMonthChoices(){
-  const months=new Set();
+  const months=new Set([ignisPlanLocalDate().slice(0,7)]);
   Object.values(state.semanas||{}).forEach(p=>{const m=String(p?.dataFim||p?.dataIni||'').slice(0,7);if(/^\d{4}-\d\d$/.test(m))months.add(m);});
   (state.abastecimentos||[]).forEach(a=>{if(!a?.periodoId){const m=String(a?.data||'').slice(0,7);if(/^\d{4}-\d\d$/.test(m))months.add(m);}});
   ignisPlanConfig().tratativas.forEach(t=>{const m=String(t?.mes||'');if(/^\d{4}-\d{2}$/.test(m))months.add(m);});
@@ -148,9 +148,10 @@ function ignisPlanSummary(period,empilhadeiras=ignisPlanEmpilhadeiraPlates()){
       acima:eficiencia!==null&&eficiencia>limiteSuperior};
   });
 }
+function ignisPlanCaseActive(t){return ignisPlanActionState(t)!=='realizada';}
 function ignisPlanCasesInMonths(months,grupo,placa){
   const set=new Set(months);
-  return ignisPlanConfig().tratativas.filter(t=>set.has(t.mes)&&t.grupo===grupo&&String(t.placa).toUpperCase()===String(placa).toUpperCase())
+  return ignisPlanConfig().tratativas.filter(t=>(set.has(t.mes)||ignisPlanCaseActive(t))&&t.grupo===grupo&&String(t.placa).toUpperCase()===String(placa).toUpperCase())
     .sort((a,b)=>String(b.criadoEm||'').localeCompare(String(a.criadoEm||'')));
 }
 
@@ -176,7 +177,7 @@ function ignisPlanFmtDate(date){
 }
 function ignisPlanCauseName(t){return t?.categoria||'Causa não informada';}
 function ignisPlanCases(mes,grupo,placa){
-  return ignisPlanConfig().tratativas.filter(t=>t.mes===mes&&t.grupo===grupo&&String(t.placa).toUpperCase()===String(placa).toUpperCase())
+  return ignisPlanConfig().tratativas.filter(t=>t.grupo===grupo&&String(t.placa).toUpperCase()===String(placa).toUpperCase())
     .sort((a,b)=>String(b.criadoEm||'').localeCompare(String(a.criadoEm||'')));
 }
 function ignisPlanSafeParam(s){return encodeURIComponent(String(s||'')).replace(/'/g,'%27');}
@@ -324,17 +325,17 @@ function ignisPlanFilterMarkup({period,months,mon,faixaFilter,groupFilter,status
    ${window.ignisMultiFilter.render("planOperation",{
      caption:"Operação",title:"Operações",subtitle:"Selecione uma ou mais operações",
      allLabel:"Todas as operações",countLabel:"operações",placeholder:"Buscar operação",
-     className:"ignis-filter-operation",options:operations.map(op=>[op,op]),
+     className:"ignis-filter-operation",allowEmpty:true,emptyLabel:"Nenhuma operação",options:operations.map(op=>[op,op]),
      initial:operacaoFilter?[operacaoFilter]:[],onApply:()=>ignisPlanRender()})}
    ${window.ignisMultiFilter.render("planPlate",{
      caption:"Placa / equipamento",title:"Placas",subtitle:"Selecione uma ou mais placas",
      allLabel:"Todas as placas",countLabel:"placas",placeholder:"Buscar placa",
-     className:"ignis-filter-plate",options:placas.map(placa=>[placa,placa]),
+     className:"ignis-filter-plate",allowEmpty:true,emptyLabel:"Nenhuma placa",options:placas.map(placa=>[placa,placa]),
      initial:placaFilter?[placaFilter]:[],onApply:()=>ignisPlanRender()})}
    ${window.ignisMultiFilter.render("planGroup",{
      caption:"Tipo de veículo",title:"Tipos de veículo",subtitle:"Selecione um ou mais tipos",
      allLabel:"Todos os tipos",countLabel:"tipos",placeholder:"Buscar tipo",
-     className:"ignis-filter-group",options:Object.entries(labels),
+     className:"ignis-filter-group",allowEmpty:true,emptyLabel:"Nenhum tipo",options:Object.entries(labels),
      initial:groupFilter?[groupFilter]:[],onApply:()=>ignisPlanRender()})}
    <label class="ignis-filter-control ignis-filter-status"><span class="ignis-filter-caption">Situação</span>
      <select class="ignis-filter-field" onchange="window._ignisPlanStatus=this.value;ignisPlanRender()">
@@ -368,7 +369,7 @@ function ignisPlanRender(){
   const empilhadeiras=ignisPlanEmpilhadeiraPlates();
   const validCase=t=>!empilhadeiras.has(String(t?.placa||'').trim().toUpperCase());
   const list=ignisPlanSummary(period.mode==='custom'?period:mon,empilhadeiras),
-    includedMonths=new Set(period.months),cases=conf.tratativas.filter(t=>validCase(t)&&includedMonths.has(t.mes));
+    includedMonths=new Set(period.months),cases=conf.tratativas.filter(t=>validCase(t)&&(includedMonths.has(t.mes)||ignisPlanCaseActive(t)));
   const allOverdue=conf.tratativas.filter(t=>validCase(t)&&ignisPlanOverdue(t));
   const rows=list.filter(x=>x.abaixo||x.acima||cases.some(t=>t.placa===x.placa&&t.grupo===x.grupo))
     .map(x=>({...x,ocorrencias:ignisPlanCasesInMonths(period.months,x.grupo,x.placa)}));
@@ -381,8 +382,14 @@ function ignisPlanRender(){
   }
   const desvio=x=>x.eficiencia===null?0:x.abaixo?x.limite-x.eficiencia:x.acima?x.eficiencia-x.limiteSuperior:0;
   rows.sort((a,b)=>desvio(b)-desvio(a)||a.placa.localeCompare(b.placa));
-  const operations=[...new Set(rows.map(x=>String(x.operacao||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
-  const placas=[...new Set(rows.map(x=>x.placa))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
+  const groupBefore=window.ignisMultiFilter.selected('planGroup');
+  const rowsByGroup=rows.filter(x=>groupBefore===null||groupBefore.has(x.grupo));
+  const operations=[...new Set(rowsByGroup.map(x=>String(x.operacao||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
+  const opsBefore=window.ignisMultiFilter.selected('planOperation');
+  const matchedOps=opsBefore instanceof Set?new Set([...opsBefore].filter(op=>operations.includes(op))):null;
+  const opsForPlates=opsBefore instanceof Set&&opsBefore.size>0&&!matchedOps.size?null:matchedOps;
+  const placas=[...new Set(rowsByGroup.filter(x=>opsForPlates===null||opsForPlates.has(x.operacao)).map(x=>x.placa))]
+    .sort((a,b)=>a.localeCompare(b,'pt-BR'));
   const uncovered=rows.filter(x=>!x.ocorrencias.length).length;
   const unresolved=cases.filter(t=>ignisPlanActionState(t)!=='realizada').length;
   const done=cases.filter(t=>ignisPlanActionState(t)==='realizada').length;
@@ -395,9 +402,9 @@ function ignisPlanRender(){
   const seen=rows.filter(x=>{
     if(faixaFilter==='abaixo'&&!x.abaixo)return false;
     if(faixaFilter==='acima'&&!x.acima)return false;
-    if(selectedOperations instanceof Set&&selectedOperations.size&&!selectedOperations.has(x.operacao))return false;
-    if(selectedPlates instanceof Set&&selectedPlates.size&&!selectedPlates.has(x.placa))return false;
-    if(selectedGroups instanceof Set&&selectedGroups.size&&!selectedGroups.has(x.grupo))return false;
+    if(selectedOperations instanceof Set&&!selectedOperations.has(x.operacao))return false;
+    if(selectedPlates instanceof Set&&!selectedPlates.has(x.placa))return false;
+    if(selectedGroups instanceof Set&&!selectedGroups.has(x.grupo))return false;
     if(statusFilter==='sem-tratativa'&&x.ocorrencias.length)return false;
     if(statusFilter==='pendente'&&!x.ocorrencias.some(t=>ignisPlanActionState(t)!=='realizada'))return false;
     if(statusFilter==='vencido'&&!x.ocorrencias.some(ignisPlanOverdue))return false;
@@ -415,7 +422,7 @@ function ignisPlanRender(){
     <div class="p27-stat"><span>Abaixo da meta</span><strong>${list.filter(x=>x.abaixo).length}</strong><small>Veículos abaixo do limite</small></div>
     <div class="p27-stat p27-stat-high"><span>Acima de ${format(conf.limiteSuperior)}%</span><strong>${list.filter(x=>x.acima).length}</strong><small>Acima da faixa superior</small></div>
     <div class="p27-stat"><span>Sem registro</span><strong>${uncovered}</strong><small>Veículos aguardando causa</small></div>
-    <div class="p27-stat"><span>Ações pendentes</span><strong>${unresolved}</strong><small>No período escolhido</small></div>
+    <div class="p27-stat"><span>Ações pendentes</span><strong>${unresolved}</strong><small>Ativas e do período</small></div>
     <div class="p27-stat p27-stat-overdue"><span>Prazos vencidos</span><strong>${allOverdue.length}</strong><small>Todos os períodos · <button type="button" onclick="ignisPlanShowOverdue()">Ver pendências</button></small></div>
     <div class="p27-stat"><span>Ações realizadas</span><strong>${done}</strong><small>No período escolhido</small></div>
   </div>
@@ -450,7 +457,7 @@ function ignisPlanRender(){
       }).join(''):`<tr><td colspan="7" class="p27-empty">${list.length?'Nenhum veículo corresponde aos filtros.':'Nenhum dado de abastecimento encontrado no período selecionado. Ajuste as datas ou importe relatórios.'}</td></tr>`}
     </tbody></table></div>
   </div>
-  <div id="p27-editor-root"></div>`;
+  `;
 }
 
 function ignisPlanSearch(v){
@@ -462,14 +469,20 @@ function ignisPlanSearch(v){
   const field=document.getElementById('p27-search');if(field){field.focus();field.setSelectionRange(Math.min(caret,field.value.length),Math.min(caret,field.value.length));}
 }
 
+function ignisPlanModalRoot(){
+  let root=document.getElementById('p27-editor-root');
+  if(!root){root=document.createElement('div');root.id='p27-editor-root';}
+  if(root.parentElement!==document.body)document.body.appendChild(root);
+  return root;
+}
 function ignisPlanClose(){
   const root=document.getElementById('p27-editor-root');
-  if(root)root.innerHTML='';
+  if(root)root.remove();
   document.body?.classList.remove('p27-modal-open');
 }
 
 function ignisPlanShowOverdue(){
-  const root=document.getElementById('p27-editor-root');if(!root)return;
+  const root=ignisPlanModalRoot();
   const empilhadeiras=ignisPlanEmpilhadeiraPlates();
   const entries=ignisPlanConfig().tratativas.filter(t=>
     !empilhadeiras.has(String(t?.placa||'').trim().toUpperCase())&&ignisPlanOverdue(t))
@@ -492,11 +505,11 @@ function ignisPlanShowOverdue(){
 function ignisPlanList(encoded,grupo,period){
   const placa=decodeURIComponent(encoded),mes=decodeURIComponent(period||window._ignisPlanMonth);
   const records=ignisPlanCases(mes,grupo,placa);
-  const root=document.getElementById('p27-editor-root');if(!root)return;
+  const root=ignisPlanModalRoot();
   root.innerHTML=`<div class="p27-backdrop" onclick="if(event.target===this)ignisPlanClose()">
     <section class="p27-editor p27-wide" role="dialog" aria-modal="true" aria-label="Ocorrências por veículo">
       <div class="p27-editor-head"><div><strong>${ignisPlanEsc(placa)} · Histórico de ocorrências</strong>
-      <small>${ignisPlanMonthLabel(mes)} · ${records.length} causa(s) registrada(s)</small></div>
+      <small>Histórico completo · ${records.length} ocorrência(s)</small></div>
       <button type="button" onclick="ignisPlanClose()" aria-label="Fechar">×</button></div>
       <div class="p27-case-list">${records.map(t=>`
         <article class="p27-case-card">
@@ -549,7 +562,7 @@ function ignisPlanOpen(encoded,grupo,caseEncoded='',period=''){
   const caseId=caseEncoded?decodeURIComponent(caseEncoded):'';
   const conf=ignisPlanConfig(),original=caseId?conf.tratativas.find(t=>t.id===caseId):null;
   if(caseId&&!original){showToast('Esta ocorrência não foi encontrada. Atualize a aba.','error');return;}
-  const old=original||{},root=document.getElementById('p27-editor-root');if(!root)return;
+  const old=original||{},root=ignisPlanModalRoot();
   const known=['Problema mecânico','Dirigibilidade','Parâmetro'];
   const categoria=known.includes(old.categoria)?old.categoria:'';
   const action=ignisPlanActionState(old);
@@ -643,6 +656,7 @@ async function ignisPlanSubmit(ev,encoded,grupo,caseEncoded='',period=''){
   try{
     const ok=await saveState({mode:'light',keys:['planejamento2027'],immediate:true});
     if(!ok)throw new Error(window._lastFirebaseSaveError||'A gravação não foi confirmada pelo Firebase.');
+    ignisPlanClose();
     ignisPlanRender();
     showToast('Ocorrência salva e histórico atualizado.','success');
   }catch(err){
