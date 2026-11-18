@@ -1,0 +1,17 @@
+// FRAGMENTO PARA REVISAR E MESCLAR nas regras REAIS DO FIRESTORE.
+// NÃO É UM ARQUIVO DE REGRAS COMPLETO. NÃO FAÇA DEPLOY ISOLADO.
+// Dados e permissões acessíveis SOMENTE pelo Cloud Functions Admin SDK;
+// o SDK cliente não pode ler, atualizar ou apagar essas coleções.
+// Importante: regras Firestore com wildcard allow read,write if true
+// ainda permitirão acesso, porque permissões de regras são OR.
+// É obrigatória a remoção da permissão global e a auditoria das regras
+// existentes ANTES de considerar estas coleções protegidas.
+match /ignis_secure_cases/{caseId} {
+  allow read, write: if false;
+  match /events/{eventId} {
+    allow read, write: if false;
+  }
+}
+match /ignis_case_roles/{uid} {
+  allow read, write: if false;
+}
