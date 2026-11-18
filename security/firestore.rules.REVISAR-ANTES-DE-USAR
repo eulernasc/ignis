@@ -1,0 +1,36 @@
+// MODELO INTEGRAL PARA REVISÃO. NÃO PUBLICAR SEM COMPARAR COM REGRAS REMOTAS.
+// Escopo baseado nas consultas encontradas no index.html em 18/11/2026.
+// A coleção legada fueltracker continua pública conforme comportamento anterior;
+// NÃO representa segurança de todo o IGNIS. Somente novos registros de ocorrências
+// são acessados via Admin SDK nas Cloud Functions autenticadas.
+//
+// As regras do Firestore somam permissões (OR). Nunca manter outro wildcard
+// allow read/write true que cubra ignis_secure_cases ou ignis_case_roles.
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Compatibilidade temporária com o IGNIS antigo.
+    match /fueltracker/{legacyDocumentId} {
+      allow get, list, create, update, delete: if true;
+    }
+
+    // Acesso direto proibido. Auth e autorização ocorrem nas Cloud Functions.
+    match /ignis_secure_cases/{caseId} {
+      allow read, write: if false;
+      match /events/{eventId} {
+        allow read, write: if false;
+      }
+    }
+    match /ignis_case_roles/{uid} {
+      allow read, write: if false;
+    }
+    match /ignis_case_role_events/{eventId} {
+      allow read, write: if false;
+    }
+
+    // Bloqueia qualquer coleção nova que não foi explicitamente revisada.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
