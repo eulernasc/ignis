@@ -22,9 +22,9 @@ function ignisPlanEmpilhadeiraPlates(){
   const inclui=item=>{
     const placa=String(item?.placa||'').trim().toUpperCase();
     if(!placa)return;
-    const tipo=String(item?.tipoIgnis||item?.tipo||'').toLowerCase();
+    const tipo=[item?.tipoIgnis,item?.tipo,item?.tipoVeiculo,item?.categoria].filter(Boolean).join(' ').toLowerCase();
     const modelo=String(item?.modelo||'').toUpperCase();
-    if(placa.startsWith('EMP')||tipo.includes('empilhadeira')||modelo.includes('MOFFETT'))
+    if(placa.startsWith('EMP')||tipo.includes('empilhadeira')||modelo.includes('MOFFETT')||modelo.includes('EMPILHADEIRA'))
       placas.add(placa);
   };
   (state.maquinas||[]).forEach(inclui);
