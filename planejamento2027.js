@@ -379,6 +379,90 @@ function ignisPlanCasesSearch(value){
   if(input){input.focus();input.setSelectionRange(Math.min(pos,input.value.length),Math.min(pos,input.value.length));}
 }
 
+const ignisPlanCaseMonthNames=['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+function ignisPlanCaseMonthGrid(year,selected){
+  const current=ignisPlanLocalDate().slice(0,7);
+  return ignisPlanCaseMonthNames.map((name,i)=>{
+    const value=year+'-'+String(i+1).padStart(2,'0');
+    const active=selected===value,now=value===current;
+    return '<button type="button" class="p27-month-cell'+(active?' is-selected':'')+(now?' is-current':'')+
+      '" aria-label="'+name+' de '+year+'" aria-pressed="'+active+
+      '" onclick="ignisPlanCaseMonthSelect(\''+value+'\')">'+name+'</button>';
+  }).join('');
+}
+function ignisPlanCaseMonthMarkup(month){
+  const valid=/^\\d{4}-(0[1-9]|1[0-2])$/.test(month);
+  const display=valid?ignisPlanMonthLabel(month):'Todos os meses';
+  const year=Number((valid?month:ignisPlanLocalDate()).slice(0,4));
+  return `<div class="ignis-filter-control p27-month-filter" id="p27-month-filter">
+    <span class="ignis-filter-caption" id="p27-month-caption">Mês de abertura / referência</span>
+    <button type="button" class="p27-month-trigger" aria-expanded="false" aria-haspopup="dialog"
+      aria-labelledby="p27-month-caption p27-month-value" onclick="ignisPlanCaseMonthToggle()">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4M17 3v4M3 10h18"/></svg>
+      <span id="p27-month-value">${ignisPlanEsc(display)}</span>
+      <svg class="p27-month-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg>
+    </button>
+    <div class="p27-month-popover" role="dialog" aria-label="Escolher mês da ocorrência" hidden>
+      <div class="p27-month-header">
+        <span class="p27-month-title">Selecionar mês</span>
+        <div class="p27-month-year-nav">
+          <button type="button" aria-label="Ano anterior" onclick="ignisPlanCaseMonthMove(-1)">&#8249;</button>
+          <strong class="p27-month-year">${year}</strong>
+          <button type="button" aria-label="Ano seguinte" onclick="ignisPlanCaseMonthMove(1)">&#8250;</button>
+        </div>
+      </div>
+      <div class="p27-month-grid" role="group" aria-label="Escolher um dos doze meses">
+        ${ignisPlanCaseMonthGrid(year,month)}
+      </div>
+      <div class="p27-month-footer">
+        <button type="button" onclick="ignisPlanCaseMonthSelect('')">Todos os meses</button>
+        <button type="button" class="p27-month-now" onclick="ignisPlanCaseMonthSelect(ignisPlanLocalDate().slice(0,7))">Este mês</button>
+      </div>
+    </div>
+  </div>`;
+}
+function ignisPlanCaseMonthClose(){
+  const picker=document.getElementById('p27-month-filter');
+  if(!picker)return;
+  picker.classList.remove('is-open');
+  const popover=picker.querySelector('.p27-month-popover');
+  if(popover)popover.hidden=true;
+  picker.querySelector('.p27-month-trigger')?.setAttribute('aria-expanded','false');
+}
+function ignisPlanCaseMonthToggle(){
+  const picker=document.getElementById('p27-month-filter');
+  if(!picker)return;
+  if(picker.classList.contains('is-open')){ignisPlanCaseMonthClose();return;}
+  const selected=String(window._ignisCaseMonth||'');
+  const year=Number((/^\\d{4}-\\d{2}$/.test(selected)?selected:ignisPlanLocalDate()).slice(0,4));
+  picker.querySelector('.p27-month-year').textContent=String(year);
+  picker.querySelector('.p27-month-grid').innerHTML=ignisPlanCaseMonthGrid(year,selected);
+  picker.classList.add('is-open');
+  picker.querySelector('.p27-month-popover').hidden=false;
+  picker.querySelector('.p27-month-trigger')?.setAttribute('aria-expanded','true');
+}
+function ignisPlanCaseMonthMove(direction){
+  const picker=document.getElementById('p27-month-filter');
+  if(!picker)return;
+  const yearNode=picker.querySelector('.p27-month-year');
+  const year=Number(yearNode?.textContent||0)+Number(direction);
+  if(!Number.isInteger(year)||year<1900||year>2100)return;
+  yearNode.textContent=String(year);
+  picker.querySelector('.p27-month-grid').innerHTML=ignisPlanCaseMonthGrid(year,String(window._ignisCaseMonth||''));
+}
+function ignisPlanCaseMonthSelect(value){
+  if(value&&!/^\\d{4}-(0[1-9]|1[0-2])$/.test(value))return;
+  window._ignisCaseMonth=value;
+  ignisPlanRender();
+}
+document.addEventListener('click',event=>{
+  const picker=document.getElementById('p27-month-filter');
+  if(picker&&!picker.contains(event.target))ignisPlanCaseMonthClose();
+});
+document.addEventListener('keydown',event=>{
+  if(event.key==='Escape')ignisPlanCaseMonthClose();
+});
+
 function ignisPlanCasesReset(){
   window._ignisCaseQuery='';window._ignisCaseStatus='todas';window._ignisCaseMonth='';
   ['planCasesGroup','planCasesOperation','planCasesPlate'].forEach(k=>window.ignisMultiFilter?.reset(k));
@@ -441,8 +525,7 @@ function ignisPlanCasesView(root,conf){
         ${[['todas','Todas as situações'],['abertas','Em aberto'],['vencidas','Prazos vencidos'],['concluidas','Concluídas']]
           .map(([value,label])=>`<option value="${value}" ${status===value?'selected':''}>${label}</option>`).join('')}
         </select></label>
-      <label class="ignis-filter-control"><span class="ignis-filter-caption">Mês de abertura / referência</span>
-        <input class="ignis-filter-field" type="month" value="${ignisPlanEsc(month)}" onchange="window._ignisCaseMonth=this.value;ignisPlanRender()"></label>
+      ${ignisPlanCaseMonthMarkup(month)}
       <label class="ignis-filter-control ignis-filter-search"><span class="ignis-filter-caption">Busca</span>
         <input class="ignis-filter-field" id="p27-case-search" type="search" value="${ignisPlanEsc(window._ignisCaseQuery||'')}"
           placeholder="Placa, causa ou responsável" oninput="ignisPlanCasesSearch(this.value)"></label>
