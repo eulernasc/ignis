@@ -15,3 +15,6 @@ match /ignis_secure_cases/{caseId} {
 match /ignis_case_roles/{uid} {
   allow read, write: if false;
 }
+match /ignis_case_role_events/{eventId} {
+  allow read, write: if false;
+}
