@@ -195,6 +195,26 @@ function ignisPlanHistory(t){
   ||'<div class="p27-legacy-note">Ocorrência anterior a esta versão. As alterações antigas não possuem histórico detalhado; as próximas atualizações serão registradas.</div>';
 }
 
+function ignisPlanCompactCaseSummary(placa,grupo,records){
+  if(!records.length)return '<span class="p27-compact-empty">Sem ocorrência</span>';
+  const pending=records.filter(ignisPlanCaseActive);
+  const completed=records.length-pending.length;
+  const late=pending.filter(ignisPlanOverdue).length;
+  const next=pending.filter(t=>/^\\d{4}-\\d{2}-\\d{2}$/.test(String(t.prazo||'')))
+    .sort((a,b)=>String(a.prazo).localeCompare(String(b.prazo)))[0];
+  return `<div class="p27-compact-cases">
+    <div class="p27-compact-badges">
+      ${pending.length?`<span class="p27-compact-badge p27-compact-pending">${pending.length} pendente${pending.length===1?'':'s'}</span>`:''}
+      ${completed?`<span class="p27-compact-badge p27-compact-done">${completed} concluída${completed===1?'':'s'}</span>`:''}
+      ${late?`<span class="p27-compact-badge p27-compact-overdue">${late} vencida${late===1?'':'s'}</span>`:''}
+    </div>
+    ${next?`<span class="p27-compact-next">Próximo prazo: <strong>${ignisPlanFmtDate(next.prazo)}</strong></span>`:''}
+    <button type="button" class="p27-compact-link" onclick="ignisPlanGoToCases('${ignisPlanSafeParam(placa)}','${ignisPlanSafeParam(grupo)}')">
+      Ver histórico (${records.length})
+    </button>
+  </div>`;
+}
+
 function ignisPlanInlineCase(t){
   const key=ignisPlanSafeParam(t.id),s=ignisPlanActionState(t),overdue=ignisPlanOverdue(t);
   const isDone=s==='realizada';
@@ -365,6 +385,22 @@ function ignisPlanSwitchTab(tab){
   ignisPlanClose();
   window._ignisPlanTab=tab;
   ignisPlanRender();
+}
+
+function ignisPlanGoToCases(encodedPlaca,encodedGrupo){
+  const placa=decodeURIComponent(encodedPlaca).trim().toUpperCase();
+  const grupo=decodeURIComponent(encodedGrupo);
+  if(!placa||!['pesada','leve','maquinas'].includes(grupo))return;
+  ignisPlanClose();
+  window._ignisPlanTab='ocorrencias';
+  window._ignisCaseMonth='';
+  window._ignisCaseStatus='todas';
+  window._ignisCaseQuery='';
+  ['planCasesGroup','planCasesOperation','planCasesPlate'].forEach(k=>window.ignisMultiFilter?.reset(k));
+  ignisPlanRender();
+  window.ignisMultiFilter?.setSelection('planCasesGroup',[grupo]);
+  window.ignisMultiFilter?.setSelection('planCasesPlate',[placa]);
+  document.getElementById('page-planejamento')?.scrollIntoView?.({behavior:'smooth',block:'start'});
 }
 
 function ignisPlanCaseOperation(t){
@@ -551,8 +587,21 @@ function ignisPlanCasesView(root,conf){
           </div>
           <div class="p27-occ-buttons">
             <button type="button" class="p27-action" onclick="ignisPlanOpen('${plate}','${group}','${id}','${mes}')">Detalhes / editar</button>
-            <button type="button" class="p27-action p27-secondary" onclick="ignisPlanOpen('${plate}','${group}','','${ignisPlanLocalDate().slice(0,7)}')">Nova ocorrência</button>
-          </div></article>`;
+            ${!done?`<button type="button" class="p27-mini primary" onclick="ignisPlanQuickFinish('${id}')">Concluir</button>
+              <button type="button" class="p27-mini" onclick="ignisPlanToggleExtend('${id}')">Prorrogar</button>`:''}
+            <button type="button" class="p27-mini" onclick="ignisPlanOpen('${plate}','${group}','','${ignisPlanLocalDate().slice(0,7)}')">Nova ocorrência</button>
+            <button type="button" class="p27-mini danger" onclick="ignisPlanDeleteCase('${id}')">Excluir</button>
+          </div>
+          ${!done?`<div class="p27-extend" id="p27-extend-${id}" hidden>
+            <label>Nova data<input type="date" min="${ignisPlanLocalDate()}"
+              value="${t.prazo&&t.prazo>=ignisPlanLocalDate()?ignisPlanEsc(t.prazo):ignisPlanLocalDate()}"></label>
+            <label>Justificativa<input type="text" maxlength="220" placeholder="Motivo da prorrogação"></label>
+            <div class="p27-inline-buttons">
+              <button type="button" class="p27-mini primary" onclick="ignisPlanExtend('${id}')">Salvar novo prazo</button>
+              <button type="button" class="p27-mini" onclick="ignisPlanToggleExtend('${id}')">Cancelar</button>
+            </div>
+          </div>`:''}
+          </article>`;
       }).join(''):'<div class="p27-empty">Nenhuma ocorrência encontrada com esses filtros.</div>'}
     </div>
   </div>`;
@@ -619,6 +668,13 @@ function ignisPlanRender(){
     if(statusFilter==='registro-concluido'&&!x.ocorrencias.some(t=>ignisPlanRegisterState(t)==='Concluída'))return false;
     return !q||(x.placa+' '+x.operacao+' '+x.ocorrencias.map(t=>t.responsavel+' '+t.categoria).join(' ')).toUpperCase().includes(q);
   });
+  const historyByPlate=new Map();
+  for(const t of conf.tratativas){
+    if(!validCase(t))continue;
+    const key=String(t.grupo||'')+'|'+String(t.placa||'').trim().toUpperCase();
+    if(!historyByPlate.has(key))historyByPlate.set(key,[]);
+    historyByPlate.get(key).push(t);
+  }
   const format=n=>Number(n).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1});
   root.innerHTML=`
   <div class="page-header"><div class="page-header-title"><div class="page-title">Acompanhamento de Performance</div>
@@ -643,12 +699,12 @@ function ignisPlanRender(){
     </div>
   </div>
   <div class="p27-panel"><div class="p27-panel-head"><div><strong>Acompanhamento por veículo</strong>
-    <p>Cada veículo pode ter várias ocorrências, com causas, responsáveis e prazos independentes.</p></div></div>
+    <p>Resumo de cada veículo. Consulte detalhes, prazos e histórico completo na aba Ocorrências.</p></div></div>
     ${filterMarkup}
     <div class="p27-results-count">${seen.length} veículo(s) encontrado(s)</div>
     <div class="p27-table-wrap"><table class="p27-table"><thead><tr>
       <th>Placa / operação</th><th>Grupo</th><th>Real / meta</th><th>Eficiência</th>
-      <th>Faixa de referência</th><th>Ocorrências / situação</th><th>Ações</th></tr></thead><tbody>
+      <th>Faixa de referência</th><th>Ocorrências</th><th>Ações</th></tr></thead><tbody>
       ${seen.length?seen.map(x=>{
         const total=x.ocorrencias.length,pendentes=x.ocorrencias.filter(t=>ignisPlanActionState(t)!=='realizada').length,
           vencidos=x.ocorrencias.filter(ignisPlanOverdue).length,ef=x.eficiencia===null?'—':format(x.eficiencia)+'%',
@@ -660,7 +716,7 @@ function ignisPlanRender(){
           <td><strong class="${x.abaixo?'p27-bad':x.acima?'p27-high':'p27-good'}">${ef}</strong>
             ${x.abaixo?'<small class="p27-bad">Abaixo da meta</small>':x.acima?'<small class="p27-high">Acima do limite</small>':''}</td>
           <td>${format(x.limite)}% a ${format(x.limiteSuperior)}%</td>
-          <td><div class="p27-inline-list">${x.ocorrencias.length?x.ocorrencias.map(ignisPlanInlineCase).join(""):'<span class="p27-pill p27-pending">Sem ocorrência</span>'}</div></td>
+          <td>${ignisPlanCompactCaseSummary(x.placa,x.grupo,historyByPlate.get(x.grupo+'|'+String(x.placa).toUpperCase())||[])}</td>
           <td><div class="p27-actions"><button class="p27-action" onclick="ignisPlanOpen('${id}','${x.grupo}','','${caseMonth}')">Nova ocorrência</button></div></td></tr>`;
       }).join(''):`<tr><td colspan="7" class="p27-empty">${list.length?'Nenhum veículo corresponde aos filtros.':'Nenhum dado de abastecimento encontrado no período selecionado. Ajuste as datas ou importe relatórios.'}</td></tr>`}
     </tbody></table></div>
