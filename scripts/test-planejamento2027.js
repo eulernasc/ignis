@@ -164,10 +164,44 @@ async function main(){
   assert.ok(conf.excluidas[secondId],'exclusão mantém tombstone contra restauração por outra sessão');
   assert.ok(saveOptions.every(o=>Array.isArray(o.keys)&&o.keys.length===1&&o.keys[0]==='planejamento2027'),
     'salvamento deve ser restrito ao módulo');
+  // Empilhadeiras: devem sumir desta aba, mas máquinas e tratores permanecem.
+  const beforeFilteringSaveCount=saves;
+  state.maquinas=[
+    {placa:'EMP1234',tipoIgnis:'empilhadeira'},
+    {placa:'MOF1200',tipoIgnis:'maquina',modelo:'MOFFETT M4'}
+  ];
+  state.abastecimentos.push(
+    {placa:'EMP1234',data:'2026-11-11',tipoIgnis:'empilhadeira',litros:500,horas:1,metaIdeal:10,operacao:'Ribas'},
+    {placa:'MOF1200',data:'2026-11-11',tipoIgnis:'maquina',modelo:'MOFFETT M4',litros:600,horas:1,metaIdeal:10,operacao:'Ribas'},
+    {placa:'TRA0069',data:'2026-11-11',tipoIgnis:'trator',litros:120,horas:10,metaIdeal:10,operacao:'Ribas'},
+    {placa:'MAQ0155',data:'2026-11-11',tipoIgnis:'maquina',litros:120,horas:10,metaIdeal:10,operacao:'Ribas'}
+  );
+  const forkliftCases=[
+    {id:'forklift-case-1',mes:'2026-11',placa:'EMP1234',grupo:'maquinas',categoria:'Problema mecânico',acaoRealizada:false,prazo:'2026-01-01'},
+    {id:'forklift-case-2',mes:'2026-11',placa:'MOF1200',grupo:'maquinas',categoria:'Problema mecânico',acaoRealizada:false,prazo:'2026-01-01'}
+  ];
+  conf.tratativas.push(...forkliftCases);
+  const summaryWithoutForklifts=context.ignisPlanSummary('2026-11');
+  const summaryPlates=summaryWithoutForklifts.map(x=>x.placa);
+  assert.ok(summaryPlates.includes('TRA0069'),'Tratores devem continuar sendo Máquinas');
+  assert.ok(summaryPlates.includes('MAQ0155'),'Máquinas normais permanecem no acompanhamento');
+  assert.ok(!summaryPlates.includes('EMP1234'),'Empilhadeira explícita não entra na média');
+  assert.ok(!summaryPlates.includes('MOF1200'),'Equipamento MOFFETT não entra na média mesmo cadastrado como máquina');
+  assert.equal(context.ignisPlanGroup('empilhadeira'),'','Empilhadeira não pertence ao grupo Máquinas no Acompanhamento');
+  context.ignisPlanRender();
+  const afterForkliftHtml=page.innerHTML;
+  assert.match(afterForkliftHtml,/TRA0069/);
+  assert.match(afterForkliftHtml,/MAQ0155/);
+  assert.doesNotMatch(afterForkliftHtml,/EMP1234|MOF1200/,'Empilhadeiras e ocorrências antigas ficam ocultas');
+  context.ignisPlanShowOverdue();
+  assert.doesNotMatch(modal.innerHTML,/EMP1234|MOF1200/,'Prazos vencidos de empilhadeiras não contam na aba');
+  assert.equal(conf.tratativas.some(x=>x.id==='forklift-case-1'),true,'Ocorrências históricas não podem ser apagadas');
+  assert.equal(saves,beforeFilteringSaveCount,'Exclusão visual não deve gravar no Firebase');
+
   const index=fs.readFileSync(path.resolve(__dirname,'../index.html'),'utf8');
   assert.ok(index.includes("const scopedPlanning=mode==='light'"),'fluxo segmentado está disponível');
   assert.match(index,/filtros-unificados\.css\?v=/,'CSS global de filtros carregado');
-  assert.match(index,/planejamento2027\.js\?v=20261118b/,'novo módulo sem cache antigo');
+  assert.match(index,/planejamento2027\.js\?v=20261118c/,'novo módulo sem cache antigo');
   const filterCss=fs.readFileSync(path.resolve(__dirname,'../filtros-unificados.css'),'utf8');
   assert.match(filterCss,/button\.dash-dropdown-done/,'botão Concluir possui padrão visual');
   for(const pageId of ['page-dashboard','page-abastecimentos','page-arla','page-comparativo','page-motoristas','page-fechamento'])
