@@ -353,6 +353,128 @@ function ignisPlanFilterMarkup({period,months,mon,faixaFilter,groupFilter,status
  ${period.mode==='custom'?'<p class="p27-period-hint">A eficiência usa as datas individuais de abastecimento dentro do intervalo. Ocorrências dos meses abrangidos permanecem acessíveis.</p>':''}`;
 }
 
+function ignisPlanTabs(){
+  const cases=window._ignisPlanTab==='ocorrencias';
+  return `<nav class="p27-tabs" aria-label="Áreas de Acompanhamento">
+    <button type="button" class="${!cases?'is-active':''}" onclick="ignisPlanSwitchTab('performance')">Performance</button>
+    <button type="button" class="${cases?'is-active':''}" onclick="ignisPlanSwitchTab('ocorrencias')">Ocorrências</button></nav>`;
+}
+
+function ignisPlanSwitchTab(tab){
+  if(!['performance','ocorrencias'].includes(tab))return;
+  ignisPlanClose();
+  window._ignisPlanTab=tab;
+  ignisPlanRender();
+}
+
+function ignisPlanCaseOperation(t){
+  return String(t.operacao||(typeof getMaquina==='function'?getMaquina(t.placa)?.operacao:'')||'').trim();
+}
+
+function ignisPlanCasesSearch(value){
+  window._ignisCaseQuery=String(value||'');
+  const pos=document.getElementById('p27-case-search')?.selectionStart??0;
+  ignisPlanRender();
+  const input=document.getElementById('p27-case-search');
+  if(input){input.focus();input.setSelectionRange(Math.min(pos,input.value.length),Math.min(pos,input.value.length));}
+}
+
+function ignisPlanCasesReset(){
+  window._ignisCaseQuery='';window._ignisCaseStatus='todas';window._ignisCaseMonth='';
+  ['planCasesGroup','planCasesOperation','planCasesPlate'].forEach(k=>window.ignisMultiFilter?.reset(k));
+  ignisPlanRender();
+}
+
+function ignisPlanCasesView(root,conf){
+  const groups={pesada:'Frota Pesada',leve:'Frota Leve',maquinas:'Máquinas'};
+  const excluded=ignisPlanEmpilhadeiraPlates();
+  const all=conf.tratativas.filter(t=>!excluded.has(String(t.placa||'').trim().toUpperCase()))
+    .sort((a,b)=>String(b.criadoEm||b.mes||'').localeCompare(String(a.criadoEm||a.mes||'')));
+  const groupSelected=window.ignisMultiFilter.selected('planCasesGroup');
+  const groupRows=all.filter(t=>groupSelected===null||groupSelected.has(t.grupo));
+  const operations=[...new Set(groupRows.map(ignisPlanCaseOperation).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
+  const opSelected=window.ignisMultiFilter.selected('planCasesOperation');
+  const validOps=opSelected instanceof Set?new Set([...opSelected].filter(o=>operations.includes(o))):null;
+  const effectiveOps=opSelected instanceof Set&&opSelected.size>0&&!validOps.size?null:validOps;
+  const plates=[...new Set(groupRows.filter(t=>effectiveOps===null||effectiveOps.has(ignisPlanCaseOperation(t)))
+    .map(t=>String(t.placa||'').trim().toUpperCase()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
+  const gs=window.ignisMultiFilter.render('planCasesGroup',{caption:'Tipo de veículo',title:'Tipos de veículo',subtitle:'Selecione um ou mais tipos',
+    allLabel:'Todos os tipos',emptyLabel:'Nenhum tipo',countLabel:'tipos',placeholder:'Buscar tipo',className:'ignis-filter-group',
+    options:Object.entries(groups),allowEmpty:true,onApply:()=>ignisPlanRender()});
+  const os=window.ignisMultiFilter.render('planCasesOperation',{caption:'Operação',title:'Operações',subtitle:'Selecione uma ou mais operações',
+    allLabel:'Todas as operações',emptyLabel:'Nenhuma operação',countLabel:'operações',placeholder:'Buscar operação',
+    className:'ignis-filter-operation',options:operations.map(x=>[x,x]),allowEmpty:true,onApply:()=>ignisPlanRender()});
+  const ps=window.ignisMultiFilter.render('planCasesPlate',{caption:'Placa / equipamento',title:'Placas',subtitle:'Selecione uma ou mais placas',
+    allLabel:'Todas as placas',emptyLabel:'Nenhuma placa',countLabel:'placas',placeholder:'Buscar placa',
+    className:'ignis-filter-plate',options:plates.map(x=>[x,x]),allowEmpty:true,onApply:()=>ignisPlanRender()});
+  const g=window.ignisMultiFilter.selected('planCasesGroup'),o=window.ignisMultiFilter.selected('planCasesOperation'),pl=window.ignisMultiFilter.selected('planCasesPlate');
+  const status=window._ignisCaseStatus||'todas',month=window._ignisCaseMonth||'';
+  const query=String(window._ignisCaseQuery||'').trim().toUpperCase();
+  const visible=all.filter(t=>{
+    if(g instanceof Set&&!g.has(t.grupo))return false;
+    if(o instanceof Set&&!o.has(ignisPlanCaseOperation(t)))return false;
+    if(pl instanceof Set&&!pl.has(String(t.placa||'').trim().toUpperCase()))return false;
+    if(month&&String(t.criadoEm||t.mes||'').slice(0,7)!==month)return false;
+    if(status==='abertas'&&!ignisPlanCaseActive(t))return false;
+    if(status==='concluidas'&&ignisPlanCaseActive(t))return false;
+    if(status==='vencidas'&&!ignisPlanOverdue(t))return false;
+    return !query||[t.placa,ignisPlanCaseOperation(t),t.categoria,t.descricaoCausa,t.acaoCorretiva,t.responsavel,t.observacao]
+      .join(' ').toUpperCase().includes(query);
+  });
+  const pending=all.filter(ignisPlanCaseActive).length,overdue=all.filter(ignisPlanOverdue).length;
+  root.innerHTML=`
+  <div class="page-header"><div class="page-header-title"><div class="page-title">Acompanhamento de Performance</div>
+    <div class="page-sub">Histórico das tratativas por placa, independente do mês da média.</div></div></div>
+  ${ignisPlanTabs()}
+  <div class="p27-occ-stats">
+    <div class="p27-stat"><span>Total de ocorrências</span><strong>${all.length}</strong></div>
+    <div class="p27-stat"><span>Em aberto</span><strong>${pending}</strong></div>
+    <div class="p27-stat p27-stat-overdue"><span>Prazos vencidos</span><strong>${overdue}</strong></div>
+    <div class="p27-stat"><span>Concluídas</span><strong>${all.length-pending}</strong></div>
+  </div>
+  <div class="p27-panel"><div class="p27-panel-head"><div><strong>Histórico de ocorrências</strong>
+    <p>Os registros concluídos continuam salvos e cada novo problema gera uma ocorrência independente.</p></div></div>
+    <div class="ignis-filterbar p27-filterbar p27-occ-filters" aria-label="Filtros das ocorrências">
+      ${gs}${os}${ps}
+      <label class="ignis-filter-control"><span class="ignis-filter-caption">Situação</span>
+        <select class="ignis-filter-field" onchange="window._ignisCaseStatus=this.value;ignisPlanRender()">
+        ${[['todas','Todas as situações'],['abertas','Em aberto'],['vencidas','Prazos vencidos'],['concluidas','Concluídas']]
+          .map(([value,label])=>`<option value="${value}" ${status===value?'selected':''}>${label}</option>`).join('')}
+        </select></label>
+      <label class="ignis-filter-control"><span class="ignis-filter-caption">Mês da ocorrência</span>
+        <input class="ignis-filter-field" type="month" value="${ignisPlanEsc(month)}" onchange="window._ignisCaseMonth=this.value;ignisPlanRender()"></label>
+      <label class="ignis-filter-control ignis-filter-search"><span class="ignis-filter-caption">Busca</span>
+        <input class="ignis-filter-field" id="p27-case-search" type="search" value="${ignisPlanEsc(window._ignisCaseQuery||'')}"
+          placeholder="Placa, causa ou responsável" oninput="ignisPlanCasesSearch(this.value)"></label>
+      <button type="button" class="ignis-filter-clear" onclick="ignisPlanCasesReset()">Limpar filtros</button>
+    </div>
+    <div class="p27-results-count">${visible.length} ocorrência(s) encontrada(s)</div>
+    <div class="p27-occ-grid">
+      ${visible.length?visible.map(t=>{
+        const done=!ignisPlanCaseActive(t),late=ignisPlanOverdue(t);
+        const current=done?'Concluída':late?'Vencida':'Em aberto';
+        const badge=done?'p27-done':late?'p27-urgent':'p27-active';
+        const id=ignisPlanSafeParam(t.id),plate=ignisPlanSafeParam(t.placa),group=ignisPlanSafeParam(t.grupo),mes=ignisPlanSafeParam(t.mes);
+        const opened=t.criadoEm?'Aberta em '+ignisPlanFmtDate(t.criadoEm):'Referência: '+ignisPlanMonthLabel(String(t.mes||''));
+        return `<article class="p27-occ-card">
+          <div class="p27-occ-head"><div><strong>${ignisPlanEsc(t.placa||'Sem placa')}</strong>
+            <small>${ignisPlanEsc(groups[t.grupo]||t.grupo||'Sem grupo')} · ${ignisPlanEsc(ignisPlanCaseOperation(t)||'Sem operação')}</small>
+          </div><span class="p27-inline-badge ${badge}">${current}</span></div>
+          <div class="p27-occ-cause"><strong>${ignisPlanEsc(ignisPlanCauseName(t))}</strong><p>${ignisPlanEsc(t.descricaoCausa||t.observacao||'Sem descrição')}</p></div>
+          <div class="p27-occ-details">
+            <span>${ignisPlanEsc(opened)}</span><span>Responsável: <b>${ignisPlanEsc(t.responsavel||'Não informado')}</b></span>
+            <span>${done?'Concluída em':'Prazo'}: <b>${ignisPlanFmtDate(done?t.dataAcao:t.prazo)}</b></span>
+            <span>Situação do registro: <b>${ignisPlanEsc(ignisPlanRegisterState(t))}</b></span>
+          </div>
+          <div class="p27-occ-buttons">
+            <button type="button" class="p27-action" onclick="ignisPlanOpen('${plate}','${group}','${id}','${mes}')">Detalhes / editar</button>
+            <button type="button" class="p27-action p27-secondary" onclick="ignisPlanOpen('${plate}','${group}','','${ignisPlanLocalDate().slice(0,7)}')">Nova ocorrência</button>
+          </div></article>`;
+      }).join(''):'<div class="p27-empty">Nenhuma ocorrência encontrada com esses filtros.</div>'}
+    </div>
+  </div>`;
+}
+
 function ignisPlanResetFilters(){
   window._ignisPlanGroup='';window._ignisPlanStatus='';window._ignisPlanQuery='';
   window._ignisPlanFaixa='ambos';window._ignisPlanOperacao='';window._ignisPlanPlaca='';
@@ -361,7 +483,9 @@ function ignisPlanResetFilters(){
 }
 function ignisPlanRender(){
   const root=document.getElementById('page-planejamento');if(!root)return;
-  const conf=ignisPlanConfig(),period=ignisPlanPeriodSpec(),months=ignisPlanMonthChoices();
+  const conf=ignisPlanConfig();
+  if(window._ignisPlanTab==='ocorrencias'){ignisPlanCasesView(root,conf);return;}
+  const period=ignisPlanPeriodSpec(),months=ignisPlanMonthChoices();
   const mon=period.month,caseMonth=period.caseMonth;
   const groupFilter=window._ignisPlanGroup||'',statusFilter=window._ignisPlanStatus||'',
     faixaFilter=window._ignisPlanFaixa||'ambos',operacaoFilter=window._ignisPlanOperacao||'',
@@ -416,6 +540,7 @@ function ignisPlanRender(){
   root.innerHTML=`
   <div class="page-header"><div class="page-header-title"><div class="page-title">Acompanhamento de Performance</div>
   <div class="page-sub">Registre a causa, acompanhe a ação corretiva e preserve o histórico por placa e equipamento.</div></div></div>
+  ${ignisPlanTabs()}
   <div class="p27-info"><strong>Regras de acompanhamento</strong><span>Metas propostas de 90% (pesada), 93% (leve) e 95% (máquinas), ajustáveis após validação operacional.
   A conclusão do <b>registro</b> não significa que a <b>ação corretiva</b> foi realizada.</span></div>
   <div class="p27-top">
