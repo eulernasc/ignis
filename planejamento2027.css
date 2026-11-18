@@ -321,3 +321,96 @@
   #p27-editor-root .p27-backdrop{padding:8px}
   #p27-editor-root .p27-editor{max-height:calc(100dvh - 16px)}
 }
+
+
+/* Ocorrências | seletor mês/ano proprietário no padrão visual IGNIS. */
+#page-planejamento .p27-panel:has(.p27-month-filter.is-open){
+  position:relative;z-index:80;overflow:visible
+}
+#page-planejamento .p27-month-filter{position:relative;flex:1 1 185px;min-width:0}
+#page-planejamento .p27-month-filter .p27-month-trigger{
+  display:flex;align-items:center;gap:9px;width:100%;height:44px;min-height:44px;
+  padding:0 12px;border-radius:11px;
+  border:1px solid rgba(255,255,255,.105);background:#111720;color:#eef3f8;
+  font:650 12px 'DM Sans',sans-serif;cursor:pointer;text-align:left;
+  transition:background .15s,border-color .15s,box-shadow .15s
+}
+#page-planejamento .p27-month-filter .p27-month-trigger:hover{
+  background:#151d26;border-color:rgba(255,255,255,.20)
+}
+#page-planejamento .p27-month-filter.is-open .p27-month-trigger,
+#page-planejamento .p27-month-filter .p27-month-trigger:focus-visible{
+  border-color:rgba(233,95,50,.6);box-shadow:0 0 0 3px rgba(233,95,50,.08);outline:0
+}
+#page-planejamento .p27-month-trigger svg{
+  width:16px;height:16px;min-width:16px;fill:none;stroke:#8d9aab;stroke-width:1.7;
+  stroke-linecap:round;stroke-linejoin:round
+}
+#page-planejamento .p27-month-trigger #p27-month-value{
+  flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap
+}
+#page-planejamento .p27-month-trigger svg.p27-month-chevron{width:15px;height:15px;min-width:15px}
+#page-planejamento .p27-month-popover{
+  position:absolute;right:0;top:calc(100% + 9px);
+  z-index:1550;width:min(330px,calc(100vw - 32px));max-width:calc(100vw - 32px);
+  padding:15px;box-sizing:border-box;
+  background:#11171e;border:1px solid rgba(255,255,255,.11);
+  border-radius:14px;box-shadow:0 22px 55px rgba(0,0,0,.46)
+}
+#page-planejamento .p27-month-popover[hidden]{display:none!important}
+#page-planejamento .p27-month-header{
+  display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:15px
+}
+#page-planejamento .p27-month-title{
+  color:#f1f4f8;font:750 13px 'DM Sans',sans-serif
+}
+#page-planejamento .p27-month-year-nav{display:flex;align-items:center;gap:6px}
+#page-planejamento .p27-month-year-nav strong{
+  font:750 13px 'DM Sans',sans-serif;color:#eef3f8;min-width:40px;text-align:center
+}
+#page-planejamento .p27-month-year-nav button{
+  display:grid;place-items:center;width:29px;height:29px;padding:0;
+  background:#1a242f;border:1px solid rgba(255,255,255,.1);
+  border-radius:8px;color:#bdc9d6;font-size:20px;line-height:1;cursor:pointer
+}
+#page-planejamento .p27-month-year-nav button:hover{background:#273442;color:#fff}
+#page-planejamento .p27-month-grid{
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px
+}
+#page-planejamento .p27-month-grid .p27-month-cell{
+  min-width:0;min-height:40px;padding:0 5px;border-radius:9px;
+  background:#18212b;border:1px solid transparent;color:#bbc5d1;
+  font:650 11px 'DM Sans',sans-serif;cursor:pointer;
+  transition:background .15s,color .15s,border-color .15s
+}
+#page-planejamento .p27-month-grid .p27-month-cell:hover{
+  background:#263341;color:#f4f7fb
+}
+#page-planejamento .p27-month-grid .p27-month-cell.is-current:not(.is-selected){
+  border-color:rgba(233,95,50,.38);color:#ff9a72
+}
+#page-planejamento .p27-month-grid .p27-month-cell.is-selected{
+  background:#e95f32;border-color:#e95f32;color:#fff;font-weight:800
+}
+#page-planejamento .p27-month-grid .p27-month-cell:focus-visible,
+#page-planejamento .p27-month-year-nav button:focus-visible,
+#page-planejamento .p27-month-footer button:focus-visible{
+  outline:2px solid #ff965c;outline-offset:2px
+}
+#page-planejamento .p27-month-footer{
+  display:flex;justify-content:space-between;gap:10px;padding-top:13px;
+  margin-top:13px;border-top:1px solid rgba(255,255,255,.08)
+}
+#page-planejamento .p27-month-footer button{
+  min-height:34px;padding:0 10px;border:1px solid transparent;border-radius:8px;
+  background:transparent;color:#adbcca;font:750 11px 'DM Sans',sans-serif;cursor:pointer
+}
+#page-planejamento .p27-month-footer button:hover{background:#1b2733;color:#fff}
+#page-planejamento .p27-month-footer button.p27-month-now{
+  background:rgba(233,95,50,.15);border-color:rgba(233,95,50,.38);color:#ff9a72
+}
+#page-planejamento .p27-month-footer button.p27-month-now:hover{background:rgba(233,95,50,.25)}
+@media(max-width:760px){
+  #page-planejamento .p27-month-popover{right:auto;left:0;width:min(330px,calc(100vw - 36px))}
+  #page-planejamento .p27-month-grid .p27-month-cell{min-height:43px;font-size:12px}
+}
