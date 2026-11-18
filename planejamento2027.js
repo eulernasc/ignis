@@ -597,12 +597,12 @@ function ignisPlanSearch(v){
 function ignisPlanModalRoot(){
   let root=document.getElementById('p27-editor-root');
   if(!root){root=document.createElement('div');root.id='p27-editor-root';}
-  if(root.parentElement!==document.body)document.body.appendChild(root);
+  if(root.parentElement!==document.body&&typeof document.body?.appendChild==='function')document.body.appendChild(root);
   return root;
 }
 function ignisPlanClose(){
   const root=document.getElementById('p27-editor-root');
-  if(root)root.remove();
+  if(root){if(typeof root.remove==='function')root.remove();else root.innerHTML='';}
   document.body?.classList.remove('p27-modal-open');
 }
 
