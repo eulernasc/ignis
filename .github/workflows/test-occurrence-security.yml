@@ -3,11 +3,11 @@ on:
   push:
     branches: [main]
     paths:
-      - 'security/functions/**'
+      - 'security/**'
       - '.github/workflows/test-occurrence-security.yml'
   pull_request:
     paths:
-      - 'security/functions/**'
+      - 'security/**'
       - '.github/workflows/test-occurrence-security.yml'
   workflow_dispatch:
 permissions:
@@ -22,4 +22,8 @@ jobs:
           node-version: '22'
       - run: node --check security/functions/index.cjs
       - run: node --check security/functions/lib/occurrence-access.cjs
-      - run: node --test security/functions/test/occurrence-access.test.cjs
+      - run: node --check security/functions/lib/legacy-migration.cjs
+      - run: node --check security/functions/scripts/bootstrap-master.cjs
+      - run: node --check security/functions/scripts/migrate-legacy.cjs
+      - run: cp security/pilot.js /tmp/ignis-security-pilot.mjs && node --check /tmp/ignis-security-pilot.mjs
+      - run: node --test security/functions/test/*.test.cjs
