@@ -6,7 +6,8 @@ const esc=v=>String(v??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'
 const copy=s=>s===null?null:new Set(s);
 function label(f){
   const s=f.applied;
-  if(s===null||!s.size||s.size===f.options.length)return f.allLabel;
+  if(s===null||(!f.allowEmpty&&!s.size)||s.size===f.options.length)return f.allLabel;
+  if(!s.size)return f.emptyLabel;
   if(s.size===1)return f.options.find(o=>s.has(o.value))?.label||f.allLabel;
   return s.size+' '+f.countLabel;
 }
@@ -22,11 +23,11 @@ function define(key,cfg){
   f.subtitle=cfg.subtitle||'Selecione uma ou mais opções';
   f.allLabel=cfg.allLabel||'Todas as opções';f.countLabel=cfg.countLabel||'selecionados';
   f.placeholder=cfg.placeholder||'Buscar';f.icon=cfg.icon||'';
-  f.className=cfg.className||'';f.onApply=typeof cfg.onApply==='function'?cfg.onApply:()=>{};
+  f.className=cfg.className||'';f.allowEmpty=Boolean(cfg.allowEmpty);f.emptyLabel=cfg.emptyLabel||'Nenhuma opção';f.onApply=typeof cfg.onApply==='function'?cfg.onApply:()=>{};
   if(f.applied!==null){
     const available=new Set(options.map(o=>o.value));
     f.applied=new Set([...f.applied].filter(v=>available.has(v)));
-    if(!f.applied.size||f.applied.size===options.length)f.applied=null;
+    if((!f.allowEmpty&&!f.applied.size)||f.applied.size===options.length)f.applied=null;
   }
   f.draft=copy(f.applied);f.open=false;return f;
 }
@@ -43,14 +44,14 @@ function render(key,cfg){
     +'<button type="button" class="dash-dropdown-done" onclick="ignisMultiFilter.apply(\''+key+'\')">Concluir</button></div>'
     +'<label class="dash-search-box"><svg class="ui-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>'
     +'<input type="search" class="ignis-multi-search" placeholder="'+esc(f.placeholder)+'" autocomplete="off" oninput="ignisMultiFilter.search(\''+key+'\',this.value)" onkeydown="ignisMultiFilter.keydown(event,\''+key+'\')"></label>'
-    +'<label class="dash-option dash-option-all"><input type="checkbox" class="ignis-multi-all" checked onchange="ignisMultiFilter.all(\''+key+'\')"><span class="dash-option-text">'+esc(f.allLabel)+'</span></label>'
+    +'<label class="dash-option dash-option-all"><input type="checkbox" class="ignis-multi-all" checked onchange="ignisMultiFilter.all(\''+key+'\',this.checked)"><span class="dash-option-text">'+esc(f.allLabel)+'</span></label>'
     +'<div class="dash-option-list ignis-multi-list">'+items+'</div></div></div>';
 }
 function element(key){return document.getElementById('imf-'+key);}
 function selected(key){return copy(filters.get(key)?.applied??null);}
 function refresh(key){
   const f=filters.get(key),el=element(key);if(!f||!el)return;
-  const s=f.draft,all=s===null||s.size===0||s.size===f.options.length;
+  const s=f.draft,all=s===null||(!f.allowEmpty&&s.size===0)||s.size===f.options.length;
   const a=el.querySelector('.ignis-multi-all');if(a)a.checked=all;
   el.querySelectorAll('.ignis-multi-option input').forEach(c=>{c.checked=all||s.has(c.value);});
   const text=el.querySelector('.ignis-multi-label');if(text)text.textContent=label(f);
@@ -58,7 +59,7 @@ function refresh(key){
 function close(key,commit){
   const f=filters.get(key),el=element(key);if(!f)return;
   if(commit){
-    const d=f.draft;f.applied=!d||!d.size||d.size===f.options.length?null:new Set(d);
+    const d=f.draft;f.applied=!d||(!f.allowEmpty&&!d.size)||d.size===f.options.length?null:new Set(d);
   }else f.draft=copy(f.applied);
   f.open=false;
   if(el){
@@ -85,7 +86,7 @@ function change(key,value,checked){
   if(checked)f.draft.add(value);else f.draft.delete(value);
   refresh(key);
 }
-function all(key){const f=filters.get(key);if(f){f.draft=null;refresh(key);}}
+function all(key,checked){const f=filters.get(key);if(f){f.draft=!checked&&f.allowEmpty?new Set():null;refresh(key);}}
 function search(key,value){
   const el=element(key);if(!el)return;
   const clean=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
