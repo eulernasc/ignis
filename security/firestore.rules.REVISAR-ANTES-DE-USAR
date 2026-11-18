@@ -27,6 +27,9 @@ service cloud.firestore {
     match /ignis_case_role_events/{eventId} {
       allow read, write: if false;
     }
+    match /ignis_case_user_links/{legacyLogin} {
+      allow read, write: if false;
+    }
 
     // Bloqueia qualquer coleção nova que não foi explicitamente revisada.
     match /{document=**} {
