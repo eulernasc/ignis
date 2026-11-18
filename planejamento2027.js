@@ -15,10 +15,33 @@ function ignisPlanConfig(){
   return c;
 }
 
+// Empilhadeiras não participam do Acompanhamento de Performance.
+ // A exclusão é apenas de leitura: dados e ocorrências permanecem no Firebase.
+function ignisPlanEmpilhadeiraPlates(){
+  const placas=new Set();
+  const inclui=item=>{
+    const placa=String(item?.placa||'').trim().toUpperCase();
+    if(!placa)return;
+    const tipo=String(item?.tipoIgnis||item?.tipo||'').toLowerCase();
+    const modelo=String(item?.modelo||'').toUpperCase();
+    if(placa.startsWith('EMP')||tipo.includes('empilhadeira')||modelo.includes('MOFFETT'))
+      placas.add(placa);
+  };
+  (state.maquinas||[]).forEach(inclui);
+  (state.abastecimentos||[]).forEach(a=>{
+    inclui(a);
+    const tipo=typeof getTipoIgnis==='function'?getTipoIgnis(a):a?.tipoIgnis;
+    if(tipo==='empilhadeira'){
+      const placa=String(a?.placa||'').trim().toUpperCase();
+      if(placa)placas.add(placa);
+    }
+  });
+  return placas;
+}
 function ignisPlanGroup(tipo){
   if(tipo==='pesada')return 'pesada';
   if(tipo==='leve')return 'leve';
-  if(['maquina','trator','empilhadeira'].includes(tipo))return 'maquinas';
+  if(['maquina','trator'].includes(tipo))return 'maquinas';
   return '';
 }
 
@@ -93,7 +116,7 @@ function ignisPlanRawDate(a){
   return /^\d{4}-\d{2}-\d{2}$/.test(date)?date:'';
 }
 function ignisPlanSummary(period){
-  const groups=new Map(),conf=ignisPlanConfig();
+  const groups=new Map(),conf=ignisPlanConfig(),empilhadeiras=ignisPlanEmpilhadeiraPlates();
   const isCustom=period&&typeof period==='object';
   const selectedMonth=isCustom?'':String(period||'');
   for(const a of state.abastecimentos||[]){
@@ -103,7 +126,7 @@ function ignisPlanSummary(period){
       if(!actual||actual<period.start||actual>period.end)continue;
     }else if(ignisPlanMonthOf(a)!==selectedMonth)continue;
     const placa=String(a.placa||'').trim().toUpperCase();
-    if(!placa)continue;
+    if(!placa||empilhadeiras.has(placa))continue;
     const tipo=typeof getTipoIgnis==='function'?getTipoIgnis(a):String(a.tipoIgnis||'');
     const grupo=ignisPlanGroup(tipo);
     if(!grupo)continue;
@@ -342,9 +365,11 @@ function ignisPlanRender(){
   const groupFilter=window._ignisPlanGroup||'',statusFilter=window._ignisPlanStatus||'',
     faixaFilter=window._ignisPlanFaixa||'ambos',operacaoFilter=window._ignisPlanOperacao||'',
     placaFilter=window._ignisPlanPlaca||'',q=String(window._ignisPlanQuery||'').trim().toUpperCase();
+  const empilhadeiras=ignisPlanEmpilhadeiraPlates();
+  const validCase=t=>!empilhadeiras.has(String(t?.placa||'').trim().toUpperCase());
   const list=ignisPlanSummary(period.mode==='custom'?period:mon),
-    includedMonths=new Set(period.months),cases=conf.tratativas.filter(t=>includedMonths.has(t.mes));
-  const allOverdue=conf.tratativas.filter(ignisPlanOverdue);
+    includedMonths=new Set(period.months),cases=conf.tratativas.filter(t=>validCase(t)&&includedMonths.has(t.mes));
+  const allOverdue=conf.tratativas.filter(t=>validCase(t)&&ignisPlanOverdue(t));
   const rows=list.filter(x=>x.abaixo||x.acima||cases.some(t=>t.placa===x.placa&&t.grupo===x.grupo))
     .map(x=>({...x,ocorrencias:ignisPlanCasesInMonths(period.months,x.grupo,x.placa)}));
   for(const t of cases){
@@ -445,7 +470,9 @@ function ignisPlanClose(){
 
 function ignisPlanShowOverdue(){
   const root=document.getElementById('p27-editor-root');if(!root)return;
-  const entries=ignisPlanConfig().tratativas.filter(ignisPlanOverdue)
+  const empilhadeiras=ignisPlanEmpilhadeiraPlates();
+  const entries=ignisPlanConfig().tratativas.filter(t=>
+    !empilhadeiras.has(String(t?.placa||'').trim().toUpperCase())&&ignisPlanOverdue(t))
     .sort((a,b)=>String(a.prazo||'').localeCompare(String(b.prazo||'')));
   root.innerHTML=`<div class="p27-backdrop" onclick="if(event.target===this)ignisPlanClose()">
    <section class="p27-editor p27-wide" role="dialog" aria-modal="true" aria-label="Prazos vencidos">
