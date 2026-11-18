@@ -115,8 +115,8 @@ function ignisPlanRawDate(a){
   const date=String(a?.data||'').slice(0,10);
   return /^\d{4}-\d{2}-\d{2}$/.test(date)?date:'';
 }
-function ignisPlanSummary(period){
-  const groups=new Map(),conf=ignisPlanConfig(),empilhadeiras=ignisPlanEmpilhadeiraPlates();
+function ignisPlanSummary(period,empilhadeiras=ignisPlanEmpilhadeiraPlates()){
+  const groups=new Map(),conf=ignisPlanConfig();
   const isCustom=period&&typeof period==='object';
   const selectedMonth=isCustom?'':String(period||'');
   for(const a of state.abastecimentos||[]){
@@ -367,7 +367,7 @@ function ignisPlanRender(){
     placaFilter=window._ignisPlanPlaca||'',q=String(window._ignisPlanQuery||'').trim().toUpperCase();
   const empilhadeiras=ignisPlanEmpilhadeiraPlates();
   const validCase=t=>!empilhadeiras.has(String(t?.placa||'').trim().toUpperCase());
-  const list=ignisPlanSummary(period.mode==='custom'?period:mon),
+  const list=ignisPlanSummary(period.mode==='custom'?period:mon,empilhadeiras),
     includedMonths=new Set(period.months),cases=conf.tratativas.filter(t=>validCase(t)&&includedMonths.has(t.mes));
   const allOverdue=conf.tratativas.filter(t=>validCase(t)&&ignisPlanOverdue(t));
   const rows=list.filter(x=>x.abaixo||x.acima||cases.some(t=>t.placa===x.placa&&t.grupo===x.grupo))
