@@ -140,9 +140,22 @@ async function main(){
   await submit({...base,categoria:'Parâmetro',descricaoCausa:'Ajuste de parâmetro'});
   assert.equal(conf.tratativas.length,before,'falha no Firebase deve reverter o caso');
   shouldSave=true;
-  assert.match(page.innerHTML,/Prorrogar/,'prorrogar na tabela');
-  assert.match(page.innerHTML,/Concluir/,'concluir na tabela');
-  assert.match(page.innerHTML,/Excluir/,'excluir na tabela');
+  assert.match(page.innerHTML,/p27-compact-cases/,'resumo compacto na Performance');
+  assert.match(page.innerHTML,/Ver histórico \(2\)/,'histórico reúne ambas as ocorrências');
+  assert.doesNotMatch(page.innerHTML,/ignisPlanQuickFinish\(/,'ações por ocorrência saem da tabela');
+  assert.doesNotMatch(page.innerHTML,/ignisPlanDeleteCase\(/,'exclusão não polui a Performance');
+  context.ignisPlanGoToCases('RHT5F20','pesada');
+  assert.equal(window._ignisPlanTab,'ocorrencias');
+  assert.match(page.innerHTML,/Histórico de ocorrências/,'histórico abre na aba correta');
+  assert.match(page.innerHTML,/Prorrogar/,'prorrogação disponível nas Ocorrências');
+  assert.match(page.innerHTML,/Concluir/,'conclusão disponível nas Ocorrências');
+  assert.match(page.innerHTML,/Excluir/,'exclusão disponível nas Ocorrências');
+  assert.ok(window.ignisMultiFilter.selected('planCasesPlate').has('RHT5F20'),
+    'histórico abre filtrado pela placa');
+  assert.ok(window.ignisMultiFilter.selected('planCasesGroup').has('pesada'),
+    'histórico abre filtrado pelo grupo');
+  window._ignisPlanTab='performance';
+  context.ignisPlanRender();
   extendedPanel={
     querySelector(selector){return {value:selector.includes('date')?'2027-01-01':'Oficina aguardando peças de reposição'};},
     hidden:false
