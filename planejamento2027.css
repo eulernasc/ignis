@@ -414,3 +414,43 @@
   #page-planejamento .p27-month-popover{right:auto;left:0;width:min(330px,calc(100vw - 36px))}
   #page-planejamento .p27-month-grid .p27-month-cell{min-height:43px;font-size:12px}
 }
+
+
+/* Acompanhamento | resumo compacto na Performance, ações completas em Ocorrências. */
+#page-planejamento .p27-table th:nth-child(6){min-width:200px}
+#page-planejamento .p27-table{min-width:1040px}
+#page-planejamento .p27-compact-cases{
+  display:flex;flex-direction:column;align-items:flex-start;gap:8px;
+  width:100%;min-width:185px;max-width:260px
+}
+#page-planejamento .p27-compact-badges{
+  display:flex;align-items:center;flex-wrap:wrap;gap:5px 6px
+}
+#page-planejamento .p27-compact-badge{
+  display:inline-flex;align-items:center;min-height:23px;box-sizing:border-box;
+  padding:3px 8px;border-radius:7px;white-space:nowrap;
+  font:750 11px 'DM Sans',sans-serif;line-height:1.2
+}
+#page-planejamento .p27-compact-pending{background:rgba(70,149,220,.12);color:#7cbdff}
+#page-planejamento .p27-compact-done{background:rgba(24,194,120,.12);color:#45dba2}
+#page-planejamento .p27-compact-overdue{background:rgba(223,84,87,.14);color:#ff949a}
+#page-planejamento .p27-compact-next{font-size:11px;color:var(--text3,#8d9bac);line-height:1.4}
+#page-planejamento .p27-compact-next strong{color:var(--text,#f6f8fb);font-size:11px}
+#page-planejamento .p27-compact-link{
+  padding:0;border:0;background:none;color:#ff966e;
+  font:750 11px 'DM Sans',sans-serif;line-height:1.5;
+  cursor:pointer;text-align:left;text-decoration:underline;text-underline-offset:3px
+}
+#page-planejamento .p27-compact-link:hover{color:#ffc0a4}
+#page-planejamento .p27-compact-link:focus-visible{outline:2px solid #ff966e;outline-offset:4px}
+#page-planejamento .p27-compact-empty{
+  display:inline-flex;padding:5px 8px;border-radius:7px;
+  font:650 11px 'DM Sans',sans-serif;background:rgba(255,180,40,.1);color:#edb847
+}
+#page-planejamento .p27-occ-buttons{align-items:center}
+#page-planejamento .p27-occ-buttons .p27-mini{min-height:34px}
+#page-planejamento .p27-occ-card .p27-extend{margin-top:0}
+@media(max-width:760px){
+  #page-planejamento .p27-compact-cases{min-width:175px}
+  #page-planejamento .p27-table th:nth-child(6){min-width:190px}
+}
