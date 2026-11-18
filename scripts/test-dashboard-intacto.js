@@ -14,7 +14,7 @@ function gitSha(source){
   ])).digest('hex');
 }
 const html=read('index.html');
-const planningScript='<script src="ignis-multiselect.js?v=20261118b"></script>\n<script src="planejamento2027.js?v=20261118b"></script>';
+const planningScript='<script src="ignis-multiselect.js?v=20261118b"></script>\n<script src="planejamento2027.js?v=20261118c"></script>';
 assert.ok(html.includes(planningScript),'Carregamento dos filtros do Acompanhamento ausente');
 const oldHtml=html.replace(planningScript,
   '<script src="planejamento2027.js?v=20261116a"></script>')
