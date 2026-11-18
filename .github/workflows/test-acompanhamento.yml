@@ -8,6 +8,8 @@ on:
       - 'filtros-unificados.css'
       - 'index.html'
       - 'scripts/test-planejamento2027.js'
+      - 'ignis-multiselect.js'
+      - 'scripts/test-filtros-multiselect.js'
       - '.github/workflows/test-acompanhamento.yml'
   pull_request:
     branches: [main]
@@ -33,3 +35,5 @@ jobs:
         run: node scripts/test-planejamento2027.js
       - name: Validar leitura e segurança do Firebase
         run: node scripts/test-firebase-sync.js
+      - name: Validar filtros multisseleção e cálculos por unidade
+        run: node scripts/test-filtros-multiselect.js

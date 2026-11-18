@@ -298,18 +298,21 @@ function ignisPlanFilterMarkup({period,months,mon,faixaFilter,groupFilter,status
      <div class="ignis-filter-segments" role="group" aria-label="Faixa de performance">
        ${segmented([['ambos','Ambos'],['abaixo','Abaixo'],['acima','Acima']],faixaFilter,v=>`window._ignisPlanFaixa='${v}';ignisPlanRender()`)}
      </div></div>
-   <label class="ignis-filter-control ignis-filter-operation"><span class="ignis-filter-caption">Operação</span>
-     <select class="ignis-filter-field" onchange="window._ignisPlanOperacao=this.value;ignisPlanRender()">
-       ${selectOptions([['','Todas as operações'],...operations.map(op=>[op,op])],operacaoFilter)}
-     </select></label>
-   <label class="ignis-filter-control ignis-filter-plate"><span class="ignis-filter-caption">Placa / equipamento</span>
-     <select class="ignis-filter-field" onchange="window._ignisPlanPlaca=this.value;ignisPlanRender()">
-       ${selectOptions([['','Todas as placas'],...placas.map(placa=>[placa,placa])],placaFilter)}
-     </select></label>
-   <label class="ignis-filter-control ignis-filter-group"><span class="ignis-filter-caption">Tipo de veículo</span>
-     <select class="ignis-filter-field" onchange="window._ignisPlanGroup=this.value;ignisPlanRender()">
-       ${selectOptions([['','Todos os tipos'],...Object.entries(labels)],groupFilter)}
-     </select></label>
+   ${window.ignisMultiFilter.render("planOperation",{
+     caption:"Operação",title:"Operações",subtitle:"Selecione uma ou mais operações",
+     allLabel:"Todas as operações",countLabel:"operações",placeholder:"Buscar operação",
+     className:"ignis-filter-operation",options:operations.map(op=>[op,op]),
+     initial:operacaoFilter?[operacaoFilter]:[],onApply:()=>ignisPlanRender()})}
+   ${window.ignisMultiFilter.render("planPlate",{
+     caption:"Placa / equipamento",title:"Placas",subtitle:"Selecione uma ou mais placas",
+     allLabel:"Todas as placas",countLabel:"placas",placeholder:"Buscar placa",
+     className:"ignis-filter-plate",options:placas.map(placa=>[placa,placa]),
+     initial:placaFilter?[placaFilter]:[],onApply:()=>ignisPlanRender()})}
+   ${window.ignisMultiFilter.render("planGroup",{
+     caption:"Tipo de veículo",title:"Tipos de veículo",subtitle:"Selecione um ou mais tipos",
+     allLabel:"Todos os tipos",countLabel:"tipos",placeholder:"Buscar tipo",
+     className:"ignis-filter-group",options:Object.entries(labels),
+     initial:groupFilter?[groupFilter]:[],onApply:()=>ignisPlanRender()})}
    <label class="ignis-filter-control ignis-filter-status"><span class="ignis-filter-caption">Situação</span>
      <select class="ignis-filter-field" onchange="window._ignisPlanStatus=this.value;ignisPlanRender()">
        ${selectOptions([
@@ -329,6 +332,7 @@ function ignisPlanFilterMarkup({period,months,mon,faixaFilter,groupFilter,status
 function ignisPlanResetFilters(){
   window._ignisPlanGroup='';window._ignisPlanStatus='';window._ignisPlanQuery='';
   window._ignisPlanFaixa='ambos';window._ignisPlanOperacao='';window._ignisPlanPlaca='';
+  ['planOperation','planPlate','planGroup'].forEach(id=>window.ignisMultiFilter?.reset(id));
   window._ignisPlanPeriodMode='month';ignisPlanRender();
 }
 function ignisPlanRender(){
@@ -357,12 +361,18 @@ function ignisPlanRender(){
   const uncovered=rows.filter(x=>!x.ocorrencias.length).length;
   const unresolved=cases.filter(t=>ignisPlanActionState(t)!=='realizada').length;
   const done=cases.filter(t=>ignisPlanActionState(t)==='realizada').length;
+  const labels={pesada:'Frota Pesada',leve:'Frota Leve',maquinas:'Máquinas'};
+  // Monta os filtros antes de calcular as linhas para usar seleções confirmadas.
+  const filterMarkup=ignisPlanFilterMarkup({period,months,mon,faixaFilter,groupFilter,statusFilter,operacaoFilter,placaFilter,operations,placas,labels});
+  const selectedOperations=window.ignisMultiFilter.selected('planOperation');
+  const selectedPlates=window.ignisMultiFilter.selected('planPlate');
+  const selectedGroups=window.ignisMultiFilter.selected('planGroup');
   const seen=rows.filter(x=>{
     if(faixaFilter==='abaixo'&&!x.abaixo)return false;
     if(faixaFilter==='acima'&&!x.acima)return false;
-    if(operacaoFilter&&operacaoFilter!==x.operacao)return false;
-    if(placaFilter&&placaFilter!==x.placa)return false;
-    if(groupFilter&&groupFilter!==x.grupo)return false;
+    if(selectedOperations instanceof Set&&selectedOperations.size&&!selectedOperations.has(x.operacao))return false;
+    if(selectedPlates instanceof Set&&selectedPlates.size&&!selectedPlates.has(x.placa))return false;
+    if(selectedGroups instanceof Set&&selectedGroups.size&&!selectedGroups.has(x.grupo))return false;
     if(statusFilter==='sem-tratativa'&&x.ocorrencias.length)return false;
     if(statusFilter==='pendente'&&!x.ocorrencias.some(t=>ignisPlanActionState(t)!=='realizada'))return false;
     if(statusFilter==='vencido'&&!x.ocorrencias.some(ignisPlanOverdue))return false;
@@ -370,7 +380,6 @@ function ignisPlanRender(){
     if(statusFilter==='registro-concluido'&&!x.ocorrencias.some(t=>ignisPlanRegisterState(t)==='Concluída'))return false;
     return !q||(x.placa+' '+x.operacao+' '+x.ocorrencias.map(t=>t.responsavel+' '+t.categoria).join(' ')).toUpperCase().includes(q);
   });
-  const labels={pesada:'Frota Pesada',leve:'Frota Leve',maquinas:'Máquinas'};
   const format=n=>Number(n).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1});
   root.innerHTML=`
   <div class="page-header"><div class="page-header-title"><div class="page-title">Acompanhamento de Performance</div>
@@ -395,7 +404,7 @@ function ignisPlanRender(){
   </div>
   <div class="p27-panel"><div class="p27-panel-head"><div><strong>Acompanhamento por veículo</strong>
     <p>Cada veículo pode ter várias ocorrências, com causas, responsáveis e prazos independentes.</p></div></div>
-    ${ignisPlanFilterMarkup({period,months,mon,faixaFilter,groupFilter,statusFilter,operacaoFilter,placaFilter,operations,placas,labels})}
+    ${filterMarkup}
     <div class="p27-results-count">${seen.length} veículo(s) encontrado(s)</div>
     <div class="p27-table-wrap"><table class="p27-table"><thead><tr>
       <th>Placa / operação</th><th>Grupo</th><th>Real / meta</th><th>Eficiência</th>
