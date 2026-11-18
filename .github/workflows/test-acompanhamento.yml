@@ -10,6 +10,7 @@ on:
       - 'scripts/test-planejamento2027.js'
       - 'ignis-multiselect.js'
       - 'scripts/test-filtros-multiselect.js'
+      - 'scripts/test-dashboard-intacto.js'
       - '.github/workflows/test-acompanhamento.yml'
   pull_request:
     branches: [main]
@@ -17,6 +18,12 @@ on:
       - 'index.html'
       - 'scripts/test-firebase-sync.js'
       - 'scripts/test-planejamento2027.js'
+      - 'planejamento2027.js'
+      - 'planejamento2027.css'
+      - 'filtros-unificados.css'
+      - 'ignis-multiselect.js'
+      - 'scripts/test-filtros-multiselect.js'
+      - 'scripts/test-dashboard-intacto.js'
       - '.github/workflows/test-acompanhamento.yml'
   workflow_dispatch:
 jobs:
@@ -35,5 +42,7 @@ jobs:
         run: node scripts/test-planejamento2027.js
       - name: Validar leitura e segurança do Firebase
         run: node scripts/test-firebase-sync.js
-      - name: Validar filtros multisseleção e cálculos por unidade
+      - name: Confirmar que o Dashboard não sofreu alterações
+        run: node scripts/test-dashboard-intacto.js
+      - name: Validar seleção múltipla do Acompanhamento
         run: node scripts/test-filtros-multiselect.js
