@@ -391,7 +391,7 @@ function ignisPlanCaseMonthGrid(year,selected){
   }).join('');
 }
 function ignisPlanCaseMonthMarkup(month){
-  const valid=/^\\d{4}-(0[1-9]|1[0-2])$/.test(month);
+  const valid=/^\d{4}-(0[1-9]|1[0-2])$/.test(month);
   const display=valid?ignisPlanMonthLabel(month):'Todos os meses';
   const year=Number((valid?month:ignisPlanLocalDate()).slice(0,4));
   return `<div class="ignis-filter-control p27-month-filter" id="p27-month-filter">
@@ -434,7 +434,7 @@ function ignisPlanCaseMonthToggle(){
   if(!picker)return;
   if(picker.classList.contains('is-open')){ignisPlanCaseMonthClose();return;}
   const selected=String(window._ignisCaseMonth||'');
-  const year=Number((/^\\d{4}-\\d{2}$/.test(selected)?selected:ignisPlanLocalDate()).slice(0,4));
+  const year=Number((/^\d{4}-\d{2}$/.test(selected)?selected:ignisPlanLocalDate()).slice(0,4));
   picker.querySelector('.p27-month-year').textContent=String(year);
   picker.querySelector('.p27-month-grid').innerHTML=ignisPlanCaseMonthGrid(year,selected);
   picker.classList.add('is-open');
@@ -451,7 +451,7 @@ function ignisPlanCaseMonthMove(direction){
   picker.querySelector('.p27-month-grid').innerHTML=ignisPlanCaseMonthGrid(year,String(window._ignisCaseMonth||''));
 }
 function ignisPlanCaseMonthSelect(value){
-  if(value&&!/^\\d{4}-(0[1-9]|1[0-2])$/.test(value))return;
+  if(value&&!/^\d{4}-(0[1-9]|1[0-2])$/.test(value))return;
   window._ignisCaseMonth=value;
   ignisPlanRender();
 }
