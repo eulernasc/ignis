@@ -104,5 +104,7 @@ document.addEventListener('click',e=>{
     if(el&&!el.contains(e.target)&&!el.contains(mouseDown))close(key,false);
   }
 });
-window.ignisMultiFilter={render,selected,toggle,change,all,search,keydown,apply:k=>close(k,true),cancel:k=>close(k,false),isOpen:k=>!!filters.get(k)?.open};
+function reset(key){const f=filters.get(key);if(f){f.applied=null;f.draft=null;refresh(key);}}
+function setSelection(key,values){const f=filters.get(key);if(f){f.applied=Array.isArray(values)&&values.length?new Set(values):null;f.draft=copy(f.applied);refresh(key);f.onApply(selected(key));}}
+window.ignisMultiFilter={render,selected,toggle,change,all,search,keydown,reset,setSelection,apply:k=>close(k,true),cancel:k=>close(k,false),isOpen:k=>!!filters.get(k)?.open};
 })();
