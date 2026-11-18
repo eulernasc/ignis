@@ -441,7 +441,7 @@ function ignisPlanCasesView(root,conf){
         ${[['todas','Todas as situações'],['abertas','Em aberto'],['vencidas','Prazos vencidos'],['concluidas','Concluídas']]
           .map(([value,label])=>`<option value="${value}" ${status===value?'selected':''}>${label}</option>`).join('')}
         </select></label>
-      <label class="ignis-filter-control"><span class="ignis-filter-caption">Mês da ocorrência</span>
+      <label class="ignis-filter-control"><span class="ignis-filter-caption">Mês de abertura / referência</span>
         <input class="ignis-filter-field" type="month" value="${ignisPlanEsc(month)}" onchange="window._ignisCaseMonth=this.value;ignisPlanRender()"></label>
       <label class="ignis-filter-control ignis-filter-search"><span class="ignis-filter-caption">Busca</span>
         <input class="ignis-filter-field" id="p27-case-search" type="search" value="${ignisPlanEsc(window._ignisCaseQuery||'')}"
@@ -524,7 +524,7 @@ function ignisPlanRender(){
   const selectedPlates=window.ignisMultiFilter.selected('planPlate');
   const selectedGroups=window.ignisMultiFilter.selected('planGroup');
   const seen=rows.filter(x=>{
-    if(faixaFilter==='abaixo'&&!x.abaixo)return false;
+    if(faixaFilter==='abaixo'&&!x.abaixo&&!(x.semDados&&x.ocorrencias.some(ignisPlanCaseActive)))return false;
     if(faixaFilter==='acima'&&!x.acima)return false;
     if(selectedOperations instanceof Set&&!selectedOperations.has(x.operacao))return false;
     if(selectedPlates instanceof Set&&!selectedPlates.has(x.placa))return false;
