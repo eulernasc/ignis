@@ -216,7 +216,7 @@ async function main(){
   const index=fs.readFileSync(path.resolve(__dirname,'../index.html'),'utf8');
   assert.ok(index.includes("const scopedPlanning=mode==='light'"),'fluxo segmentado está disponível');
   assert.match(index,/filtros-unificados\.css\?v=/,'CSS global de filtros carregado');
-  assert.match(index,/planejamento2027\.js\?v=20261118c/,'novo módulo sem cache antigo');
+  assert.match(index,/planejamento2027\.js\?v=20261118d/,'novo módulo sem cache antigo');
   const filterCss=fs.readFileSync(path.resolve(__dirname,'../filtros-unificados.css'),'utf8');
   assert.match(filterCss,/button\.dash-dropdown-done/,'botão Concluir possui padrão visual');
   for(const pageId of ['page-dashboard','page-abastecimentos','page-arla','page-comparativo','page-motoristas','page-fechamento'])
