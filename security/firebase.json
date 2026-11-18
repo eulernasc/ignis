@@ -1,0 +1,7 @@
+{
+  "functions": [{
+    "source": "functions",
+    "codebase": "ignis-ocorrencias",
+    "ignore": ["node_modules", "test", "scripts", "*.local", ".env", "coverage"]
+  }]
+}
