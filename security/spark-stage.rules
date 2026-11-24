@@ -1,0 +1,27 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Fase de transicao: preserva SOMENTE o comportamento legado.
+    // A protecao do fueltracker sera ativada depois do teste de login.
+    match /fueltracker/{document=**} {
+      allow read, write: if true;
+    }
+    function master() {
+      return request.auth != null &&
+        exists(/databases/$(database)/documents/ignis_profiles/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/ignis_profiles/$(request.auth.uid)).data.active == true &&
+        get(/databases/$(database)/documents/ignis_profiles/$(request.auth.uid)).data.role == 'adm';
+    }
+    match /ignis_profiles/{uid} {
+      allow get: if request.auth != null && (request.auth.uid == uid || master());
+      allow list: if master();
+      allow write: if false;
+    }
+    match /ignis_auth_aliases/{loginHash} {
+      // Alias tecnico nao inclui email pessoal ou senha.
+      allow get: if true;
+      allow list, write: if false;
+    }
+    match /{document=**} { allow read, write: if false; }
+  }
+}
