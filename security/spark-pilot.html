@@ -3,11 +3,12 @@
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow"><title>IGNIS | Teste de login protegido</title>
 <style>
 *{box-sizing:border-box}body{margin:0;background:#100e0d;color:#f3ede8;font:15px system-ui,sans-serif;display:grid;min-height:100dvh;place-items:center;padding:20px}main{width:min(100%,460px);padding:26px;border:1px solid #493125;border-radius:18px;background:#1b1613}h1{font-size:22px;margin:0 0 8px}p{line-height:1.5;color:#c4b7ad}label{display:grid;gap:6px;margin:14px 0}input{border:1px solid #665043;background:#100e0d;color:#fff;border-radius:8px;padding:12px;font-size:16px;width:100%}button{border:0;background:#e95f32;color:#fff;padding:12px 18px;border-radius:8px;font-weight:700;cursor:pointer;width:100%}button:disabled{opacity:.5}#status{white-space:pre-wrap;overflow-wrap:anywhere;min-height:20px}a{color:#ffab80}small{color:#c4b7ad}[hidden]{display:none!important}
+.password-wrap{position:relative;display:block}.password-wrap input{padding-right:54px}.password-toggle{position:absolute;right:5px;top:50%;transform:translateY(-50%);width:42px;height:38px;padding:0;display:grid;place-items:center;background:transparent;color:#c4b7ad;border-radius:6px}.password-toggle:hover,.password-toggle:focus-visible{background:#30241e;color:#fff}.password-toggle svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 </style></head><body><main>
 <h1>IGNIS · Login protegido</h1><p>Teste isolado com Firebase Authentication, usando a conta que já existe. Não altera dados operacionais ou senhas.</p>
 <form id="form">
 <label>Usuário atual<input name="login" required autocomplete="username"></label>
-<label>Senha atual<input name="password" type="password" required autocomplete="current-password"></label>
+<label>Senha atual<span class="password-wrap"><input id="password" name="password" type="password" required autocomplete="current-password"><button type="button" class="password-toggle" id="password-toggle" aria-label="Mostrar senha" aria-pressed="false" title="Mostrar senha"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/><path id="eye-slash" d="M3 3l18 18" hidden/></svg></button></span></label>
 <label id="email-box" hidden>E-mail já cadastrado no Firebase<input name="email" type="email" autocomplete="email"><small>Somente se a conta utilizar e-mail próprio.</small></label>
 <button id="btn">Validar login</button></form>
 <p id="status" role="status" aria-live="polite"></p><button id="logout" hidden>Encerrar teste</button>
@@ -20,15 +21,24 @@ import {createIgnisAuth} from './spark-auth.js';
 const app=initializeApp({apiKey:'AIzaSyBdfrSrrf-vThP3WqWJF76hhKE7FXGFpL0',authDomain:'fueltracker-adee5.firebaseapp.com',projectId:'fueltracker-adee5',appId:'1:488178201286:web:ecde03cc0488f4c3ffddc7'},'ignis-spark-validation');
 const client=createIgnisAuth(app,getFirestore(app));
 const form=document.getElementById('form'),btn=document.getElementById('btn'),status=document.getElementById('status'),out=document.getElementById('logout');
+const password=document.getElementById('password'),toggle=document.getElementById('password-toggle'),slash=document.getElementById('eye-slash');
+function showPassword(visible){
+  password.type=visible?'text':'password';
+  toggle.setAttribute('aria-pressed',String(visible));
+  toggle.setAttribute('aria-label',visible?'Ocultar senha':'Mostrar senha');
+  toggle.title=visible?'Ocultar senha':'Mostrar senha';
+  slash.toggleAttribute('hidden',!visible);
+}
+toggle.addEventListener('click',()=>showPassword(password.type==='password'));
 form.addEventListener('submit',async ev=>{
   ev.preventDefault();btn.disabled=true;status.textContent='Validando com o Firebase…';
   try{
     const d=new FormData(form),p=await client.login(d.get('login'),d.get('password'),d.get('email'));
     status.textContent='LOGIN FIREBASE CONFIRMADO\nPerfil protegido: '+(p.role==='adm'?'ADM Master':p.role==='admin'?'Admin':'Usuário')+'\nPermissões preservadas: '+p.perms.length;
-    form.reset();form.hidden=true;out.hidden=false;
+    form.reset();showPassword(false);form.hidden=true;out.hidden=false;
   }catch(e){
     if(e.code==='IGNIS_EMAIL_REQUIRED'){document.getElementById('email-box').hidden=false;document.querySelector('[name=email]').required=true;document.querySelector('[name=email]').focus();}
-    status.textContent=e.code==='auth/invalid-credential'?'Usuário, e-mail ou senha não conferem no Firebase.':(e.message||'Login não confirmado.');
+    status.textContent=e.code==='auth/api-key-not-valid.-please-pass-a-valid-api-key.'?'Chave de API recusada pelo Firebase Authentication. Não é um erro de senha.':e.code==='auth/invalid-credential'?'Usuário, e-mail ou senha não conferem no Firebase.':(e.message||'Login não confirmado.');
   }finally{btn.disabled=false;}
 });
 out.addEventListener('click',async()=>{await client.logout();out.hidden=true;form.hidden=false;status.textContent='Teste encerrado.';});
