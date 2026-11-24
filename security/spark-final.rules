@@ -3,7 +3,10 @@ service cloud.firestore {
   match /databases/{database}/documents {
     function profilePath() { return /databases/$(database)/documents/ignis_profiles/$(request.auth.uid); }
     function active() {
-      return request.auth != null && exists(profilePath()) && get(profilePath()).data.active == true;
+      return request.auth != null && exists(profilePath()) && get(profilePath()).data.active == true && get(profilePath()).data.role in ['adm','admin','usuario'];
+    }
+    function reportReader() {
+      return request.auth != null && exists(profilePath()) && get(profilePath()).data.active == true && get(profilePath()).data.role == 'report';
     }
     function master() { return active() && get(profilePath()).data.role == 'adm'; }
     function casesAccess() { return active() && (get(profilePath()).data.role in ['adm','admin'] || 'planejamento' in get(profilePath()).data.perms); }
@@ -13,10 +16,11 @@ service cloud.firestore {
         !request.resource.data.get('planejamento2027',{}).keys().hasAny(['tratativas','excluidas']);
     }
     match /fueltracker/{id} {
-      allow get,list: if active();
+      allow get: if active() || (reportReader() && (id == 'dados_v4' || id.matches('v4_(abast|abpatch|maq)_.*')));
+      allow list: if active();
       allow create,update: if active() && id != 'usuarios' && id != 'dados' &&
         (id != 'maintenance' || master()) && noLegacyCases();
-      allow delete: if active() && !(id in ['usuarios','dados','dados_v4','maintenance']);
+      allow delete: if active() && id.matches('(v4_(abast|abpatch|maq|med|efic|arla)|postos_rede|postos_precos|postos_preco_vinculos|postos_preco_pendentes)_.*');
     }
     match /ignis_profiles/{uid} {
       allow get: if request.auth != null && (request.auth.uid == uid || master());
@@ -44,7 +48,7 @@ service cloud.firestore {
           newHistory()==oldHistory().concat([newHistory()[oldHistory().size()]]) &&
           newHistory()[oldHistory().size()].autorUid==request.auth.uid;
       }
-      allow get: if casesAccess();
+      allow get: if casesAccess() && (!exists(/databases/$(database)/documents/ignis_cases/$(id)) || resource.data.deleted == false || master());
       allow list: if casesAccess() && (resource.data.deleted==false || master());
       allow create: if casesAccess() && shape() && request.resource.data.createdByUid==request.auth.uid &&
         request.resource.data.version==1 && request.resource.data.deleted==false &&
