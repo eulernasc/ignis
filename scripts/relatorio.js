@@ -37,11 +37,16 @@ async function carregarDados() {
   const API_KEY = process.env.FIREBASE_API_KEY;
   if (!PROJECT_ID || !API_KEY) throw new Error('FIREBASE_PROJECT_ID/FIREBASE_API_KEY não configurados');
 
+  const email=process.env.IGNIS_REPORT_EMAIL, password=process.env.IGNIS_REPORT_PASSWORD;
+  if(!email||!password)throw new Error('Credencial exclusiva de leitura do relatório não configurada.');
+  const login=await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${encodeURIComponent(API_KEY)}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password,returnSecureToken:true})});
+  if(!login.ok)throw new Error('Autenticação do relatório recusada: HTTP '+login.status);
+  const {idToken}=await login.json();if(!idToken)throw new Error('Token do relatório ausente.');
   const baseUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/fueltracker`;
 
   async function carregarDocumento(id, obrigatorio = true) {
     const url = `${baseUrl}/${encodeURIComponent(id)}?key=${API_KEY}`;
-    const res = await fetch(url);
+    const res = await fetch(url,{headers:{Authorization:'Bearer '+idToken}});
     if (res.status === 404 && !obrigatorio) return null;
     if (!res.ok) throw new Error(`Firestore ${id}: ${res.status} ${await res.text()}`);
     return res.json();
@@ -71,36 +76,28 @@ async function carregarDados() {
     return obj;
   }
 
-  const principal = parseDocumento(await carregarDocumento('dados'));
-  let abastecimentos = Array.isArray(principal.abastecimentos) ? principal.abastecimentos : [];
-
-  // Formato novo: manifesto versionado e atômico.
-  if (principal._storageVersion === 2 && principal._abastVersion) {
-    const total = Number(principal._abastChunks || 0);
-    if (!Number.isInteger(total) || total < 1 || total > 500) {
-      throw new Error(`Manifesto inválido: ${total} chunks`);
+  const principal = parseDocumento(await carregarDocumento('dados_v4'));
+  if(principal._storageVersion!==4)throw new Error('Manifesto v4 esperado.');
+  async function serie(prefix,version,count){
+    const n=Number(count||0);if(!Number.isInteger(n)||n<0||n>800||n>0&&!version)throw new Error('Manifesto de chunks inválido.');
+    const out=[];
+    for(let i=0;i<n;i+=10){
+      const docs=await Promise.all(Array.from({length:Math.min(10,n-i)},(_,k)=>carregarDocumento(prefix+'_'+version+'_'+(i+k))));
+      docs.forEach((d,k)=>{const row=parseDocumento(d);if(row.version!==version||Number(row.chunk)!==i+k||!Array.isArray(row.registros))throw new Error('Chunk inválido.');out.push(...row.registros);});
     }
-    const docs = await Promise.all(
-      Array.from({ length: total }, (_, i) =>
-        carregarDocumento(`abast_${principal._abastVersion}_${i}`)
-      )
-    );
-    abastecimentos = docs.flatMap(d => parseDocumento(d).registros || []);
-  } else if (principal._hasAbast) {
-    // Compatibilidade com o formato antigo. O script anterior olhava apenas o
-    // documento principal, embora os abastecimentos já estivessem em chunks.
-    const primeiroDoc = await carregarDocumento('abast_0', false);
-    if (primeiroDoc) {
-      const primeiro = parseDocumento(primeiroDoc);
-      const total = Math.max(1, Number(primeiro.total || 1));
-      if (!Number.isInteger(total) || total > 500) throw new Error(`Chunks legados inválidos: ${total}`);
-      const restantes = total > 1
-        ? await Promise.all(Array.from({ length: total - 1 }, (_, i) => carregarDocumento(`abast_${i + 1}`)))
-        : [];
-      abastecimentos = [primeiroDoc, ...restantes].flatMap(d => parseDocumento(d).registros || []);
-    }
+    return out;
   }
-
+  let abastecimentos=await serie('v4_abast',principal._abastVersion,principal._abastChunks);
+  const buckets=new Map(),loose=[];
+  function append(a){const pid=String(a?.periodoId||'');if(!pid){loose.push(a);return;}if(!buckets.has(pid))buckets.set(pid,[]);buckets.get(pid).push(a);}
+  abastecimentos.forEach(append);
+  for(const patch of principal._abastPatches||[]){
+    String(patch.removed||'').split('|').filter(Boolean).forEach(id=>buckets.delete(id));
+    (await serie('v4_abpatch',patch.version,patch.chunks)).forEach(append);
+  }
+  abastecimentos=[...loose,...Array.from(buckets.values()).flat()];
+  if(Number(principal._abastCount)!==abastecimentos.length)throw new Error('Contagem de abastecimentos diverge do manifesto.');
+  principal.maquinas=await serie('v4_maq',principal._maqVersion,principal._maqChunks);
   principal.abastecimentos = abastecimentos;
   return principal;
 }
