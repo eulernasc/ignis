@@ -974,9 +974,23 @@ window.fbSaveUsers = async function(){return false;};
 window.fbLoadUsers = async function(){
   if(!window.ignisSecureAuth?.auth.currentUser||window._authUser?.role!=='adm')return {};
   const snap=await getDocs(collection(db,'ignis_profiles'));
-  const users={};
-  snap.forEach(d=>{const p=d.data();if(p.login&&p.active===true)users[p.login]={uid:d.id,nome:p.nome||p.login,role:p.role,perms:Array.isArray(p.perms)?p.perms:[]};});
+  const users=Object.create(null);
+  snap.forEach(d=>{const p=d.data();if(p.login&&p.active===true&&['adm','admin','usuario'].includes(p.role))users[p.login]={uid:d.id,nome:p.nome||p.login,role:p.role,perms:Array.isArray(p.perms)?p.perms:[]};});
   return users;
+};
+window.fbUpdateUserProfile=async function(uid,login,changes,visiblePerms){
+  const auth=window.ignisSecureAuth?.auth;
+  if(!auth?.currentUser||window._authUser?.role!=='adm'||uid===auth.currentUser.uid)throw new Error('Somente o ADM Master pode alterar outros perfis.');
+  const ref=doc(db,'ignis_profiles',uid);
+  await runTransaction(db,async tx=>{
+    const snap=await tx.get(ref);
+    if(!snap.exists())throw new Error('Perfil não encontrado.');
+    const p=snap.data();
+    if(p.login!==login||p.active!==true||!['admin','usuario'].includes(p.role))throw new Error('Perfil protegido ou indisponível.');
+    const retained=(Array.isArray(p.perms)?p.perms:[]).filter(x=>!visiblePerms.includes(x));
+    const perms=[...new Set([...retained,...changes.perms])];
+    tx.update(ref,{nome:changes.nome,role:changes.role,perms});
+  });
 };
 
 // ── REDE DE POSTOS: coordenadas compartilhadas ─────────────────────────────
@@ -5427,6 +5441,9 @@ body{background:radial-gradient(900px 520px at 82% -10%,rgba(255,107,44,.065),tr
         <label class="perm-item"><input type="checkbox" data-perm="abastecimentos"> Abastecimentos</label>
         <label class="perm-item"><input type="checkbox" data-perm="cta"> CTA</label>
         <label class="perm-item"><input type="checkbox" data-perm="maquinas">Frota e Equipamentos</label>
+        <label class="perm-item"><input type="checkbox" data-perm="planejamento"> Acompanhamento de Performance</label>
+        <label class="perm-item"><input type="checkbox" data-perm="postos"> Rede de Postos</label>
+        <label class="perm-item"><input type="checkbox" data-perm="recon"> O2P × Ticket</label>
         <label class="perm-item"><input type="checkbox" data-perm="motoristas">Motoristas PX</label>
         <label class="perm-item"><input type="checkbox" data-perm="relatorio"> 📧 Relatório</label>
         <label class="perm-item"><input type="checkbox" data-perm="excluir"> 🗑️ A Excluir</label>
@@ -5451,11 +5468,15 @@ body{background:radial-gradient(900px 520px at 82% -10%,rgba(255,107,44,.065),tr
         </div>
         <div style="font-size:10px;color:var(--text3);line-height:1.45;margin-top:8px">As ações de <strong>Motoristas PX</strong> são individuais: histórico, importar, excluir, configurar faixas, vincular nomes e ajustar as faixas da Eficiência Geral. O <strong>ADM Master</strong> sempre possui acesso; para qualquer outra conta, inclusive Admin, você escolhe exatamente quais botões aparecem. <strong>Adicionar / remover motoristas</strong> e <strong>Ver Economia / Desperdício</strong> continuam separados.</div>
       </div>
+      <div style="margin-top:10px">
+        <label class="perm-item"><input type="checkbox" data-perm="ocorrencias_editar_todas"> Editar ocorrências de outros usuários</label>
+        <div style="font-size:11px;color:var(--text3);margin-top:4px">Liberação individual. Excluir ocorrências continua exclusivo do ADM Master.</div>
+      </div>
       <div style="margin-top:10px;padding:10px;background:rgba(232,148,26,.08);border:1px solid rgba(232,148,26,.3);border-radius:8px">
         <label class="perm-item" style="background:none;border:none;padding:0;gap:8px">
           <input type="checkbox" id="user-field-admin">
           ⭐ Tag <strong>Admin</strong>
-          <span style="font-size:11px;color:var(--text3)">(acesso amplo: pode importar/excluir em todas as áreas e gerenciar usuários)</span>
+          <span style="font-size:11px;color:var(--text3)">(acesso amplo a operações; gerenciamento de usuários exclusivo do ADM Master)</span>
         </label>
       </div>
     </div>
@@ -6848,7 +6869,7 @@ function authResumoPermissoesUsuario(usr){
   const extraPerms=new Set([
     'motoristas_idt_importar','motoristas_idt_excluir','motoristas_gobrax_historico',
     'motoristas_gobrax_importar','motoristas_gobrax_excluir','motoristas_gobrax_faixas',
-    'motoristas_eficiencia_faixas','motoristas_vinculos','motoristas_gerenciar','motoristas_financeiro_ver'
+    'motoristas_eficiencia_faixas','motoristas_vinculos','motoristas_gerenciar','motoristas_financeiro_ver','ocorrencias_editar_todas'
   ]);
   const extras=perms.filter(p=>extraPerms.has(p)).length;
   return {abas,extras,manage:perms.includes('manage_users')};
@@ -6925,7 +6946,7 @@ async function authRenderUsuarios(usersOverride) {
     const role=normalizedRole(usr);
     const roleLabel=role==='adm'?'ADM Master':role==='admin'?'Admin':'Usuário';
     const current=u?.id===id;
-    const canEdit=!current && (isAdm || usr.role !== 'adm');
+    const canEdit=isAdm&&!current&&usr.role!=='adm';
     return `
       <div class="config-user-card ${current?'is-current':''}">
         <div class="config-user-main">
@@ -6953,13 +6974,58 @@ async function authRenderUsuarios(usersOverride) {
 }
 
 function abrirModalNovoUsuario(){showToast('Novas contas devem ser provisionadas no Firebase.','info');}
-async function abrirModalEditarUsuario(id){showToast('Alterações de perfil e senha serão feitas no Firebase durante esta migração.','info');}
+async function abrirModalEditarUsuario(id){
+  if(window._authUser?.role!=='adm')return;
+  const users=await authCarregarUsuarios();
+  const u=users[id];
+  if(!u||u.role==='adm'||u.uid===window._authUser.uid){showToast('Perfil protegido ou indisponível.','error');return;}
+  document.getElementById('modal-usuario-title').textContent='Editar Usuário';
+  document.getElementById('edit-user-id').value=id;
+  document.getElementById('user-field-login').value=id;
+  document.getElementById('user-field-login').disabled=true;
+  document.getElementById('user-field-nome').value=u.nome||'';
+  for(const key of ['user-field-senha','user-field-senha2']){
+    const input=document.getElementById(key);input.value='';input.disabled=true;
+    input.closest('.form-group').style.display='none';
+  }
+  document.querySelectorAll('#modal-usuario [data-perm]').forEach(cb=>{cb.checked=u.perms.includes(cb.dataset.perm);});
+  document.getElementById('user-field-admin').checked=u.role==='admin';
+  authAtualizarControlePermissaoFinanceiro();
+  authAtualizarControlePermissaoGerenciarMotoristas();
+  authAtualizarControlesPermissoesMotoristasAcoes();
+  document.getElementById('user-modal-error').style.display='none';
+  document.getElementById('modal-usuario').classList.add('open');
+}
 
 function fecharModalUsuario() {
   document.getElementById('modal-usuario').classList.remove('open');
 }
 
-async function salvarUsuario(){showToast('Gerenciamento legado desativado. Utilize o Firebase.','info');}
+async function salvarUsuario(){
+  if(window._authUser?.role!=='adm')return;
+  const id=document.getElementById('edit-user-id').value;
+  const err=document.getElementById('user-modal-error');
+  const btn=document.querySelector('#modal-usuario button[onclick="salvarUsuario()"]');
+  if(!id||window._ignisProfileSaving)return;
+  err.style.display='none';
+  const nome=document.getElementById('user-field-nome').value.trim()||id;
+  const boxes=[...document.querySelectorAll('#modal-usuario [data-perm]')];
+  const perms=boxes.filter(cb=>cb.checked).map(cb=>cb.dataset.perm);
+  if(perms.some(p=>p.startsWith('motoristas_'))&&!perms.includes('motoristas'))perms.push('motoristas');
+  if(perms.includes('ocorrencias_editar_todas')&&!perms.includes('planejamento'))perms.push('planejamento');
+  const role=document.getElementById('user-field-admin').checked?'admin':'usuario';
+  window._ignisProfileSaving=true;if(btn)btn.disabled=true;
+  try{
+    const users=await window.fbLoadUsers();
+    const u=users[id];
+    if(!u||u.role==='adm')throw new Error('Perfil protegido ou indisponível.');
+    await window.fbUpdateUserProfile(u.uid,id,{nome,role,perms},boxes.map(cb=>cb.dataset.perm));
+    fecharModalUsuario();
+    showToast('Permissões salvas com sucesso! O usuário deve entrar novamente.','success');
+    await authRenderUsuarios();
+  }catch(e){err.textContent='Não foi possível salvar as permissões: '+(e.message||'Erro desconhecido');err.style.display='block';}
+  finally{window._ignisProfileSaving=false;if(btn)btn.disabled=false;}
+}
 async function confirmarExcluirUsuario(id){showToast('Gerenciamento legado desativado. Utilize o Firebase.','info');}
 
 // Inicializa ao carregar — uma única vez, depois que todo o HTML/JS síncrono terminou.
