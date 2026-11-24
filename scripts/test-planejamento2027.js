@@ -221,14 +221,17 @@ async function main(){
   const index=fs.readFileSync(path.resolve(__dirname,'../index.html'),'utf8');
   assert.ok(index.includes("const scopedPlanning=mode==='light'"),'fluxo segmentado está disponível');
   assert.match(index,/filtros-unificados\.css\?v=/,'CSS global de filtros carregado');
-  assert.match(index,/planejamento2027\.js\?v=20261118d/,'novo módulo sem cache antigo');
+  assert.match(index,/planejamento2027\.js\?v=20261124-security/,'novo módulo sem cache antigo');
   const filterCss=fs.readFileSync(path.resolve(__dirname,'../filtros-unificados.css'),'utf8');
   assert.match(filterCss,/button\.dash-dropdown-done/,'botão Concluir possui padrão visual');
   for(const pageId of ['page-dashboard','page-abastecimentos','page-arla','page-comparativo','page-motoristas','page-fechamento'])
     assert.ok(filterCss.includes('#'+pageId)||filterCss.includes('.page .filter-'),'padronização de '+pageId);
 
-  assert.ok(index.includes('const excluidas={...(current.excluidas||{})}'),'merge Firestore conserva exclusões');
-  assert.ok(index.includes('excluidas,tratativas:[...cases.values()]'),'Firestore não ressuscita as exclusões');
+  assert.ok(index.includes('const {tratativas,excluidas,...settings}=restData.planejamento2027'),'Manifesto não deve receber ocorrências protegidas');
+  const secureStore=fs.readFileSync(path.resolve(__dirname,'../security/spark-cases.js'),'utf8');
+  assert.match(secureStore,/current\.deleted\|\|current\.version!==previous\._secureVersion/,'Ocorrências excluídas não podem ser recriadas ou sobrescritas');
+  assert.match(secureStore,/deleted:true,updatedByUid:profile.uid/,'Exclusão preserva tombstone');
+  assert.match(secureStore,/previous&&!incoming&&profile.role!=='adm'/,'Exclusão só pelo Master');
   const legacy={id:'2026-11|pesada|ABCD123',mes:'2026-11',placa:'ABCD123',grupo:'pesada',
     categoria:'Treinamento',prazo:'2026-01-01',status:'Resolvido'};
   assert.equal(context.ignisPlanActionState(legacy),'não verificada');
