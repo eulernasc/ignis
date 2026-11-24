@@ -1,12 +1,11 @@
 name: Relatório Mensal de Eficiência
 
 on:
-  schedule:
-    - cron: '0 11 15 * *'   # dia 15, 08h horário de Brasília
-  workflow_dispatch:          # permite rodar manualmente
+  workflow_dispatch: # Arquivado: o envio oficial ocorre manualmente no IGNIS.
 
 jobs:
   enviar-relatorio:
+    if: ${{ false }} # Rotina legada desativada; preservada apenas para histórico.
     runs-on: ubuntu-latest
     defaults:
       run:
