@@ -25,10 +25,10 @@ test('editor delegado pode editar registros de terceiros sem poder excluir',()=>
   assert.equal(canEditCase(p,other,original),true);
   assert.equal(canRemoveCase(p,other,original),false);
 });
-test('permissão de exclusão independente da edição',()=>{
+test('permissão delegada nunca permite exclusão definitiva',()=>{
   const p=accessFor({auth:other,permission:{active:true,editAll:false,deleteCases:true}});
   assert.equal(canEditCase(p,other,original),false);
-  assert.equal(canRemoveCase(p,other,original),true);
+  assert.equal(canRemoveCase(p,other,original),false);
 });
 test('master acessa independentemente da ACL',()=>{
   const p=accessFor({auth:master,permission:null});

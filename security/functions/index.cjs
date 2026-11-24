@@ -175,7 +175,7 @@ exports.ignisCaseGrantAccess=onCall(settings,async req=>{
   if(!user.emailVerified)fail('failed-precondition','Usuário precisa verificar o email antes de receber permissões.');
   const active=req.data?.active===true;
   const editAll=active&&req.data?.editAll===true;
-  const deleteCases=active&&req.data?.deleteCases===true;
+  const deleteCases=false; // Exclusão definitiva reservada ao ADM Master.
   const docRef=roles.doc(user.uid);
   const auditRef=db.collection('ignis_case_role_events').doc();
   const batch=db.batch();

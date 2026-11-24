@@ -27,7 +27,7 @@ Consequência: ocultar Editar/Excluir ou conferir `role==='adm'` no navegador n�
 |---|---|---|---|---|
 | Usuário ativo e verificado | Sim | Sim | Não | Não |
 | Editor com permissão específica | Sim | Sim | Sim | Não |
-| Exclusor com permissão específica | Sim | Sim | Conforme autorização separada | Sim |
+| Usuário com permissão de exclusão legada | Sim | Sim | Conforme autorização de edição | Não |
 | ADM Master por claim server-side | Sim | Sim | Sim | Sim |
 
 Ocorrências antigas sem `createdByUid` autenticado **não** são automaticamente atribuídas pelo nome; continuam visíveis e somente master/editor delegado pode modificá-las. Exclusão lógica mantém eventos e autor. Alterações usam versões e transações.

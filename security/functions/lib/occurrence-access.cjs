@@ -10,7 +10,7 @@ function accessFor({auth,permission}){
     canRead:active,
     canCreate:active,
     canEditAll:active&&(master||permission?.editAll===true),
-    canDelete:active&&(master||permission?.deleteCases===true)
+    canDelete:active&&master
   };
 }
 function canEditCase(access,auth,record){
