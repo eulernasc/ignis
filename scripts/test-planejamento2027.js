@@ -21,7 +21,7 @@ async function main(){
     querySelector:()=>null,
     body:{classList:{add(){},remove(){}}}
   };
-  const window={addEventListener(){},_authUser:{nome:'Instrutor (teste)'}};
+  const window={addEventListener(){},_authUser:{nome:'Instrutor (teste)',role:'adm'}};
   let saves=0,shouldSave=true;
   const saveOptions=[];
   const notifications=[];
@@ -170,6 +170,11 @@ async function main(){
   assert.equal(conf.tratativas.find(x=>x.id===first.id).acaoRealizada,true);
   assert.ok(conf.tratativas.find(x=>x.id===first.id).historico.some(x=>x.tipo==='Ação corretiva concluída'));
   const secondId=conf.tratativas.find(x=>x.id!==first.id).id;
+  window._authUser.role='usuario';
+  const beforeDenied=conf.tratativas.length;
+  await context.ignisPlanDeleteCase(encodeURIComponent(secondId));
+  assert.equal(conf.tratativas.length,beforeDenied,'usuário comum não pode excluir ocorrências');
+  window._authUser.role='adm';
   shouldSave=false;
   await context.ignisPlanDeleteCase(encodeURIComponent(secondId));
   assert.ok(conf.tratativas.some(x=>x.id===secondId),'erro de gravação deve reverter exclusão');
