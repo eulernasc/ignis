@@ -14117,13 +14117,13 @@ function relSetTab(tab, el) {
 window._relGrupos = [];
 
 const REL_FROTA_LEVE_BI_URL = 'https://app.powerbi.com/groups/me/reports/ab4126d2-3897-48f3-bd08-8d16596276b5/7f73c6376254be31b09e?ctid=24591b61-de2e-49c4-8d4a-cdad28571338&experience=power-bi';
-const REL_FROTA_LEVE_BI_TEXTO = 'Para apoiar as análises e auxiliar na identificação das causas dos desvios de consumo, disponibilizamos o painel de BI da Frota Leve:';
+const REL_FROTA_LEVE_BI_TEXTO = 'Para apoiar as análises e auxiliar na identificação das causas do alto consumo de combustível desses veículos, disponibilizamos o painel de BI da Frota Leve:';
 
 // O link pertence ao tipo do relatório, não ao nome ou à operação do grupo.
 function relgCorpoFrotaLeve(corpo, tipo) {
   const texto = String(corpo || '').replace(/\r\n/g, '\n');
   const linhas = texto.split('\n');
-  const semBI = linhas.filter(l => l.trim() !== REL_FROTA_LEVE_BI_TEXTO && l.trim() !== REL_FROTA_LEVE_BI_URL);
+  const semBI = linhas.filter(l => l.trim() !== REL_FROTA_LEVE_BI_TEXTO && l.trim() !== 'Para apoiar as análises e auxiliar na identificação das causas dos desvios de consumo, disponibilizamos o painel de BI da Frota Leve:' && l.trim() !== REL_FROTA_LEVE_BI_URL);
   if(tipo !== '__leve__') return semBI.length === linhas.length ? texto : semBI.join('\n').replace(/\n{3,}/g,'\n\n').trim();
   const idx = semBI.findIndex(l => /^\s*solicitamos\b/i.test(l));
   let pos = idx + 1;
