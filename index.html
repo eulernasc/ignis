@@ -12311,7 +12311,7 @@ function renderRelEmailBloco(operacoes, relTipo) {
     const textarea = document.getElementById('rel-email-corpo-' + encodeURIComponent(b.id));
     if (textarea) {
       const grupoCorpo = b.corpo || '';
-      textarea.value = grupoCorpo || corpoBackup[b.id] || '';
+      textarea.value = relgCorpoFrotaLeve(grupoCorpo || corpoBackup[b.id] || '', relTipo);
     }
   });
 }
@@ -12456,6 +12456,7 @@ function relEmailFiltrar() {
 }
 
 function buildEmailHTML(blocoOps, byOp, labelPeriodo, limite, labelBloco, corpoTexto) {
+  corpoTexto = relgCorpoFrotaLeve(corpoTexto, window._relDados?.relTipo);
   const corEfic = e => e < 90 ? '#dc2626' : e < 95 ? '#ea580c' : '#d97706';
   const bgEfic  = e => e < 90 ? '#fef2f2' : e < 95 ? '#fff7ed' : '#fffbeb';
   const isKmL = window._relDados?.isKmL || false;
@@ -12478,16 +12479,8 @@ function buildEmailHTML(blocoOps, byOp, labelPeriodo, limite, labelBloco, corpoT
     maquinas.forEach(m => todasMaquinas.push({ ...m, _op: op }));
   }
 
-  // Ordena: 1) operação A-Z, 2) modelo A-Z, 3) eficiência crescente (menor pra maior)
-  todasMaquinas.sort((a, b) => {
-    if (a._op < b._op) return -1;
-    if (a._op > b._op) return 1;
-    const modA = (a.modelo||'').toUpperCase();
-    const modB = (b.modelo||'').toUpperCase();
-    if (modA < modB) return -1;
-    if (modA > modB) return 1;
-    return (a.eficiencia||0) - (b.eficiencia||0);
-  });
+  // Prioridade absoluta: eficiência crescente, independentemente de operação e modelo.
+  todasMaquinas.sort((a,b) => Number(a.eficiencia) - Number(b.eficiencia));
 
   const totalPlacas = todasMaquinas.length;
 
@@ -14123,6 +14116,26 @@ function relSetTab(tab, el) {
 // ── RELATÓRIO — GRUPOS DE E-MAIL ─────────────────────────────────────────────
 window._relGrupos = [];
 
+const REL_FROTA_LEVE_BI_URL = 'https://app.powerbi.com/groups/me/reports/ab4126d2-3897-48f3-bd08-8d16596276b5/7f73c6376254be31b09e?ctid=24591b61-de2e-49c4-8d4a-cdad28571338&experience=power-bi';
+const REL_FROTA_LEVE_BI_TEXTO = 'Para apoiar as análises e auxiliar na identificação das causas dos desvios de consumo, disponibilizamos o painel de BI da Frota Leve:';
+
+// O link pertence ao tipo do relatório, não ao nome ou à operação do grupo.
+function relgCorpoFrotaLeve(corpo, tipo) {
+  const texto = String(corpo || '').replace(/\r\n/g, '\n');
+  const linhas = texto.split('\n');
+  const semBI = linhas.filter(l => l.trim() !== REL_FROTA_LEVE_BI_TEXTO && l.trim() !== REL_FROTA_LEVE_BI_URL);
+  if(tipo !== '__leve__') return semBI.length === linhas.length ? texto : semBI.join('\n').replace(/\n{3,}/g,'\n\n').trim();
+  const idx = semBI.findIndex(l => /^\s*solicitamos\b/i.test(l));
+  let pos = idx + 1;
+  if(idx >= 0){
+    while(pos < semBI.length && semBI[pos].trim() && !/^\s*(caso seja necess[aá]rio|seguimos\s)/i.test(semBI[pos])) pos++;
+  } else {
+    const aviso = semBI.findIndex(l => /^\s*(caso seja necess[aá]rio|seguimos\s)/i.test(l));
+    pos = aviso >= 0 ? aviso : semBI.length;
+  }
+  semBI.splice(pos,0,'',REL_FROTA_LEVE_BI_TEXTO,REL_FROTA_LEVE_BI_URL,'');
+  return semBI.join('\n').replace(/\n{3,}/g,'\n\n').trim();
+}
 const REL_DESTINATARIOS_AVISO = 'Caso seja necessário incluir ou retirar alguém da lista de destinatários deste e-mail, por favor, nos informe para que possamos manter a comunicação sempre atualizada.';
 
 function relgAplicarAvisoDestinatarios(corpo) {
@@ -14180,6 +14193,9 @@ function relgCorpoEmailHTML(corpoTexto) {
   const escapeHtml = valor => String(valor || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
   return String(corpoTexto || '').replace(/\r\n/g, '\n').split('\n').map(line => {
+    if (line.trim() === REL_FROTA_LEVE_BI_URL) {
+      return '<p style="margin:0 0 4px 0;padding:0"><a style="color:#1d4ed8;text-decoration:underline" href="' + escapeHtml(REL_FROTA_LEVE_BI_URL) + '">Acessar BI da Frota Leve</a></p>';
+    }
     const conteudo = line.trim() ? escapeHtml(line) : '&nbsp;';
     if (norm(line) === avisoNorm) {
       return '<p style="margin:0 0 4px 0;padding:0;font-weight:700;color:#1d4ed8">' + conteudo + '</p>';
@@ -14347,9 +14363,10 @@ function relgSalvar() {
   const nome = document.getElementById('relg-nome').value.trim();
   relgChipSyncHidden();
   const emails = document.getElementById('relg-emails').value.trim();
-  const corpo = relgAplicarAvisoDestinatarios(document.getElementById('relg-corpo').value.trim());
+  const corpoBase = relgAplicarAvisoDestinatarios(document.getElementById('relg-corpo').value.trim());
   const ops = [...document.querySelectorAll('.relg-op-check:checked')].map(c => c.value);
   const tipos = [...document.querySelectorAll('.relg-tipo-check:checked')].map(c => c.value);
+  const corpo = relgCorpoFrotaLeve(corpoBase, tipos.length===1 ? tipos[0] : '');
   if (!nome) { showToast('Digite um nome para o grupo', 'error'); return; }
   if (!emails) { showToast('Adicione pelo menos um e-mail', 'error'); return; }
   if (!ops.length) { showToast('Selecione pelo menos uma operação', 'error'); return; }
@@ -14384,7 +14401,7 @@ function relgEditar(id) {
   if (!g) return;
   document.getElementById('relg-nome').value = g.nome;
   document.getElementById('relg-edit-id').value = id;
-  const corpo = document.getElementById('relg-corpo'); if (corpo) corpo.value = g.corpo || '';
+  const corpo = document.getElementById('relg-corpo'); if (corpo) corpo.value = relgCorpoFrotaLeve(g.corpo || '', g.tipos?.length===1 ? g.tipos[0] : '');
   relgChipLoad(g.emails);
   document.querySelectorAll('.relg-tipo-check').forEach(c => {
     c.checked = g.tipos ? g.tipos.includes(c.value) : false;

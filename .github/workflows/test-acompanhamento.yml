@@ -48,3 +48,5 @@ jobs:
         run: node scripts/test-dashboard-intacto.js
       - name: Validar seleção múltipla do Acompanhamento
         run: node scripts/test-filtros-multiselect.js
+      - name: Validar ordem de eficiência e BI de frota leve
+        run: node scripts/test-relatorio-eficiencia.js
