@@ -233,7 +233,7 @@ function ignisPlanInlineCase(t){
       ${!isDone?`<button type="button" class="p27-mini primary" onclick="ignisPlanQuickFinish('${key}')">Concluir</button>
        <button type="button" class="p27-mini" onclick="ignisPlanToggleExtend('${key}')">Prorrogar</button>`:''}
       <button type="button" class="p27-mini" onclick="ignisPlanOpen('${ignisPlanSafeParam(t.placa)}','${ignisPlanSafeParam(t.grupo)}','${key}','${ignisPlanSafeParam(t.mes)}')">Detalhes</button>
-      <button type="button" class="p27-mini danger" onclick="ignisPlanDeleteCase('${key}')">Excluir</button>
+      <button type="button" class="p27-mini danger" style="display:${window._authUser?.role==='adm'?'inline-flex':'none'}" onclick="ignisPlanDeleteCase('${key}')">Excluir</button>
     </div>
     ${!isDone?`<div class="p27-extend" id="p27-extend-${key}" hidden>
       <label>Nova data<input type="date" min="${ignisPlanLocalDate()}" value="${t.prazo&&t.prazo>=ignisPlanLocalDate()?ignisPlanEsc(t.prazo):ignisPlanLocalDate()}"></label>
@@ -314,6 +314,7 @@ async function ignisPlanExtend(encoded){
 }
 
 async function ignisPlanDeleteCase(encoded){
+  if(window._authUser?.role!=='adm'){showToast('Somente o ADM Master pode excluir ocorrências.','error');return;}
   const t=ignisPlanCaseById(encoded);if(!t)return;
   if(!confirm('Excluir definitivamente a ocorrência de '+ignisPlanCauseName(t)+' da placa '+t.placa+'?'))return;
   await ignisPlanCommitInline(conf=>{
@@ -594,7 +595,7 @@ function ignisPlanCasesView(root,conf){
             ${!done?`<button type="button" class="p27-mini primary" onclick="ignisPlanQuickFinish('${id}')">Concluir</button>
               <button type="button" class="p27-mini" onclick="ignisPlanToggleExtend('${id}')">Prorrogar</button>`:''}
             <button type="button" class="p27-mini" onclick="ignisPlanOpen('${plate}','${group}','','${ignisPlanLocalDate().slice(0,7)}')">Nova ocorrência</button>
-            <button type="button" class="p27-mini danger" onclick="ignisPlanDeleteCase('${id}')">Excluir</button>
+            <button type="button" class="p27-mini danger" style="display:${window._authUser?.role==='adm'?'inline-flex':'none'}" onclick="ignisPlanDeleteCase('${id}')">Excluir</button>
           </div>
           ${!done?`<div class="p27-extend" id="p27-extend-${id}" hidden>
             <label>Nova data<input type="date" min="${ignisPlanLocalDate()}"
