@@ -17,7 +17,7 @@
 import {initializeApp} from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
 import {getFirestore} from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 import {createIgnisAuth} from './spark-auth.js';
-const app=initializeApp({apiKey:'AIzaSyBdfrSrif-vThP3WqWJF76hhKE7FXGFpL0',authDomain:'fueltracker-adee5.firebaseapp.com',projectId:'fueltracker-adee5',appId:'1:488178201286:web:ecde03cc0488f4c3ffddc7'},'ignis-spark-validation');
+const app=initializeApp({apiKey:'AIzaSyBdfrSrrf-vThP3WqWJF76hhKE7FXGFpL0',authDomain:'fueltracker-adee5.firebaseapp.com',projectId:'fueltracker-adee5',appId:'1:488178201286:web:ecde03cc0488f4c3ffddc7'},'ignis-spark-validation');
 const client=createIgnisAuth(app,getFirestore(app));
 const form=document.getElementById('form'),btn=document.getElementById('btn'),status=document.getElementById('status'),out=document.getElementById('logout');
 form.addEventListener('submit',async ev=>{
