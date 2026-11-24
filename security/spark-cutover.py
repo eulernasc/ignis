@@ -68,7 +68,7 @@ def commit(writes):
     if writes:req(DB+":commit","POST",{"writes":writes})
 def rules_source(content):return {"source":{"files":[{"name":"firestore.rules","content":content}]}}
 def compile_rules(content):
-    tested=req(RULES+f"projects/{P}:test","POST",rules_source(content))
+    tested=req(RULES+f"projects/{P}:test","POST",{**rules_source(content),"testSuite":{"testCases":[]}})
     errors=[x for x in tested.get("issues",[]) if x.get("severity")=="ERROR"]
     if errors:
         for e in errors:print("Erro de compilação:",e.get("description","")[:400])
@@ -97,13 +97,13 @@ def main():
     for uid,v in humans.items():
         if v.get("active") is not True or v["login"] not in old or not hashlib.sha256(v["login"].encode()).hexdigest().startswith(uid.removeprefix("ignis_")):raise RuntimeError("Vínculo de perfil divergente.")
         previous=old[v["login"]]
-        if v["role"]!=previous.get("role") or v["perms"]!=previous.get("perms",[]):raise RuntimeError("Permissões divergentes; não aplicar corte.")
+        if v["role"]!=previous.get("role","usuario") or v["perms"]!=previous.get("perms",[]):raise RuntimeError("Permissões divergentes; não aplicar corte.")
     accounts=req(AUTH+"/accounts:batchGet?maxResults=1000")
     users={u["localId"]:u for u in accounts.get("users",[])}
     if accounts.get("nextPageToken") or any(uid not in users or users[uid].get("disabled") for uid in humans):raise RuntimeError("Contas não confirmadas.")
     if set(users)-set(humans)-{REPORT_UID}:raise RuntimeError("Contas inesperadas.")
     main_doc=doc("fueltracker/dados_v4")
-    if not main_doc or decode(main_doc).get("_storageVersion")!=4:raise RuntimeError("Manifesto v4 ausente.")
+    if not main_doc or field(main_doc.get("fields",{}).get("_storageVersion",{"integerValue":"0"}))!=4:raise RuntimeError("Manifesto v4 ausente.")
     if doc("ignis_security/config") or listdocs("ignis_cases"):raise RuntimeError("Migração de ocorrências já existente; não sobrescrever.")
     site=urllib.request.urlopen("https://eulernasc.github.io/ignis/index.html?cutover="+str(datetime.datetime.now().timestamp()),timeout=40).read().decode()
     if "2026-11-24-firebase-auth-spark" not in site or "await auth.login(login,password,email)" not in site:raise RuntimeError("GitHub Pages ainda não está com a versão segura. Nenhuma regra alterada.")
@@ -167,6 +167,13 @@ def main():
         # Sem prova de autor, apenas o master/editor delegado pode editar.
         payload={"record":raw,"createdByUid":enc(owner),"updatedByUid":enc("migration"),"version":enc(1),"deleted":enc(cid in excluded),"updatedAt":{"timestampValue":now}}
         writes.append(write("ignis_cases/"+hashlib.sha256(cid.encode()).hexdigest(),payload))
+    # Preserve tombstones de registros que já haviam sido excluídos.
+    for cid in excluded:
+        if cid in ids:continue
+        if not isinstance(cid,str) or not cid:raise RuntimeError("Tombstone inválido.")
+        payload={"record":enc({"id":cid,"historico":[]}),"createdByUid":enc(""),"updatedByUid":enc("migration"),"version":enc(1),"deleted":enc(True),"updatedAt":{"timestampValue":now}}
+        writes.append(write("ignis_cases/"+hashlib.sha256(cid.encode()).hexdigest(),payload))
+    expected_count=len(ids|set(excluded))
     # Remove hashes e cópias de ocorrências dos documentos compartilhados.
     candidates=listdocs("fueltracker",("_users","planejamento2027"))
     full=[]
@@ -189,7 +196,7 @@ def main():
     writes.append(write("ignis_security/config",{"casesReady":enc(True),"migratedAt":{"timestampValue":now},"caseCount":enc(len(raw_cases))}))
     if len(writes)>450:raise RuntimeError("Migração excede limite atômico. Banco em manutenção.")
     commit(writes)
-    if doc("fueltracker/usuarios") or len(listdocs("ignis_cases"))!=len(raw_cases):raise RuntimeError("Verificação de migração falhou.")
+    if doc("fueltracker/usuarios") or len(listdocs("ignis_cases"))!=expected_count:raise RuntimeError("Verificação de migração falhou.")
     publish(final_name,freeze_name)
     # Testes REST reais: anônimo negado; leitor técnico autorizado; escrita negada.
     public={"Content-Type":"application/json"}
@@ -201,6 +208,14 @@ def main():
     if not denied(DB+"/fueltracker/dados_v4",public):raise RuntimeError("Leitura anônima não foi negada.")
     req(DB+"/fueltracker/dados_v4",h=reader)
     if not denied(DB+"/ignis_profiles/"+next(uid for uid,v in humans.items() if v["role"]=="adm"),reader):raise RuntimeError("Leitor técnico acessa perfil indevido.")
+    probe=DB+"/fueltracker/security_report_write_probe_"+secrets.token_hex(8)
+    try:
+        req(probe+"?currentDocument.exists=false","PATCH",{"fields":{"probe":enc(True)}},h=reader)
+    except RuntimeError as e:
+        if "HTTP 403" not in str(e) and "HTTP 401" not in str(e):raise
+    else:
+        req(probe,"DELETE")
+        raise RuntimeError("Leitor técnico conseguiu gravar indevidamente.")
     print(json.dumps({"status":"CORTE_CONFIRMADO","contas_humanas_preservadas":14,"senhas_humanas_alteradas":0,"ocorrencias_migradas":len(raw_cases),"backup_privado":True,"acesso_anonimo_bloqueado":True,"relatorio_leitura_confirmada":True,"regras":final_name},ensure_ascii=False,indent=2))
 try:main()
 except Exception as e:
