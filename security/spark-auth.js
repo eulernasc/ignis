@@ -25,13 +25,17 @@ export function createIgnisAuth(app,db){
     if(!normalized||!password)throw new Error('Informe usuário e senha.');
     const hash=await loginHash(normalized);
     const alias=await getDocFromServer(doc(db,'ignis_auth_aliases',hash));
-    const email=alias.exists()?String(alias.data().email||''):String(emailHint|| (normalized.includes('@')?normalized:'')).trim();
+    let remembered='';try{remembered=localStorage.getItem('ignis_auth_email_'+hash)||'';}catch(e){}
+    const email=alias.exists()?String(alias.data().email||''):String(emailHint||remembered||(normalized.includes('@')?normalized:'')).trim();
     if(!email){const e=new Error('Esta conta usa e-mail próprio. Informe o e-mail já cadastrado no Firebase.');e.code='IGNIS_EMAIL_REQUIRED';throw e;}
     await setPersistence(auth,browserSessionPersistence);
-    const credential=await signInWithEmailAndPassword(auth,email,password);
+    let credential;
+    try{credential=await signInWithEmailAndPassword(auth,email,password);}
+    catch(e){if(!alias.exists()&&remembered&&!emailHint&&e.code==='auth/invalid-credential'){try{localStorage.removeItem('ignis_auth_email_'+hash);}catch(_){}const err=new Error('Confirme o e-mail cadastrado no Firebase.');err.code='IGNIS_EMAIL_REQUIRED';throw err;}throw e;}
     try{
       const profile=await loadProfile(credential.user);
       if(profile.id!==normalized||!credential.user.uid.startsWith('ignis_')||!hash.startsWith(credential.user.uid.slice(6)))throw new Error('O login não corresponde à conta autenticada.');
+      if(!alias.exists()){try{localStorage.setItem('ignis_auth_email_'+hash,email);}catch(e){}}
       return profile;
     }catch(e){await signOut(auth);throw e;}
   }

@@ -5,7 +5,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <!-- IGNIS v46 · correção de travamento Motoristas PX + cache de nomes + renderização única -->
-<meta name="ignis-build" content="2026-11-17-firebase-multiclient-v65">
+<meta name="ignis-build" content="2026-11-24-firebase-auth-spark">
 <title>Ignis — Gestão Inteligente de Frotas e Equipamentos</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23ff6b2c'/%3E%3Cpath d='M36 9c1 8-4 11-7 15-3 4-5 8-2 14 2-4 5-6 9-8-1 8 5 11 5 17 6-4 9-10 8-17-1-10-7-17-13-21Z' fill='none' stroke='white' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -15,10 +15,12 @@
 <script async src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 <script type="module" async>
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import {createIgnisAuth} from "./security/spark-auth.js?v=20261124b";
+import {createCaseStore} from "./security/spark-cases.js?v=20261124";
 import { getFirestore, initializeFirestore, memoryLocalCache, collection, query, where, documentId, getDocs, getDocsFromCache, doc, setDoc, getDoc, getDocFromCache, deleteDoc, writeBatch, runTransaction, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyBdfrSrif-vThP3WqWJF76hhKE7FXGFpL0",
+  apiKey: "AIzaSyBdfrSrrf-vThP3WqWJF76hhKE7FXGFpL0",
   authDomain: "fueltracker-adee5.firebaseapp.com",
   projectId: "fueltracker-adee5",
   storageBucket: "fueltracker-adee5.firebasestorage.app",
@@ -39,6 +41,8 @@ try{
   console.warn('IGNIS: inicialização do Firestore com cache em memória falhou.',e);
   db=getFirestore(app);
 }
+window.ignisSecureAuth = createIgnisAuth(app,db);
+window.ignisCaseStore = createCaseStore(db,window.ignisSecureAuth.auth);
 window._firebaseRevision = null; // revisão compartilhada da base para impedir que um computador desatualizado sobrescreva a nuvem
 window._firebaseFuelSignature = ''; // identifica a versão das séries de abastecimentos/máquinas/anomalias
 window._firebaseArlaSignature = '';
@@ -528,11 +532,13 @@ window.fbSave = async function(data) {
       ...restData
     } = snapshot;
 
+    if(restData.planejamento2027){const {tratativas,excluidas,...settings}=restData.planejamento2027;restData.planejamento2027=settings;}
     const mainRef = doc(db, 'fueltracker', FB_MAIN_DOC);
     let antigo = {};
     try {
       const atualSnap = await fbRetry(() => withTimeout(getDoc(mainRef), 10000), 2, 350);
       if (atualSnap.exists()) antigo = atualSnap.data() || {};
+      delete antigo._users;
     } catch (e) {
       console.warn('IGNIS: não foi possível ler o manifesto anterior; o save continuará.', e);
     }
@@ -677,6 +683,7 @@ window.fbSave = async function(data) {
           }))
         }
       : { _savedAt: restData._savedAt };
+    if(scopedRest.planejamento2027)scopedRest.planejamento2027={...(antigo.planejamento2027||{}),...scopedRest.planejamento2027};
     const manifest = {
       ...antigo,
       ...scopedRest,
@@ -700,22 +707,7 @@ window.fbSave = async function(data) {
         // Preserve campos leves não alterados por outros usuários.
         const appliedLight={...lightPatch};
         if(Object.prototype.hasOwnProperty.call(appliedLight,'planejamento2027')){
-          // Mescla casos por identificador + carimbo de alteração para não perder
-          // tratativas paralelas de usuários diferentes.
           const current=latestData.planejamento2027||{},incoming=appliedLight.planejamento2027||{};
-          // Excluir de verdade: o registro sai das tratativas e um identificador de exclusão
-          // evita que sincronizações antigas de outros usuários recriem a ocorrência.
-          const excluidas={...(current.excluidas||{})};
-          Object.entries(incoming.excluidas||{}).forEach(([id,stamp])=>{
-            if(!excluidas[id]||String(stamp||'')>String(excluidas[id]))excluidas[id]=stamp;
-          });
-          const cases=new Map((Array.isArray(current.tratativas)?current.tratativas:[])
-            .filter(t=>t?.id&&!Object.prototype.hasOwnProperty.call(excluidas,t.id)).map(t=>[t.id,t]));
-          (Array.isArray(incoming.tratativas)?incoming.tratativas:[]).forEach(t=>{
-            if(!t?.id||Object.prototype.hasOwnProperty.call(excluidas,t.id))return;
-            const existing=cases.get(t.id);
-            if(!existing||String(t.atualizadoEm||'')>=String(existing.atualizadoEm||''))cases.set(t.id,t);
-          });
           const metas={...(current.metas||{})},timestamps={...(current.metasRevisadas||{})};
           Object.entries(incoming.metas||{}).forEach(([g,v])=>{
             const stamp=String(incoming.metasRevisadas?.[g]||'');
@@ -723,8 +715,9 @@ window.fbSave = async function(data) {
               metas[g]=v;if(stamp)timestamps[g]=stamp;
             }
           });
-          appliedLight.planejamento2027={...current,...incoming,metas,metasRevisadas:timestamps,excluidas,tratativas:[...cases.values()]};
+          appliedLight.planejamento2027={...current,...incoming,metas,metasRevisadas:timestamps};
         }
+        delete latestData._users;
         tx.set(mainRef, { ...latestData, ...appliedLight, _revision:version, _storageVersion:Number(latestData._storageVersion||FB_STORAGE_VERSION) });
         return;
       }
@@ -915,6 +908,8 @@ window.fbLoad = async function() {
       '_maqVersion','_maqChunks','_maqCount','_medVersion','_medChunks','_medCount',
       '_eficVersion','_eficChunks','_eficCount','_arlaVersion','_arlaChunks','_arlaCount'
     ].forEach(k => delete dados[k]);
+    try{const result=await window.ignisCaseStore.load(window._authUser);if(result.ready){dados.planejamento2027={...(dados.planejamento2027||{}),tratativas:result.records};}}
+    catch(e){console.warn('IGNIS: ocorrências protegidas indisponíveis; edição bloqueada.',e);}
     return dados;
   } catch(e) {
     window._fbLoadFailed = true;
@@ -975,21 +970,13 @@ window.fbLoadAnomReviews = async function() {
 };
 
 // Funções exclusivas para usuários — documento separado e protegido
-window.fbSaveUsers = async function(users) {
-  // Atualiza cache IMEDIATAMENTE — antes mesmo do Firebase responder
-  try { localStorage.setItem('ignis_users_cache', JSON.stringify(users)); } catch(e) {}
-  try {
-    await withTimeout(setDoc(doc(db, "fueltracker", "usuarios"), { _users: users }), 10000);
-    return true;
-  } catch(e) { console.error("Firebase saveUsers error:", e); return false; }
-};
-
-window.fbLoadUsers = async function() {
-  try {
-    const snap = await withTimeout(getDoc(doc(db, "fueltracker", "usuarios")), 8000);
-    if (snap.exists() && snap.data()._users) return snap.data()._users;
-    return null;
-  } catch(e) { console.error("Firebase loadUsers error:", e); return null; }
+window.fbSaveUsers = async function(){return false;};
+window.fbLoadUsers = async function(){
+  if(!window.ignisSecureAuth?.auth.currentUser||window._authUser?.role!=='adm')return {};
+  const snap=await getDocs(collection(db,'ignis_profiles'));
+  const users={};
+  snap.forEach(d=>{const p=d.data();if(p.login&&p.active===true)users[p.login]={uid:d.id,nome:p.nome||p.login,role:p.role,perms:Array.isArray(p.perms)?p.perms:[]};});
+  return users;
 };
 
 // ── REDE DE POSTOS: coordenadas compartilhadas ─────────────────────────────
@@ -2872,6 +2859,10 @@ input[type="checkbox"]:indeterminate{background:rgba(233,95,50,.2);border-color:
         <div style="position:relative">
           <input class="login-input" type="password" id="login-pass" placeholder="Digite sua senha" autocomplete="current-password" onkeydown="if(event.key==='Enter')loginEntrar()" style="padding-right:44px">
           <button type="button" onclick="toggleSenhaLogin()" style="position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text2);padding:0;line-height:1;display:flex;align-items:center"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg></button>
+        </div>
+        <div id="ignis-login-email-box" hidden>
+          <label class="login-label" for="ignis-login-email">E-mail cadastrado no Firebase</label>
+          <input class="login-input" id="ignis-login-email" type="email" autocomplete="email" placeholder="E-mail da sua conta" onkeydown="if(event.key==='Enter')loginEntrar()">
         </div>
         <button class="login-btn" onclick="loginEntrar()">Entrar</button>
       </div>
@@ -6307,16 +6298,11 @@ async function _flushFirebaseSaveQueue() {
   updateSyncStatus('syncing');
 
   const agora = Date.now();
-  const users = (() => {
-    try { return JSON.parse(localStorage.getItem('ignis_users_cache') || '{}'); }
-    catch(e) { return {}; }
-  })();
   const dataToSave = { ...snapshot, _savedAt: agora };
   // Se outro save deste MESMO navegador acabou enquanto este aguardava na fila,
   // usa a revisão recém-confirmada. Sem isso o segundo save era recusado como
   // conflito e obrigava o usuário a reimportar o mesmo período.
   dataToSave._baseRevision = String(window._firebaseRevision || snapshot._baseRevision || '');
-  if (Object.keys(users).length) dataToSave._users = users;
 
   let ok = false;
   try {
@@ -6677,225 +6663,64 @@ const AUTH_PAGES = [
   { id:'config',        label:'Configurações',         group:'Sistema' },
 ].map(p => ({...p, icon:navIconSvg(p.id)}));
 
-async function sha256(str) {
-  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
-  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+// Firebase Authentication: não existe fallback por hash ou sessão legada.
+async function ignisAwaitAuth(){
+  if(window.ignisSecureAuth)return window.ignisSecureAuth;
+  await new Promise((resolve,reject)=>{
+    let timer;const ready=()=>{clearTimeout(timer);window.removeEventListener('firebaseReady',ready);resolve();};
+    timer=setTimeout(()=>{window.removeEventListener('firebaseReady',ready);reject(new Error('Firebase indisponível. Recarregue a página.'));},15000);
+    window.addEventListener('firebaseReady',ready,{once:true});
+    if(window.ignisSecureAuth)ready();
+  });
+  if(!window.ignisSecureAuth)throw new Error('Autenticação indisponível.');
+  return window.ignisSecureAuth;
 }
-
-// Inicializa: verifica se existe ADM, se não mostra setup
-async function loginInit() {
-  // O login nunca depende do Firebase para ficar visível/interativo.
-  const loader = document.getElementById('ignis-loading');
-  if (loader) loader.remove();
-  const loginScreen = document.getElementById('login-screen');
-  if (loginScreen) { loginScreen.style.display = 'flex'; loginScreen.style.pointerEvents = 'auto'; }
-  if (window.__ignisBootWatchdog) { clearTimeout(window.__ignisBootWatchdog); window.__ignisBootWatchdog = null; }
-
-  // Cache local de usuários (salvo após primeiro login bem-sucedido)
-  const getCached = () => { try { return JSON.parse(localStorage.getItem('ignis_users_cache')||'{}'); } catch(e){ return {}; } };
-  const setCached = u => { try { localStorage.setItem('ignis_users_cache', JSON.stringify(u)); } catch(e){} };
-
-  const cachedUsers = getCached();
-  const sessao = sessionStorage.getItem('ignis_session');
-
-  // 1. Verifica sessão contra cache local (instantâneo, sem Firebase)
-  if (sessao && Object.keys(cachedUsers).length) {
-    try {
-      const s = JSON.parse(sessao);
-      if (cachedUsers[s.id] && cachedUsers[s.id].hash === s.hash) {
-        window._authUser = { id: s.id, ...cachedUsers[s.id] };
-        loginEntrarApp();
-        return;
-      }
-    } catch(e) {}
-    sessionStorage.removeItem('ignis_session');
-  }
-
-  // 2. Sem cache local → busca Firebase em background (sem bloquear UI)
-  if (!Object.keys(cachedUsers).length) {
-    (async () => {
-      try {
-        if (!window.firebaseReady) {
-          await Promise.race([
-            new Promise(r => window.addEventListener('firebaseReady', r, {once:true})),
-            new Promise((_,rej) => setTimeout(()=>rej(),6000))
-          ]);
-        }
-        const users = await window.fbLoadUsers() || {};
-        if (Object.keys(users).length) {
-          setCached(users);
-          // Verifica sessão com dados frescos do Firebase
-          if (sessao) {
-            try {
-              const s = JSON.parse(sessao);
-              if (users[s.id] && users[s.id].hash === s.hash) {
-                window._authUser = { id: s.id, ...users[s.id] };
-                loginEntrarApp(); return;
-              }
-            } catch(e) {}
-          }
-        } else {
-          // Firebase confirmou banco vazio → primeiro acesso
-          document.getElementById('login-form').style.display = 'none';
-          document.getElementById('login-setup').style.display = 'block';
-        }
-      } catch(e) {
-        // Firebase falhou — NÃO mostra setup. Mantém tela de login normal.
-        console.warn('Firebase indisponível no init:', e);
-      }
-    })();
-  }
-
-  // 3. Sincroniza Firebase em background para manter cache atualizado
-  if (Object.keys(cachedUsers).length) {
-    (async () => {
-      try {
-        if (!window.firebaseReady) await Promise.race([
-          new Promise(r => window.addEventListener('firebaseReady', r, {once:true})),
-          new Promise((_,rej) => setTimeout(()=>rej(),10000))
-        ]);
-        // Sincroniza usuários do documento próprio (não mais em `dados`)
-        const fbUsers = await window.fbLoadUsers();
-        if (fbUsers && Object.keys(fbUsers).length) {
-          setCached(fbUsers);
-        } else {
-          // Firebase vazio mas temos usuários locais → sobe para Firebase agora
-          console.log('Ignis: subindo usuários locais para o Firebase...');
-          await window.fbSaveUsers(cachedUsers);
-        }
-      } catch(e) {}
-    })();
-  }
+function ignisRemoveLegacyCredentials(){
+  try{localStorage.removeItem('ignis_users_cache');sessionStorage.removeItem('ignis_session');}catch(e){}
 }
-
-async function loginCriarAdm() {
-  const login = document.getElementById('setup-user').value.trim().toLowerCase();
-  const pass  = document.getElementById('setup-pass').value;
-  const pass2 = document.getElementById('setup-pass2').value;
-  const btn   = document.querySelector('#login-setup .login-btn');
-
+async function loginInit(){
+  if(window.__ignisAuthInit)return;
+  window.__ignisAuthInit=true;
+  document.getElementById('ignis-loading')?.remove();
+  const screen=document.getElementById('login-screen');
+  if(screen){screen.style.display='flex';screen.style.pointerEvents='auto';}
+  if(window.__ignisBootWatchdog){clearTimeout(window.__ignisBootWatchdog);window.__ignisBootWatchdog=null;}
+  document.getElementById('login-setup').style.display='none';
+  ignisRemoveLegacyCredentials();
+  const btn=document.querySelector('#login-form .login-btn');
+  if(btn)btn.disabled=true;
+  try{
+    const auth=await ignisAwaitAuth();
+    const profile=await auth.restore();
+    if(profile&&!window._authUser){window._authUser=profile;loginEntrarApp();}
+  }catch(e){mostrarLoginErro(e.message||'Não foi possível restaurar a sessão.');}
+  finally{window.__ignisAuthInit=false;if(btn)btn.disabled=false;}
+}
+async function loginCriarAdm(){mostrarLoginErro('Cadastros de contas são feitos pelo administrador no Firebase.');}
+async function loginEntrar(){
+  if(window.__ignisLoginInFlight||window.__ignisAuthInit)return;
+  const login=document.getElementById('login-user').value.trim().toLowerCase();
+  const field=document.getElementById('login-pass');
+  const password=field.value;
+  const email=document.getElementById('ignis-login-email').value.trim();
+  const btn=document.querySelector('#login-form .login-btn');
+  if(!login||!password){mostrarLoginErro('Preencha usuário e senha.');return;}
+  window.__ignisLoginInFlight=true;btn.disabled=true;btn.textContent='Verificando...';
   document.getElementById('login-error').style.display='none';
-  if (!login || login.length < 2) { mostrarLoginErro('Nome de usuário inválido (mínimo 2 caracteres).'); return; }
-  if (pass.length < 6) { mostrarLoginErro('Senha deve ter no mínimo 6 caracteres.'); return; }
-  if (pass !== pass2) { mostrarLoginErro('As senhas não conferem.'); return; }
-
-  btn.textContent = '⏳ Criando...';
-  btn.disabled = true;
-
-  try {
-    const hash = await sha256(pass);
-    const adm = { nome: login, hash, role: 'adm', perms: ['dashboard','comparativo','abastecimentos','cta','maquinas','relatorio','excluir','arla','kmcomp','metarota','config'] };
-
-    // Salva cache local imediatamente (não depende do Firebase)
-    try { localStorage.setItem('ignis_users_cache', JSON.stringify({ [login]: adm })); } catch(e) {}
-
-    window._authUser = { id: login, ...adm };
-    sessionStorage.setItem('ignis_session', JSON.stringify({ id: login, hash }));
-
-    // Salva no Firebase (tenta imediato, sem bloquear o login)
-    if (window.firebaseReady) {
-      window.fbSaveUsers({ [login]: adm }).catch(e => console.warn('Firebase save ADM:', e));
-    } else {
-      window.addEventListener('firebaseReady', () => {
-        window.fbSaveUsers({ [login]: adm }).catch(e => console.warn('Firebase save ADM:', e));
-      }, {once:true});
-    }
-
+  try{
+    const auth=await ignisAwaitAuth();
+    const profile=await auth.login(login,password,email);
+    ignisRemoveLegacyCredentials();
+    window._authUser=profile;
+    field.value='';
     loginEntrarApp();
-  } catch(e) {
-    console.error('Setup error:', e);
-    mostrarLoginErro('Erro ao criar usuário. Tente novamente.');
-    btn.textContent = 'Criar ADM e Entrar';
-    btn.disabled = false;
-  }
-}
-
-async function loginEntrar() {
-  if (window.__ignisLoginInFlight) return;
-  const login = document.getElementById('login-user').value.trim().toLowerCase();
-  const pass  = document.getElementById('login-pass').value;
-  const btn   = document.querySelector('#login-form .login-btn');
-
-  if (!login || !pass) { mostrarLoginErro('Preencha usuário e senha.'); return; }
-
-  window.__ignisLoginInFlight = true;
-  let entrou = false;
-  const resetBtn = () => {
-    window.__ignisLoginInFlight = false;
-    if (btn && !entrou) { btn.textContent = 'Entrar'; btn.disabled = false; }
-  };
-  btn.textContent = 'Verificando...';
-  btn.disabled = true;
-  document.getElementById('login-error').style.display = 'none';
-
-  try {
-    const hash = await Promise.race([
-      sha256(pass),
-      new Promise((_,rej)=>setTimeout(()=>rej(new Error('hash-timeout')),2500))
-    ]);
-    const getCached = () => { try { return JSON.parse(localStorage.getItem('ignis_users_cache')||'{}'); } catch(e){ return {}; } };
-    const setCached = u => { try { localStorage.setItem('ignis_users_cache', JSON.stringify(u)); } catch(e){} };
-
-    // 1) Cache local: caminho normal e instantâneo.
-    const cached = getCached();
-    const cachedUser = cached[login];
-    if (cachedUser && cachedUser.hash === hash) {
-      window._authUser = { id: login, ...cachedUser };
-      try { sessionStorage.setItem('ignis_session', JSON.stringify({ id: login, hash })); } catch(e) {}
-      entrou = true;
-      resetBtn();
-      loginEntrarApp();
-      return;
+  }catch(e){
+    if(e.code==='IGNIS_EMAIL_REQUIRED'){
+      document.getElementById('ignis-login-email-box').hidden=false;
+      document.getElementById('ignis-login-email').focus();
     }
-
-    // 2) Só consulta servidor quando o cache não consegue validar. Toda a etapa remota
-    // tem prazo total; nenhum getDoc/CDN pode deixar o botão preso indefinidamente.
-    const fetchRemoteUsers = async () => {
-      if (!window.firebaseReady || typeof window.fbLoadUsers !== 'function') {
-        await new Promise((resolve, reject) => {
-          let done = false;
-          const finish = (fn) => { if (done) return; done = true; clearTimeout(t); fn(); };
-          const onReady = () => finish(resolve);
-          window.addEventListener('firebaseReady', onReady, {once:true});
-          const t = setTimeout(() => finish(() => reject(new Error('firebase-init-timeout'))), 3500);
-          if (window.firebaseReady && typeof window.fbLoadUsers === 'function') finish(resolve);
-        });
-      }
-      if (typeof window.fbLoadUsers !== 'function') throw new Error('firebase-api-indisponivel');
-      return await window.fbLoadUsers();
-    };
-
-    let users;
-    try {
-      users = await Promise.race([
-        fetchRemoteUsers(),
-        new Promise((_,rej)=>setTimeout(()=>rej(new Error('login-server-timeout')),5500))
-      ]);
-      users = users || {};
-      if (Object.keys(users).length) setCached(users);
-    } catch (e) {
-      console.warn('IGNIS login remoto:', e.message || e);
-      if (cachedUser) mostrarLoginErro('Não foi possível atualizar sua credencial agora. Verifique a conexão e tente novamente.');
-      else mostrarLoginErro('Servidor indisponível. Tente novamente em alguns segundos.');
-      return;
-    }
-
-    if (!Object.keys(users).length) { mostrarLoginErro('Não foi possível verificar os usuários no servidor.'); return; }
-    const u = users[login];
-    if (!u) { mostrarLoginErro('Usuário não encontrado. Verifique o nome de usuário.'); return; }
-    if (u.hash !== hash) { mostrarLoginErro('Senha incorreta.'); return; }
-
-    window._authUser = { id: login, ...u };
-    try { sessionStorage.setItem('ignis_session', JSON.stringify({ id: login, hash })); } catch(e) {}
-    entrou = true;
-    resetBtn();
-    loginEntrarApp();
-  } catch(e) {
-    console.error('Login error:', e);
-    mostrarLoginErro('Não foi possível concluir o login. Tente novamente.');
-  } finally {
-    resetBtn();
-  }
+    mostrarLoginErro(e.code==='auth/invalid-credential'?'Usuário, e-mail ou senha não conferem no Firebase.':(e.message||'Não foi possível entrar.'));
+  }finally{window.__ignisLoginInFlight=false;btn.disabled=false;btn.textContent='Entrar';}
 }
 
 function mostrarLoginErro(msg) {
@@ -6927,7 +6752,7 @@ function loginEntrarApp() {
   authRenderNav();
   authAplicarPermissoesMotoristas();
   // Mostra/oculta seções restritas no Config
-  const canManage = u?.role === 'adm' || u?.role === 'admin';
+  const canManage = u?.role === 'adm';
   const usersSection = document.getElementById('config-users-section');
   if (usersSection) usersSection.style.display = canManage ? 'block' : 'none';
   const dangerZone = document.getElementById('config-danger-zone');
@@ -6957,9 +6782,11 @@ function loginEntrarApp() {
   });
 }
 
-function loginSair() {
-  sessionStorage.removeItem('ignis_session');
-  window._authUser = null;
+async function loginSair() {
+  try{await (await ignisAwaitAuth()).logout();}
+  catch(e){showToast('Não foi possível encerrar a sessão. Tente novamente.','error');return;}
+  ignisRemoveLegacyCredentials();
+  window._authUser=null;
   window.location.reload();
 }
 
@@ -7009,19 +6836,9 @@ function authRenderNav() {
 
 // ── GERENCIAMENTO DE USUÁRIOS ──────────────────────────────────────────────────
 
-async function authCarregarUsuarios() {
-  // Cache é a fonte de verdade — atualizado em todo save/delete/login
-  const cached = (() => { try { return JSON.parse(localStorage.getItem('ignis_users_cache')||'{}'); } catch(e){ return {}; } })();
-  if (Object.keys(cached).length) return cached;
-  // Cache vazio = primeiro acesso neste dispositivo → busca Firebase
-  try {
-    const users = await window.fbLoadUsers() || {};
-    if (Object.keys(users).length) {
-      try { localStorage.setItem('ignis_users_cache', JSON.stringify(users)); } catch(e) {}
-      return users;
-    }
-    return {};
-  } catch(e) { return {}; }
+async function authCarregarUsuarios(){
+  if(window._authUser?.role!=='adm')return {};
+  try{return await window.fbLoadUsers()||{};}catch(e){showToast('Não foi possível consultar os perfis protegidos.','error');return {};}
 }
 
 function authResumoPermissoesUsuario(usr){
@@ -7135,94 +6952,15 @@ async function authRenderUsuarios(usersOverride) {
   }).join('');
 }
 
-function abrirModalNovoUsuario() {
-  document.getElementById('modal-usuario-title').textContent = 'Novo Usuário';
-  document.getElementById('edit-user-id').value = '';
-  document.getElementById('user-field-login').value = '';
-  document.getElementById('user-field-login').disabled = false;
-  document.getElementById('user-field-nome').value = '';
-  document.getElementById('user-field-senha').value = '';
-  document.getElementById('user-field-senha2').value = '';
-  document.querySelectorAll('[data-perm]').forEach(cb => cb.checked = false);
-  document.getElementById('user-field-admin').checked = false;
-  authAtualizarControlePermissaoFinanceiro();
-  authAtualizarControlePermissaoGerenciarMotoristas();
-  authAtualizarControlesPermissoesMotoristasAcoes();
-  document.getElementById('user-modal-error').style.display = 'none';
-  document.getElementById('modal-usuario').classList.add('open');
-}
-
-async function abrirModalEditarUsuario(id) {
-  const users = await authCarregarUsuarios();
-  const u = users[id]; if (!u) return;
-  document.getElementById('modal-usuario-title').textContent = 'Editar Usuário';
-  document.getElementById('edit-user-id').value = id;
-  document.getElementById('user-field-login').value = id;
-  document.getElementById('user-field-login').disabled = true;
-  document.getElementById('user-field-nome').value = u.nome || '';
-  document.getElementById('user-field-senha').value = '';
-  document.getElementById('user-field-senha2').value = '';
-  document.querySelectorAll('[data-perm]').forEach(cb => {
-    cb.checked = (u.perms || []).includes(cb.dataset.perm);
-  });
-  document.getElementById('user-field-admin').checked = (u.role === 'admin');
-  authAtualizarControlePermissaoFinanceiro();
-  authAtualizarControlePermissaoGerenciarMotoristas();
-  authAtualizarControlesPermissoesMotoristasAcoes();
-  document.getElementById('user-modal-error').style.display = 'none';
-  document.getElementById('modal-usuario').classList.add('open');
-}
+function abrirModalNovoUsuario(){showToast('Novas contas devem ser provisionadas no Firebase.','info');}
+async function abrirModalEditarUsuario(id){showToast('Alterações de perfil e senha serão feitas no Firebase durante esta migração.','info');}
 
 function fecharModalUsuario() {
   document.getElementById('modal-usuario').classList.remove('open');
 }
 
-async function salvarUsuario() {
-  const editId = document.getElementById('edit-user-id').value;
-  const login  = document.getElementById('user-field-login').value.trim().toLowerCase();
-  const nome   = document.getElementById('user-field-nome').value.trim();
-  const pass   = document.getElementById('user-field-senha').value;
-  const pass2  = document.getElementById('user-field-senha2').value;
-  const perms  = [...document.querySelectorAll('[data-perm]:checked')].map(cb=>cb.dataset.perm);
-  if (perms.some(p=>p==='motoristas_idt_importar'||p==='motoristas_idt_excluir'||p==='motoristas_gobrax_importar'||p==='motoristas_gobrax_excluir'||p==='motoristas_gerenciar'||p==='motoristas_financeiro_ver') && !perms.includes('motoristas')) perms.push('motoristas');
-  const isAdmin = document.getElementById('user-field-admin').checked;
-  const errEl  = document.getElementById('user-modal-error');
-  errEl.style.display = 'none';
-
-  if (!login || login.length < 2) { errEl.textContent='Nome de login inválido.'; errEl.style.display='block'; return; }
-  if (!editId && pass.length < 6) { errEl.textContent='Senha deve ter no mínimo 6 caracteres.'; errEl.style.display='block'; return; }
-  if (pass && pass !== pass2) { errEl.textContent='As senhas não conferem.'; errEl.style.display='block'; return; }
-
-  // Usa cache como fonte primária — sempre atualizado e não depende de latência do Firestore
-  let users = {};
-  try { users = JSON.parse(localStorage.getItem('ignis_users_cache')||'{}'); } catch(e) {}
-  if (!Object.keys(users).length) {
-    // Cache vazio: tenta Firebase como fallback
-    users = await window.fbLoadUsers() || {};
-  }
-
-  if (!editId && users[login]) { errEl.textContent='Este login já existe.'; errEl.style.display='block'; return; }
-
-  const existing = users[editId || login] || {};
-  const hash = pass ? await sha256(pass) : existing.hash;
-  if (editId && editId !== login) delete users[editId];
-  users[login] = { nome: nome||login, hash, role: isAdmin ? 'admin' : 'usuario', perms };
-  await window.fbSaveUsers(users);
-  fecharModalUsuario();
-  authRenderUsuarios(users);
-  showToast('Usuário salvo com sucesso!', 'success');
-}
-
-async function confirmarExcluirUsuario(id) {
-  if (!confirm(`Excluir o usuário "${id}"? Esta ação não pode ser desfeita.`)) return;
-  let users = {};
-  try { users = JSON.parse(localStorage.getItem('ignis_users_cache')||'{}'); } catch(e) {}
-  if (!Object.keys(users).length) { users = await window.fbLoadUsers() || {}; }
-  delete users[id];
-  await window.fbSaveUsers(users);
-  authRenderUsuarios(users);
-  showToast('Usuário excluído.', 'success');
-}
+async function salvarUsuario(){showToast('Gerenciamento legado desativado. Utilize o Firebase.','info');}
+async function confirmarExcluirUsuario(id){showToast('Gerenciamento legado desativado. Utilize o Firebase.','info');}
 
 // Inicializa ao carregar — uma única vez, depois que todo o HTML/JS síncrono terminou.
 let __ignisLoginBooted = false;
@@ -7703,7 +7441,7 @@ function showPage(page,el) {
   if(page==='config' && precisaAtualizar) {
     dieselPopularOps();
     const u = window._authUser;
-    const canManage = u?.role === 'adm' || u?.role === 'admin';
+    const canManage = u?.role === 'adm';
     if(canManage) authRenderUsuarios();
     configRestoreTab();
     _markPageClean(page);
@@ -21182,6 +20920,6 @@ function ctaOnShow(){
 </script>
 
 <script src="ignis-multiselect.js?v=20261118b"></script>
-<script src="planejamento2027.js?v=20261118d"></script>
+<script src="planejamento2027.js?v=20261124-security"></script>
 </body>
 </html>

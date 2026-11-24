@@ -1,5 +1,6 @@
 'use strict';
 import fs from 'node:fs';
+import {execFileSync} from 'node:child_process';
 import crypto from 'node:crypto';
 import path from 'node:path';
 import assert from 'node:assert/strict';
@@ -14,13 +15,13 @@ function gitSha(source){
   ])).digest('hex');
 }
 const html=read('index.html');
-const planningScript='<script src="ignis-multiselect.js?v=20261118b"></script>\n<script src="planejamento2027.js?v=20261118d"></script>';
-assert.ok(html.includes(planningScript),'Carregamento dos filtros do Acompanhamento ausente');
-const oldHtml=html.replace(planningScript,
-  '<script src="planejamento2027.js?v=20261116a"></script>')
-  .replace('planejamento2027.css?v=20261118c','planejamento2027.css?v=20261116a');
-assert.equal(gitSha(oldHtml),'4df6faea1a38a1adfb4c7084b28426eb22fdbb11',
-  'Dashboard/HTML divergiu da versão anterior! Não altere os arquivos do Dashboard.');
+const baseline=execFileSync('git',['show','27c212c0f3df967b015c7f83607cde346d9dc71e:index.html'],{encoding:'utf8',maxBuffer:10*1024*1024});
+const css=s=>s.slice(s.indexOf('<style>'),s.indexOf('</style>')+8);
+const dash=s=>{const a=s.indexOf('  <!-- DASHBOARD -->'),b=s.indexOf('  <div id="page-planejamento"',a);return s.slice(a,b);};
+assert.equal(css(html),css(baseline),'CSS do Dashboard não pode mudar');
+assert.equal(dash(html),dash(baseline),'Markup do Dashboard não pode mudar');
+assert.match(html,/await auth\.login\(login,password,email\)/);
+assert.doesNotMatch(html,/cachedUser\.hash|await sha256\(pass\)/);
 assert.equal(gitSha(read('filtros-unificados.css')),'89339503d27ae7c2625472fddd14ffd620c3a33b',
   'CSS global do Dashboard divergiu da versão anterior.');
 const planning=read('planejamento2027.js');
