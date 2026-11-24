@@ -1,0 +1,65 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function profilePath() { return /databases/$(database)/documents/ignis_profiles/$(request.auth.uid); }
+    function active() {
+      return request.auth != null && exists(profilePath()) && get(profilePath()).data.active == true;
+    }
+    function master() { return active() && get(profilePath()).data.role == 'adm'; }
+    function casesAccess() { return active() && (get(profilePath()).data.role in ['adm','admin'] || 'planejamento' in get(profilePath()).data.perms); }
+    function editor() { return master() || (casesAccess() && 'ocorrencias_editar_todas' in get(profilePath()).data.perms); }
+    function noLegacyCases() {
+      return !request.resource.data.keys().hasAny(['_users']) &&
+        !request.resource.data.get('planejamento2027',{}).keys().hasAny(['tratativas','excluidas']);
+    }
+    match /fueltracker/{id} {
+      allow get,list: if active();
+      allow create,update: if active() && id != 'usuarios' && id != 'dados' &&
+        (id != 'maintenance' || master()) && noLegacyCases();
+      allow delete: if active() && !(id in ['usuarios','dados','dados_v4','maintenance']);
+    }
+    match /ignis_profiles/{uid} {
+      allow get: if request.auth != null && (request.auth.uid == uid || master());
+      allow list: if master();
+      allow update: if master() && uid != request.auth.uid && resource.data.role != 'adm' &&
+        request.resource.data.role in ['admin','usuario'] &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nome','perms','role','active']) &&
+        request.resource.data.nome is string && request.resource.data.perms is list && request.resource.data.active is bool;
+      allow create,delete: if false;
+    }
+    match /ignis_auth_aliases/{loginHash} { allow get: if true; allow list,write: if false; }
+    match /ignis_security/{id} { allow get: if active() && id=='config'; allow list,write: if false; }
+    match /ignis_cases/{id} {
+      function shape() {
+        return request.resource.data.keys().hasAll(['record','createdByUid','updatedByUid','version','deleted','updatedAt']) &&
+          request.resource.data.keys().hasOnly(['record','createdByUid','updatedByUid','version','deleted','updatedAt']) &&
+          request.resource.data.record is map && request.resource.data.record.id is string &&
+          request.resource.data.version is int && request.resource.data.updatedByUid == request.auth.uid &&
+          request.resource.data.updatedAt == request.time && request.resource.data.deleted is bool;
+      }
+      function oldHistory() { return resource.data.record.get('historico',[]); }
+      function newHistory() { return request.resource.data.record.historico; }
+      function appendHistory() {
+        return newHistory() is list && newHistory().size()==oldHistory().size()+1 &&
+          newHistory()==oldHistory().concat([newHistory()[oldHistory().size()]]) &&
+          newHistory()[oldHistory().size()].autorUid==request.auth.uid;
+      }
+      allow get: if casesAccess();
+      allow list: if casesAccess() && (resource.data.deleted==false || master());
+      allow create: if casesAccess() && shape() && request.resource.data.createdByUid==request.auth.uid &&
+        request.resource.data.version==1 && request.resource.data.deleted==false &&
+        newHistory() is list && newHistory().size()==1 && newHistory()[0].autorUid==request.auth.uid;
+      allow update: if casesAccess() && shape() && resource.data.deleted==false &&
+        request.resource.data.createdByUid==resource.data.createdByUid &&
+        request.resource.data.version==resource.data.version+1 &&
+        ((request.resource.data.deleted==true && master() && request.resource.data.record==resource.data.record) ||
+        (request.resource.data.deleted==false && (editor() || resource.data.createdByUid==request.auth.uid) &&
+        request.resource.data.record.id==resource.data.record.id &&
+        request.resource.data.record.diff(resource.data.record).affectedKeys().hasOnly([
+          'categoria','categoriaOutro','descricaoCausa','acaoCorretiva','acaoRealizada','responsavel','prazo','dataAcao','statusRegistro','observacao','status','atualizadoEm','atualizadoPor','historico','motivoProrrogacao'
+        ]) && appendHistory()));
+      allow delete: if false;
+    }
+    match /{document=**} { allow read,write: if false; }
+  }
+}

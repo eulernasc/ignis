@@ -230,7 +230,7 @@ function ignisPlanInlineCase(t){
     <div class="p27-inline-info"><span class="${overdue?'p27-bad':''}">${isDone?'Concluída em':'Prazo'}: <b>${when}</b></span>
     <span>Resp.: ${ignisPlanEsc(t.responsavel||'Não informado')}</span></div>
     <div class="p27-inline-buttons">
-      ${!isDone?`<button type="button" class="p27-mini primary" onclick="ignisPlanQuickFinish('${key}')">Concluir</button>
+      ${!isDone&&ignisPlanCanEdit(t)?`<button type="button" class="p27-mini primary" onclick="ignisPlanQuickFinish('${key}')">Concluir</button>
        <button type="button" class="p27-mini" onclick="ignisPlanToggleExtend('${key}')">Prorrogar</button>`:''}
       <button type="button" class="p27-mini" onclick="ignisPlanOpen('${ignisPlanSafeParam(t.placa)}','${ignisPlanSafeParam(t.grupo)}','${key}','${ignisPlanSafeParam(t.mes)}')">Detalhes</button>
       <button type="button" class="p27-mini danger" style="display:${window._authUser?.role==='adm'?'inline-flex':'none'}" onclick="ignisPlanDeleteCase('${key}')">Excluir</button>
@@ -250,6 +250,12 @@ function ignisPlanCaseById(encoded){
   return ignisPlanConfig().tratativas.find(t=>t.id===decodeURIComponent(encoded))||null;
 }
 
+function ignisPlanCanEdit(t){return !window.ignisCaseStore||window.ignisCaseStore.canEdit(window._authUser,t);}
+async function ignisPlanPersistCases(before,conf){
+  if(!window.ignisCaseStore)return saveState({mode:'light',keys:['planejamento2027'],immediate:true});
+  conf.tratativas=await window.ignisCaseStore.apply(before,conf.tratativas,window._authUser);
+  return true;
+}
 function ignisPlanAuthor(){return String(window._authUser?.nome||window._authUser?.id||'Não identificado');}
 
 function ignisPlanAuditUpdate(t,next,label,extra=[]){
@@ -269,7 +275,7 @@ async function ignisPlanCommitInline(mutate,successMessage){
   const start=Date.now();
   try{
     mutate(conf);
-    const ok=await saveState({mode:'light',keys:['planejamento2027'],immediate:true});
+    const ok=await ignisPlanPersistCases(JSON.parse(before).tratativas,conf);
     if(!ok)throw new Error(window._lastFirebaseSaveError||'Firebase não confirmou o salvamento.');
     ignisPlanRender();showToast(successMessage,'success');
     console.info('IGNIS Performance: operação confirmada em '+((Date.now()-start)/1000).toFixed(1)+'s.');
@@ -283,6 +289,7 @@ async function ignisPlanCommitInline(mutate,successMessage){
 
 async function ignisPlanQuickFinish(encoded){
   const t=ignisPlanCaseById(encoded);if(!t)return;
+  if(!ignisPlanCanEdit(t)){showToast('Você não possui autorização para editar esta ocorrência.','error');return;}
   if(ignisPlanActionState(t)==='realizada'){showToast('Esta ação já está concluída.','info');return;}
   if(!confirm('Confirmar que a ação corretiva da placa '+t.placa+' foi realizada?'))return;
   await ignisPlanCommitInline(conf=>{
@@ -300,6 +307,7 @@ function ignisPlanToggleExtend(encoded){
 async function ignisPlanExtend(encoded){
   const t=ignisPlanCaseById(encoded),panel=document.getElementById('p27-extend-'+encoded);
   if(!t||!panel)return;
+  if(!ignisPlanCanEdit(t)){showToast('Você não possui autorização para editar esta ocorrência.','error');return;}
   const prazo=String(panel.querySelector('input[type="date"]')?.value||'');
   const motivo=String(panel.querySelector('input[type="text"]')?.value||'').trim();
   if(!/^\d{4}-\d{2}-\d{2}$/.test(prazo)||prazo<ignisPlanLocalDate()||(t.prazo&&prazo<=t.prazo)){
@@ -592,7 +600,7 @@ function ignisPlanCasesView(root,conf){
           </div>
           <div class="p27-occ-buttons">
             <button type="button" class="p27-action" onclick="ignisPlanOpen('${plate}','${group}','${id}','${mes}')">Detalhes / editar</button>
-            ${!done?`<button type="button" class="p27-mini primary" onclick="ignisPlanQuickFinish('${id}')">Concluir</button>
+            ${!done&&ignisPlanCanEdit(t)?`<button type="button" class="p27-mini primary" onclick="ignisPlanQuickFinish('${id}')">Concluir</button>
               <button type="button" class="p27-mini" onclick="ignisPlanToggleExtend('${id}')">Prorrogar</button>`:''}
             <button type="button" class="p27-mini" onclick="ignisPlanOpen('${plate}','${group}','','${ignisPlanLocalDate().slice(0,7)}')">Nova ocorrência</button>
             <button type="button" class="p27-mini danger" style="display:${window._authUser?.role==='adm'?'inline-flex':'none'}" onclick="ignisPlanDeleteCase('${id}')">Excluir</button>
@@ -839,6 +847,7 @@ function ignisPlanOpen(encoded,grupo,caseEncoded='',period=''){
   const conf=ignisPlanConfig(),original=caseId?conf.tratativas.find(t=>t.id===caseId):null;
   if(caseId&&!original){showToast('Esta ocorrência não foi encontrada. Atualize a aba.','error');return;}
   const old=original||{},root=ignisPlanModalRoot();
+  const readOnly=!!original&&!ignisPlanCanEdit(original);
   const known=['Problema mecânico','Dirigibilidade','Parâmetro','Outro'];
   const categoria=known.includes(old.categoria)?old.categoria:'';
   const action=ignisPlanActionState(old);
@@ -887,10 +896,11 @@ function ignisPlanOpen(encoded,grupo,caseEncoded='',period=''){
         <textarea name="observacao" rows="3" maxlength="1500" placeholder="Retornos do instrutor, evidências, novas orientações...">${ignisPlanEsc(old.observacao||'')}</textarea></label>
       ${original?`<details class="p27-history"><summary>Histórico de atualizações (${Array.isArray(old.historico)?old.historico.length:0})</summary>
         ${ignisPlanHistory(old)}</details>`:''}
+      ${readOnly?'<p class="p27-legacy-note">Somente leitura. Você não possui permissão para editar esta ocorrência.</p>':''}
       <div id="p27-save-state" class="p27-save-state" role="status" aria-live="polite"></div>
       <div class="p27-editor-actions">
         <button type="button" class="p27-action p27-secondary" onclick="ignisPlanClose()">Cancelar</button>
-        <button type="submit" class="p27-action" id="p27-save-btn">Salvar ocorrência</button></div>
+        <button type="submit" class="p27-action" id="p27-save-btn" ${readOnly?'disabled':''}>Salvar ocorrência</button></div>
     </form></div>`;
   document.body?.classList.add('p27-modal-open');
   ignisPlanFields();
@@ -902,6 +912,7 @@ async function ignisPlanSubmit(ev,encoded,grupo,caseEncoded='',period=''){
   const conf=ignisPlanConfig(),id=caseEncoded?decodeURIComponent(caseEncoded):`${mes}|${grupo}|${placa}|${Date.now().toString(36)}-${Math.random().toString(36).slice(2,8)}`;
   const idx=conf.tratativas.findIndex(t=>t.id===id),old=idx>=0?conf.tratativas[idx]:null;
   if(caseEncoded&&!old){showToast('Ocorrência não encontrada.','error');return;}
+  if(old&&!ignisPlanCanEdit(old)){showToast('Você não possui autorização para editar esta ocorrência.','error');return;}
   const before=JSON.stringify(conf.tratativas),now=new Date().toISOString();
   const categoria=String(form.get('categoria')||''),acao=String(form.get('acaoRealizada')||'');
   const categoriaOutro=categoria==='Outro'?String(form.get('categoriaOutro')||'').trim():'';
@@ -937,7 +948,7 @@ async function ignisPlanSubmit(ev,encoded,grupo,caseEncoded='',period=''){
   const btn=f.querySelector('#p27-save-btn'),note=f.querySelector('#p27-save-state');if(btn)btn.disabled=true;
   if(note)note.textContent='Confirmando no Firebase...';
   try{
-    const ok=await saveState({mode:'light',keys:['planejamento2027'],immediate:true});
+    const ok=await ignisPlanPersistCases(JSON.parse(before),conf);
     if(!ok)throw new Error(window._lastFirebaseSaveError||'A gravação não foi confirmada pelo Firebase.');
     ignisPlanClose();
     ignisPlanRender();

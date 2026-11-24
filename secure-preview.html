@@ -16,6 +16,7 @@
 <script type="module" async>
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import {createIgnisAuth} from "./security/spark-auth.js?v=20261124";
+import {createCaseStore} from "./security/spark-cases.js?v=20261124";
 import { getFirestore, initializeFirestore, memoryLocalCache, collection, query, where, documentId, getDocs, getDocsFromCache, doc, setDoc, getDoc, getDocFromCache, deleteDoc, writeBatch, runTransaction, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -41,6 +42,7 @@ try{
   db=getFirestore(app);
 }
 window.ignisSecureAuth = createIgnisAuth(app,db);
+window.ignisCaseStore = createCaseStore(db,window.ignisSecureAuth.auth);
 window._firebaseRevision = null; // revisão compartilhada da base para impedir que um computador desatualizado sobrescreva a nuvem
 window._firebaseFuelSignature = ''; // identifica a versão das séries de abastecimentos/máquinas/anomalias
 window._firebaseArlaSignature = '';
@@ -530,11 +532,13 @@ window.fbSave = async function(data) {
       ...restData
     } = snapshot;
 
+    if(restData.planejamento2027){const {tratativas,excluidas,...settings}=restData.planejamento2027;restData.planejamento2027=settings;}
     const mainRef = doc(db, 'fueltracker', FB_MAIN_DOC);
     let antigo = {};
     try {
       const atualSnap = await fbRetry(() => withTimeout(getDoc(mainRef), 10000), 2, 350);
       if (atualSnap.exists()) antigo = atualSnap.data() || {};
+      delete antigo._users;
     } catch (e) {
       console.warn('IGNIS: não foi possível ler o manifesto anterior; o save continuará.', e);
     }
@@ -679,6 +683,7 @@ window.fbSave = async function(data) {
           }))
         }
       : { _savedAt: restData._savedAt };
+    if(scopedRest.planejamento2027)scopedRest.planejamento2027={...(antigo.planejamento2027||{}),...scopedRest.planejamento2027};
     const manifest = {
       ...antigo,
       ...scopedRest,
@@ -702,22 +707,7 @@ window.fbSave = async function(data) {
         // Preserve campos leves não alterados por outros usuários.
         const appliedLight={...lightPatch};
         if(Object.prototype.hasOwnProperty.call(appliedLight,'planejamento2027')){
-          // Mescla casos por identificador + carimbo de alteração para não perder
-          // tratativas paralelas de usuários diferentes.
           const current=latestData.planejamento2027||{},incoming=appliedLight.planejamento2027||{};
-          // Excluir de verdade: o registro sai das tratativas e um identificador de exclusão
-          // evita que sincronizações antigas de outros usuários recriem a ocorrência.
-          const excluidas={...(current.excluidas||{})};
-          Object.entries(incoming.excluidas||{}).forEach(([id,stamp])=>{
-            if(!excluidas[id]||String(stamp||'')>String(excluidas[id]))excluidas[id]=stamp;
-          });
-          const cases=new Map((Array.isArray(current.tratativas)?current.tratativas:[])
-            .filter(t=>t?.id&&!Object.prototype.hasOwnProperty.call(excluidas,t.id)).map(t=>[t.id,t]));
-          (Array.isArray(incoming.tratativas)?incoming.tratativas:[]).forEach(t=>{
-            if(!t?.id||Object.prototype.hasOwnProperty.call(excluidas,t.id))return;
-            const existing=cases.get(t.id);
-            if(!existing||String(t.atualizadoEm||'')>=String(existing.atualizadoEm||''))cases.set(t.id,t);
-          });
           const metas={...(current.metas||{})},timestamps={...(current.metasRevisadas||{})};
           Object.entries(incoming.metas||{}).forEach(([g,v])=>{
             const stamp=String(incoming.metasRevisadas?.[g]||'');
@@ -725,8 +715,9 @@ window.fbSave = async function(data) {
               metas[g]=v;if(stamp)timestamps[g]=stamp;
             }
           });
-          appliedLight.planejamento2027={...current,...incoming,metas,metasRevisadas:timestamps,excluidas,tratativas:[...cases.values()]};
+          appliedLight.planejamento2027={...current,...incoming,metas,metasRevisadas:timestamps};
         }
+        delete latestData._users;
         tx.set(mainRef, { ...latestData, ...appliedLight, _revision:version, _storageVersion:Number(latestData._storageVersion||FB_STORAGE_VERSION) });
         return;
       }
@@ -917,6 +908,8 @@ window.fbLoad = async function() {
       '_maqVersion','_maqChunks','_maqCount','_medVersion','_medChunks','_medCount',
       '_eficVersion','_eficChunks','_eficCount','_arlaVersion','_arlaChunks','_arlaCount'
     ].forEach(k => delete dados[k]);
+    try{const result=await window.ignisCaseStore.load(window._authUser);if(result.ready){dados.planejamento2027={...(dados.planejamento2027||{}),tratativas:result.records};}}
+    catch(e){console.warn('IGNIS: ocorrências protegidas indisponíveis; edição bloqueada.',e);}
     return dados;
   } catch(e) {
     window._fbLoadFailed = true;
@@ -20927,6 +20920,6 @@ function ctaOnShow(){
 </script>
 
 <script src="ignis-multiselect.js?v=20261118b"></script>
-<script src="planejamento2027.js?v=20261118d"></script>
+<script src="planejamento2027.js?v=20261124-security"></script>
 </body>
 </html>
