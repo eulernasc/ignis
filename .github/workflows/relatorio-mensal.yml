@@ -26,10 +26,10 @@ jobs:
 
       - name: Rodar relatório e enviar e-mails
         env:
-          IGNIS_REPORT_EMAIL: ${{ secrets.IGNIS_REPORT_EMAIL }}
+          IGNIS_REPORT_EMAIL: ignis-report-reader@ignis.invalid
           IGNIS_REPORT_PASSWORD: ${{ secrets.IGNIS_REPORT_PASSWORD }}
-          FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
-          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          FIREBASE_API_KEY: AIzaSyBdfrSrrf-vThP3WqWJF76hhKE7FXGFpL0
+          FIREBASE_PROJECT_ID: fueltracker-adee5
           OUTLOOK_USER: ${{ secrets.OUTLOOK_USER }}
           OUTLOOK_PASS: ${{ secrets.OUTLOOK_PASS }}
         run: node relatorio.js

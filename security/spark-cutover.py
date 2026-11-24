@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """IGNIS: prepara corte autenticado, sem modificar as senhas dos 14 usuários.
 Uso: python3 spark-cutover.py --apply
-Exige gh autenticado no repositório para armazenar credenciais de serviço.
+Modo manual: --apply --manual-report usa senha técnica em arquivo privado, já cadastrada nos Secrets pelo proprietário.
 """
 import os, sys, json, subprocess, urllib.request, urllib.error, urllib.parse, hashlib, secrets, datetime
 from pathlib import Path
@@ -20,6 +20,8 @@ STAGE=(HERE/"spark-stage.rules").read_text()
 REPORT_UID="ignis_report_reader"
 REPORT_EMAIL="ignis-report-reader@ignis.invalid"
 APPLY="--apply" in sys.argv
+MANUAL="--manual-report" in sys.argv
+PASSWORD_FILE=Path.home()/".ignis-report-password"
 TOKEN=subprocess.check_output(["gcloud","auth","print-access-token"],text=True).strip()
 headers={"Authorization":"Bearer "+TOKEN,"x-goog-user-project":P,"Content-Type":"application/json"}
 def req(url,method="GET",data=None,missing=False,h=None):
@@ -109,9 +111,15 @@ def main():
     if "2026-11-24-firebase-auth-spark" not in site or "await auth.login(login,password,email)" not in site:raise RuntimeError("GitHub Pages ainda não está com a versão segura. Nenhuma regra alterada.")
     print("PRÉ-VALIDAÇÃO: 14 contas, permissões, manifesto v4 e site seguro confirmados.",flush=True)
     # Verifica GitHub antes de qualquer mutação para preservar relatório mensal.
-    if subprocess.run(["gh","auth","status"],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL).returncode:
-        raise RuntimeError("GitHub CLI não autenticado. Execute gh auth login --hostname github.com --web e repita.")
-    subprocess.run(["gh","repo","view",REPO,"--json","viewerPermission"],check=True,stdout=subprocess.DEVNULL)
+    if MANUAL:
+        if not PASSWORD_FILE.is_file() or PASSWORD_FILE.stat().st_mode & 0o077:
+            raise RuntimeError("Arquivo privado ~/.ignis-report-password ausente ou inseguro.")
+        manual_password=PASSWORD_FILE.read_text().strip()
+        if len(manual_password)<32:raise RuntimeError("Senha técnica inválida.")
+    else:
+        if subprocess.run(["gh","auth","status"],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL).returncode:
+            raise RuntimeError("GitHub CLI não autenticado. Use a opção manual.")
+        subprocess.run(["gh","repo","view",REPO,"--json","viewerPermission"],check=True,stdout=subprocess.DEVNULL)
     if not APPLY:
         print("Somente validação. Use --apply para executar o corte.")
         return
@@ -124,23 +132,25 @@ def main():
     print("Regras de manutenção e definitivas compiladas.",flush=True)
     # A conta técnica não é uma das 14 pessoas. Nenhuma senha humana é redefinida.
     if REPORT_UID in users or REPORT_UID in people:raise RuntimeError("Conta técnica já existente; não redefinir sua senha automaticamente.")
-    password=secrets.token_urlsafe(40)
+    password=manual_password if MANUAL else secrets.token_urlsafe(40)
     backup=Path.home()/("ignis-cutover-"+datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%d-%H%M%S-%f")+".json")
     private_json(backup,{"release":release,"legacy_users":legacy,"manifest":main_doc,"profiles":profiles})
     # Não imprimir senha, token ou e-mail pessoal. Secrets enviados via stdin.
-    ghsecret("IGNIS_REPORT_EMAIL",REPORT_EMAIL)
-    ghsecret("IGNIS_REPORT_PASSWORD",password)
+    if not MANUAL:
+        ghsecret("IGNIS_REPORT_EMAIL",REPORT_EMAIL)
+        ghsecret("IGNIS_REPORT_PASSWORD",password)
     config=req(f"https://firebase.googleapis.com/v1beta1/projects/{P}/webApps/{APP}/config")
     key=config["apiKey"]
-    ghsecret("FIREBASE_API_KEY",key)
-    ghsecret("FIREBASE_PROJECT_ID",P)
+    if not MANUAL:
+        ghsecret("FIREBASE_API_KEY",key)
+        ghsecret("FIREBASE_PROJECT_ID",P)
     req(AUTH+"/accounts","POST",{"localId":REPORT_UID,"email":REPORT_EMAIL,"password":password,"emailVerified":False})
     report_profile={"login":"relatorio_tecnico","nome":"Relatório automático","role":"report","perms":[],"active":True}
     commit([write("ignis_profiles/"+REPORT_UID,{k:enc(v) for k,v in report_profile.items()})])
     result=req("https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key="+urllib.parse.quote(key),"POST",{"email":REPORT_EMAIL,"password":password,"returnSecureToken":True},h={"Content-Type":"application/json"})
     if result.get("localId")!=REPORT_UID or not result.get("idToken"):raise RuntimeError("Conta técnica não confirmada.")
     report_token=result["idToken"]
-    print("Conta técnica do relatório criada e autenticada; credenciais armazenadas nos Secrets.",flush=True)
+    print("Conta técnica do relatório criada e autenticada.",flush=True)
     publish(freeze_name,release["rulesetName"])
     print("Manutenção temporária ativada. Migrando registros.",flush=True)
     # Releitura após bloqueio; backup específico contém o estado imediatamente anterior.
