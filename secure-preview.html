@@ -7570,12 +7570,25 @@ function filtrarOpsPorTipo(tipoFiltro, opsBase) {
   return maq?.operacao ? [maq.operacao] : opsBase;
 }
 
+function dashOperationName(value) {
+  return String(value || 'Sem Operação').replace(/_/g,' ');
+}
 function getSelectedOps() {
-  const allCheck = document.getElementById('op-all-check');
+  const selected = window._selectedOps;
+  return selected instanceof Set && selected.size ? selected : null;
+}
+function syncDashboardOpSelection() {
+  const selected = getSelectedOps();
   const checks = [...document.querySelectorAll('.op-check')];
-  const checked = checks.filter(c => c.checked);
-  if (allCheck && allCheck.checked && !allCheck.indeterminate) return null;
-  return new Set(checked.map(c => c.value));
+  checks.forEach(c => { c.checked = !selected || selected.has(dashOperationName(c.value)); });
+  const allCheck = document.getElementById('op-all-check');
+  if (allCheck) {
+    allCheck.checked = !selected;
+    allCheck.indeterminate = !!selected && checks.some(c=>c.checked);
+  }
+  const label = document.getElementById('op-dropdown-label');
+  if (label) label.textContent = !selected ? 'Todas as Operações' :
+    selected.size===1 ? [...selected][0] : selected.size+' operações';
 }
 
 function updateFilters(force=false) {
@@ -7587,7 +7600,11 @@ function updateFilters(force=false) {
   const signature = `${_ignisPerf.version}|${maqFiltro}|${compMaqFiltro}`;
   if (!force && _ignisPerf.filtersSignature === signature) return;
   _ignisPerf.filtersSignature = signature;
-  const opsFiltradas = filtrarOpsPorTipo(maqFiltro, ops);
+  const selectedDashOps = getSelectedOps();
+  const opsFiltradas = [...new Set([
+    ...filtrarOpsPorTipo(maqFiltro, ops),
+    ...ops.filter(o=>selectedDashOps?.has(dashOperationName(o)))
+  ])].sort();
 
   // Multi-select operações do dashboard
   const cb=document.getElementById('op-checkboxes');
@@ -7595,17 +7612,10 @@ function updateFilters(force=false) {
     const selected=getSelectedOps(); // null = todas, Set = específicas
     cb.innerHTML=opsFiltradas.map(o=>`
       <label class="dash-option">
-        <input type="checkbox" class="op-check" value="${o}" ${selected===null||selected.has(o)?'checked':''} onchange="onOpCheckChange()">
+        <input type="checkbox" class="op-check" value="${o}" ${selected===null||selected.has(dashOperationName(o))?'checked':''} onchange="onOpCheckChange()">
         <span class="dash-option-text">${o.replace(/_/g,' ')}</span>
       </label>`).join('');
-    // Sincroniza o "Todas" checkbox
-    const allCheck=document.getElementById('op-all-check');
-    if(allCheck){
-      const checks=document.querySelectorAll('.op-check');
-      const checked=document.querySelectorAll('.op-check:checked');
-      allCheck.checked=checks.length===checked.length;
-      allCheck.indeterminate=checked.length>0&&checked.length<checks.length;
-    }
+    syncDashboardOpSelection();
   }
   // Filtro operação único nos outros lugares
   ['abast-op-filter','maq-op-filter'].forEach(id=>{
@@ -7720,18 +7730,10 @@ function populateModeloDropdown() {
     return a.placa === maqF;
   });
 
-  // Se há operações selecionadas (cards OU dropdown), filtra modelos por essas ops
-  const selOpsCards = window._selectedOps;
-  const selOpsDrop  = typeof getSelectedOps === 'function' ? getSelectedOps() : null;
-  let opsAtivas = null;
-  if (selOpsDrop instanceof Set && selOpsDrop.size > 0) {
-    opsAtivas = new Set([...selOpsDrop].map(o => o.replace(/_/g,' ')));
-  } else if (selOpsCards && selOpsCards.size > 0) {
-    opsAtivas = selOpsCards;
-  }
-
+  // Card e dropdown compartilham a mesma seleção persistente.
+  const opsAtivas = getSelectedOps();
   const base = opsAtivas
-    ? byTipo.filter(a => { const op=(getMaquina(a.placa)?.operacao||a.operacao||'Sem Operação').replace(/_/g,' '); return opsAtivas.has(op); })
+    ? byTipo.filter(a => opsAtivas.has(dashOperationName(getMaquina(a.placa)?.operacao||a.operacao)))
     : byTipo;
 
   const modelos = [...new Set(
@@ -7740,7 +7742,8 @@ function populateModeloDropdown() {
 
   if (modelos.length === 0) { btn.style.display = 'none'; if (wrap) wrap.style.display = 'none'; cont.innerHTML = ''; return; }
 
-  const anterior = getSelectedModelos();
+  let anterior = getSelectedModelos();
+  if (anterior && !modelos.some(m=>anterior.has(m))) anterior = null;
   if (wrap) wrap.style.display = 'flex';
   btn.style.display = 'flex';
   cont.innerHTML = modelos.map(m =>
@@ -7814,12 +7817,17 @@ function populatePlacaDropdown() {
   const cont = document.getElementById('placa-checkboxes');
   if(!cont) return;
   const maqF = document.getElementById('dash-maq-filter')?.value||'';
-  // Usa lista filtrada pelo tipo atual
+  const opsAtivas = getSelectedOps();
+  const modelosAtivos = getSelectedModelos();
+  // As opções respeitam a operação, o tipo e o modelo ativos.
   const placas = [...new Set(
     state.abastecimentos
       .filter(a => {
-        if(!maqF) return getTipoIgnis(a) !== 'ignorado';
+        if (opsAtivas && !opsAtivas.has(dashOperationName(getMaquina(a.placa)?.operacao||a.operacao))) return false;
+        if (modelosAtivos?.size && !modelosAtivos.has((getMaquina(a.placa)?.modelo||a.modelo||'').trim().toUpperCase())) return false;
         const t = getTipoIgnis(a);
+        if (t==='ignorado') return false;
+        if(!maqF) return true;
         if(maqF==='__maquinas__') return t==='maquina';
         if(maqF==='__tratores__') return t==='trator';
         if(maqF==='__pesada__') return t==='pesada';
@@ -7827,9 +7835,10 @@ function populatePlacaDropdown() {
         if(maqF==='__empilhadeiras__') return t==='empilhadeira';
         return a.placa===maqF;
       })
-      .map(a=>a.placa)
+      .map(a=>a.placa).filter(Boolean)
   )].sort();
-  const sel = getSelectedPlacas();
+  let sel = getSelectedPlacas();
+  if (sel && !placas.some(p=>sel.has(p))) sel = null;
   cont.innerHTML = placas.map(p =>
     `<label class="dash-option placa-check-label">
       <input type="checkbox" class="placa-check" value="${p}" ${sel===null||sel.has(p)?'checked':''} onchange="onPlacaCheckChange()">
@@ -7837,6 +7846,8 @@ function populatePlacaDropdown() {
     </label>`
   ).join('');
   sincPlacaAllCheck();
+  updatePlacaLabel();
+  filtrarPlacasDropdown();
 }
 
 function filtrarPlacasDropdown() {
@@ -7868,13 +7879,16 @@ function sincPlacaAllCheck() {
   allCheck.indeterminate = checked.length>0 && checked.length<all.length;
 }
 
-function onPlacaCheckChange() {
-  sincPlacaAllCheck();
+function updatePlacaLabel() {
   const sel = getSelectedPlacas();
   const placas = [...document.querySelectorAll('.placa-check')];
   const n = sel===null ? placas.length : (sel?.size||0);
   const label = document.getElementById('placa-dropdown-label');
   if(label) label.textContent = n===0||n===placas.length ? 'Todas as Placas' : n===1 ? [...(sel||[])][0] : `${n} placas`;
+}
+function onPlacaCheckChange() {
+  sincPlacaAllCheck();
+  updatePlacaLabel();
   renderDashboard();
 }
 
@@ -7886,15 +7900,9 @@ function toggleAllOps(cb) {
 function onOpCheckChange() {
   const all=[...document.querySelectorAll('.op-check')];
   const checked=all.filter(c=>c.checked);
-  const allCheck=document.getElementById('op-all-check');
-  allCheck.checked=checked.length===all.length;
-  allCheck.indeterminate=checked.length>0&&checked.length<all.length;
-  const n=checked.length;
-  document.getElementById('op-dropdown-label').textContent=
-    n===0||n===all.length?'Todas as Operações':
-    n===1?checked[0].value.replace(/_/g,' '):
-    `${n} operações`;
-  populateModeloDropdown();
+  window._selectedOps = new Set(checked.length===0||checked.length===all.length
+    ? [] : checked.map(c=>dashOperationName(c.value)));
+  syncDashboardOpSelection();
   renderDashboard();
 }
 
@@ -8095,7 +8103,13 @@ function renderDashboard() {
   const kpiMetaLabelEl = document.getElementById('kpi-meta-label');
   if(kpiMetaLabelEl) kpiMetaLabelEl.textContent = labelMeta;
 
-  const list=getFilteredAbast(opsSelec,maqF);
+  populateModeloDropdown();
+  populatePlacaDropdown();
+  // Os cards mantêm a visão das operações disponíveis; KPIs e ranking usam a seleção.
+  const baseList=getFilteredAbast(null,maqF);
+  const list=opsSelec ? baseList.filter(a=>opsSelec.has(dashOperationName(getMaquina(a.placa)?.operacao||a.operacao))) : baseList;
+  window._dashList=baseList;
+  window._dashIsKmL=isKmL;
 
   const _animKpi = (id, end, dec=0) => {
     const el = document.getElementById(id); if(!el) return;
@@ -8126,12 +8140,17 @@ function renderDashboard() {
       <div class="empty-text">Nenhum dado para este filtro no período</div>
       ${sug?`<div class="empty-sub" style="margin-top:8px">Tente: <strong>${sug}</strong></div>`:''}
     </div>`;
-    if(opEl) opEl.innerHTML = emptyHtml;
+    if(baseList.length) renderOpChart(baseList,isKmL);
+    else if(opEl) opEl.innerHTML = emptyHtml;
+    _opUpdateVisual();
     if(barEl) barEl.innerHTML = '<div class="empty"><div class="empty-icon">📊</div><div class="empty-text">Sem dados</div></div>';
     if(rankEl) rankEl.innerHTML = '<div class="empty"><div class="empty-icon">🏆</div><div class="empty-text">Sem dados</div></div>';
     _animKpi('kpi-litros',0,0); _animKpi('kpi-media',0,2); _animKpi('kpi-horas',0,0); _animKpi('kpi-maquinas',0,0);
     document.getElementById('kpi-meta-ideal').textContent='—';
     document.getElementById('kpi-eficiencia').textContent='—';
+    document.getElementById('kpi-maq-delta').textContent=opsSelec?'na seleção de operações':'sem ativos no período';
+    document.getElementById('kpi-meta-sub').textContent='sem metas no período';
+    document.getElementById('kpi-efic-sub').textContent='sem dados';
     relChecarReincidencia();
     return;
   }
@@ -8144,7 +8163,7 @@ function renderDashboard() {
   _animKpi('kpi-media',media,2);
   _animKpi('kpi-horas',totalH,0);
   _animKpi('kpi-maquinas',maqAtivas,0);
-  document.getElementById('kpi-maq-delta').textContent=`${state.maquinas.length} total`;
+  document.getElementById('kpi-maq-delta').textContent=opsSelec?.size===1?'na operação selecionada':opsSelec?.size?'nas operações selecionadas':`${state.maquinas.length} total`;
 
   // Meta ideal média e eficiência
   // Meta do painel: uma meta por ativo (não uma meta por abastecimento).
@@ -8200,16 +8219,8 @@ function renderDashboard() {
     lbl = 'Período';
   }
   if(document.getElementById('chart-period-label2')) document.getElementById('chart-period-label2').textContent=lbl;
-  window._dashList  = list;
-  window._dashIsKmL = isKmL;
-  // Se filtros principais mudaram, remove seleções de cards que não existem mais.
-  if(window._selectedOps && window._selectedOps.size){
-    const opsDisponiveis=new Set(list.map(a=>(getMaquina(a.placa)?.operacao||a.operacao||'Sem Operação').replace(/_/g,' ')));
-    [...window._selectedOps].forEach(op=>{ if(!opsDisponiveis.has(op)) window._selectedOps.delete(op); });
-  }
-  populateModeloDropdown();
-  renderOpChart(list, isKmL);
-  if(window._selectedOps && window._selectedOps.size) _updateDashboardKpisForOperationSelection();
+  renderOpChart(baseList, isKmL);
+  _opUpdateVisual();
   _renderBarAndRanking();
   relChecarReincidencia();
 }
@@ -8344,16 +8355,14 @@ function opCardClick(e, op) {
   } else {
     if (sel.size===1 && sel.has(op)) sel.clear(); else { sel.clear(); sel.add(op); }
   }
-  _opUpdateVisual();
-  _renderBarAndRanking();
-  _updateDashboardKpisForOperationSelection();
+  syncDashboardOpSelection();
+  renderDashboard();
 }
 
 function opClearSelection() {
   if (window._selectedOps) window._selectedOps.clear();
-  _opUpdateVisual();
-  _renderBarAndRanking();
-  _updateDashboardKpisForOperationSelection();
+  syncDashboardOpSelection();
+  renderDashboard();
 }
 
 function _opUpdateVisual() {
@@ -8365,13 +8374,13 @@ function _opUpdateVisual() {
     const isActive   = sel.has(op);
     card.style.opacity   = isSelected ? '1' : '0.3';
     card.style.transform = isActive   ? 'scale(1.03)' : 'scale(1)';
+    card.classList.toggle('selected',isActive);
   });
   const ind = document.getElementById('op-filter-indicator');
   const lbl = document.getElementById('op-filter-label');
   if (ind) ind.style.display = sel.size>0 ? 'flex' : 'none';
   if (lbl && sel.size>0) lbl.textContent = sel.size===1 ? '1 operação filtrada' : `${sel.size} operações filtradas`;
-  // Re-popula modelos disponíveis conforme operações selecionadas
-  if (typeof populateModeloDropdown === 'function') populateModeloDropdown();
+
 }
 
 function _renderBarAndRanking() {
@@ -8385,19 +8394,7 @@ function _renderBarAndRanking() {
   renderRanking(filtered, isKmL);
 }
 
-// Click fora do gráfico de operações → limpa seleção
-document.addEventListener('click', function(e) {
-  const c = document.getElementById('op-chart-container');
-  const ind = document.getElementById('op-filter-indicator');
-  if (!c) return;
-  if (c.contains(e.target) || (ind && ind.contains(e.target))) return;
-  if (window._selectedOps && window._selectedOps.size>0) {
-    window._selectedOps.clear();
-    _opUpdateVisual();
-    _renderBarAndRanking();
-    _updateDashboardKpisForOperationSelection();
-  }
-});
+// A seleção de operações só é alterada pelo usuário nos controles de operação.
 
 function renderBarChart(list, isKmL=false) {
   const c=document.getElementById('bar-chart-container');
