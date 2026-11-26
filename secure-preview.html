@@ -776,6 +776,29 @@ window.fbUnificarArlaPampulha = async function() {
   }),25000);
 };
 
+// Uma transação para ambas as listas, com registro de conclusão na nuvem.
+window.fbIncluirEmailsAmbev20261126=async function(){
+  if(window._authUser?.role!=='adm'||window._dadosCarregados!==true||window._ignisMaintenanceState?.active)return null;
+  const mainRef=doc(db,'fueltracker',FB_MAIN_DOC);
+  return await withTimeout(runTransaction(db,async t=>{
+    const snap=await t.get(mainRef);
+    if(!snap.exists())return {blocked:true,reason:'Documento de dados indisponível.'};
+    const data=snap.data()||{};
+    if(Number(data._storageVersion||0)!==FB_STORAGE_VERSION)return {blocked:true,reason:'Versão de armazenamento não confirmada.'};
+    if(data.ambevDestinatarios20261126?.done===true)return {already:true,marker:data.ambevDestinatarios20261126};
+    const rel=window.ignisPlanejarEmailsAmbev20261126(data.relGrupos);
+    const arla=window.ignisPlanejarEmailsAmbev20261126(data.arlaGrupos);
+    if(!rel||!arla||!rel.matched||!arla.matched)return {blocked:true,reason:'As duas listas de grupos AMBEV ainda não estão disponíveis na nuvem; nenhuma alteração realizada.'};
+    const savedAt=Date.now(),revision='ambev-emails-'+savedAt+'-'+Math.random().toString(36).slice(2,10);
+    const marker={done:true,at:savedAt,rel:rel.matched,arla:arla.matched,changed:rel.changed+arla.changed,added:rel.added+arla.added};
+    const patch={ambevDestinatarios20261126:marker,_revision:revision,_savedAt:savedAt};
+    if(rel.changed)patch.relGrupos=rel.grupos;
+    if(arla.changed)patch.arlaGrupos=arla.grupos;
+    t.update(mainRef,patch);
+    return {relGrupos:rel.grupos,arlaGrupos:arla.grupos,marker,revision,savedAt};
+  }),25000);
+};
+
 window.fbLoad = async function() {
   window._fbLoadFailed = false;
   window._lastFirebaseLoadError='';
@@ -13180,6 +13203,29 @@ window.arlaPampulhaNormalizar=arlaPampulhaNormalizar;
 window.arlaPampulhaCandidatos=arlaPampulhaCandidatos;
 window.arlaPlanejarUnificacaoPampulha=arlaPlanejarUnificacaoPampulha;
 
+// Inclusão pontual de destinatários AMBEV solicitada em 26/11/2026.
+function ignisPlanejarEmailsAmbev20261126(grupos) {
+  if(!Array.isArray(grupos))return null;
+  const emails=['leonardoleite@expressonepomuceno.com.br','marianaribeiro@expressonepomuceno.com.br','rayanioliveira@expressonepomuceno.com.br'];
+  const ambev=v=>/\bAMBEV\b/.test(String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/_/g,' ').toUpperCase());
+  let matched=0,changed=0,added=0;
+  const result=grupos.map(g=>{
+    if(!g||!(ambev(g.nome)||(Array.isArray(g.ops)&&g.ops.some(ambev))))return g;
+    matched++;
+    if(g.emails!=null&&typeof g.emails!=='string')throw new Error('Formato de destinatários inesperado em grupo AMBEV.');
+    const raw=g.emails||'';
+    const present=new Set(raw.split(/[,;\s]+/).map(e=>e.trim().toLowerCase()).filter(Boolean));
+    const missing=emails.filter(e=>!present.has(e));
+    if(!missing.length)return g;
+    changed++;added+=missing.length;
+    // Preserva integralmente a lista existente; acrescenta apenas os endereços ausentes.
+    const sep=raw.trim()&&!/[,;]\s*$/.test(raw)?',':'';
+    return {...g,emails:raw+sep+missing.join(',')};
+  });
+  return {grupos:result,matched,changed,added};
+}
+window.ignisPlanejarEmailsAmbev20261126=ignisPlanejarEmailsAmbev20261126;
+
 function arlaInit() {
   // Carrega EGR: prioridade = state (Firebase) > localStorage > defaults
   if (state.arlaEgr && state.arlaEgr.length) {
@@ -13329,7 +13375,7 @@ function arlaLembreteBannerHTML(msg, tipo) {
 let _arlaPampulhaMergeInFlight=false;
 let _arlaPampulhaMergeConfirmed=false;
 async function arlaUnificarPampulhaSeNecessario(avisar=false) {
-  if(_arlaPampulhaMergeInFlight||_arlaPampulhaMergeConfirmed||!ignisIsAdmMaster()||window._dadosCarregados!==true||window._ignisMaintenanceState?.active||window._ignisSyncConflict)return;
+  if(_ambevEmails20261126InFlight||_arlaPampulhaMergeInFlight||_arlaPampulhaMergeConfirmed||!ignisIsAdmMaster()||window._dadosCarregados!==true||window._ignisMaintenanceState?.active||window._ignisSyncConflict)return;
   if(_firebaseSaveInFlight||_firebasePendingSnapshot||typeof window.fbUnificarArlaPampulha!=='function')return;
   // O servidor é a única fonte da migração; não depende do cache nem do baseline local.
   // Consulta apenas quando os grupos antigos aparecem na interface/estado, ou ao abrir Grupos.
@@ -13361,6 +13407,47 @@ async function arlaUnificarPampulhaSeNecessario(avisar=false) {
 }
 document.addEventListener('ignis:data-ready',()=>{arlaUnificarPampulhaSeNecessario();});
 
+let _ambevEmails20261126InFlight=false,_ambevEmails20261126Done=false,_ambevEmails20261126Retry=0,_ambevEmails20261126Timer=null;
+async function ignisIncluirEmailsAmbev20261126(avisar=false){
+  if(_ambevEmails20261126Done||_ambevEmails20261126InFlight||!ignisIsAdmMaster()||window._dadosCarregados!==true||window._ignisMaintenanceState?.active||window._ignisSyncConflict||typeof window.fbIncluirEmailsAmbev20261126!=='function')return;
+  if(state.ambevDestinatarios20261126?.done===true){_ambevEmails20261126Done=true;return;}
+  if(_firebaseSaveInFlight||_firebasePendingSnapshot||_saveFirebaseTimer!==null||_arlaPampulhaMergeInFlight){
+    if(_ambevEmails20261126Timer===null&&_ambevEmails20261126Retry++<20)_ambevEmails20261126Timer=setTimeout(()=>{_ambevEmails20261126Timer=null;ignisIncluirEmailsAmbev20261126(avisar);},1000);
+    return;
+  }
+  _ambevEmails20261126InFlight=true;
+  const beforeRel=state.relGrupos,beforeArla=state.arlaGrupos,beforeSave=state._savedAt;
+  try{
+    const r=await window.fbIncluirEmailsAmbev20261126();
+    if(!r||r.blocked){if(avisar)showToast(r?.reason||'Não foi possível atualizar os destinatários AMBEV.','error');return;}
+    _ambevEmails20261126Done=true;
+    if(r.already)return;
+    // Não substituir uma edição local iniciada enquanto a transação estava em andamento.
+    if(state.relGrupos!==beforeRel||state.arlaGrupos!==beforeArla||state._savedAt!==beforeSave||_firebaseSaveInFlight||_firebasePendingSnapshot){
+      showToast('Destinatários AMBEV gravados na nuvem. Recarregue para conferir a lista atualizada.','info');return;
+    }
+    state.relGrupos=r.relGrupos;window._relGrupos=r.relGrupos;
+    state.arlaGrupos=r.arlaGrupos;window._arlaState.grupos=r.arlaGrupos;
+    state.ambevDestinatarios20261126=r.marker;
+    window._firebaseRevision=r.revision;
+    window._ultimoSaveAt=Math.max(Number(window._ultimoSaveAt||0),r.savedAt);
+    state._savedAt=Math.max(Number(state._savedAt||0),r.savedAt);
+    _ignisUpdateLightBaseline({relGrupos:r.relGrupos,arlaGrupos:r.arlaGrupos,ambevDestinatarios20261126:r.marker},['relGrupos','arlaGrupos','ambevDestinatarios20261126']);
+    try{
+      localStorage.setItem('rel_grupos',JSON.stringify(r.relGrupos));
+      localStorage.setItem('arla_grupos',JSON.stringify(r.arlaGrupos));
+      const lean=JSON.parse(localStorage.getItem('fueltracker_v3')||'{}');
+      Object.assign(lean,{relGrupos:r.relGrupos,arlaGrupos:r.arlaGrupos,ambevDestinatarios20261126:r.marker,_savedAt:state._savedAt});
+      localStorage.setItem('fueltracker_v3',JSON.stringify(lean));
+    }catch(e){}
+    if(document.getElementById('page-arla')?.classList.contains('active'))arlaRenderGrupos();
+    if(document.getElementById('page-relatorio')?.classList.contains('active')&&document.getElementById('rel-tab-grupos')?.style.display!=='none')relgRender();
+    showToast('AMBEV: '+r.marker.rel+' grupo(s) Relatório e '+r.marker.arla+' grupo(s) ARLA conferidos; '+r.marker.added+' destinatário(s) incluídos.','success');
+  }catch(e){console.warn('IGNIS: inclusão de destinatários AMBEV não confirmada.',e);if(avisar)showToast('Firebase não confirmou a inclusão dos destinatários AMBEV.','error');}
+  finally{_ambevEmails20261126InFlight=false;}
+}
+document.addEventListener('ignis:data-ready',()=>{ignisIncluirEmailsAmbev20261126();});
+
 function arlaOnShow() {
   arlaUnificarPampulhaSeNecessario();
   arlaInit();
@@ -13382,7 +13469,7 @@ function arlaSetTab(tab, el) {
   document.querySelectorAll('.arla-tab').forEach(b => b.classList.remove('active'));
   if (el) el.classList.add('active');
   if (tab === 'segmentos') { arlaRenderSegmentosTabela(); }
-  if (tab === 'grupos') { arlaUnificarPampulhaSeNecessario(true); }
+  if (tab === 'grupos') { arlaUnificarPampulhaSeNecessario(true).finally(()=>ignisIncluirEmailsAmbev20261126(true)); }
 }
 
 // ── SEGMENTOS: tabela de faixas editável ──────────────────────────────────────
@@ -14274,7 +14361,7 @@ function relSetTab(tab, el) {
   document.getElementById('rel-tab-executivo').style.display = tab === 'executivo' ? '' : 'none';
   document.querySelectorAll('#page-relatorio .arla-tab').forEach(b => b.classList.remove('active'));
   if (el) el.classList.add('active');
-  if (tab === 'grupos') relgRender();
+  if (tab === 'grupos') { relgRender(); ignisIncluirEmailsAmbev20261126(true); }
   if (tab === 'executivo') { const hoje = new Date(); const fmt = d => d.toISOString().split('T')[0]; const ini = new Date(hoje.getFullYear(), hoje.getMonth(), 1); document.getElementById('exec-data-ini').value = fmt(ini); document.getElementById('exec-data-fim').value = fmt(hoje); execPopularFiltroOp(); }
 }
 
