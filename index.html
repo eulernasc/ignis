@@ -4668,8 +4668,12 @@ input[type="checkbox"]:indeterminate{background:rgba(233,95,50,.2);border-color:
           <input type="text" class="form-input" id="arla-grupo-nome" placeholder="Ex: Gestores CENIBRA">
         </div>
         <div class="form-group">
-          <label class="form-label">E-mail(s) destinatário — separe por vírgula</label>
-          <input type="text" class="form-input" id="arla-grupo-emails" placeholder="gestor@empresa.com, supervisor@empresa.com">
+          <label class="form-label">E-mail(s)</label>
+          <div id="arla-grupo-chips-wrap" style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:6px 8px;background:var(--bg1);border:1px solid var(--border);border-radius:6px;min-height:38px;cursor:text" onclick="document.getElementById('arla-grupo-chips-input').focus()">
+            <input type="text" id="arla-grupo-chips-input" placeholder="email@empresa.com e pressione Enter" style="border:none;background:transparent;outline:none;font-size:12px;color:var(--text1);min-width:220px;flex:1;padding:2px 4px;font-family:inherit" onkeydown="arlaGrupoChipKeydown(event,this)" onpaste="arlaGrupoChipPaste(event,this)">
+          </div>
+          <div style="font-size:10px;color:var(--text3);margin-top:4px">Enter ou vírgula para adicionar · clique no × para remover</div>
+          <input type="hidden" id="arla-grupo-emails">
         </div>
         <div class="form-group">
           <label class="form-label">Operações incluídas neste grupo</label>
@@ -13894,8 +13898,78 @@ function arlaFiltrarOpsGrupo() {
   }).join('');
 }
 
+// Chips de destinatários ARLA — mesmo padrão visual do Relatório.
+function arlaGrupoChipSyncHidden() {
+  const wrap = document.getElementById('arla-grupo-chips-wrap');
+  const hidden = document.getElementById('arla-grupo-emails');
+  if (wrap && hidden) hidden.value = [...wrap.querySelectorAll('.arla-grupo-chip')].map(c=>c.dataset.email).join(',');
+}
+function arlaGrupoChipAdd(email) {
+  email = String(email || '').trim();
+  const wrap = document.getElementById('arla-grupo-chips-wrap');
+  const input = document.getElementById('arla-grupo-chips-input');
+  if (!email || !wrap || !input) return;
+  if ([...wrap.querySelectorAll('.arla-grupo-chip')].some(c=>c.dataset.email.toLowerCase()===email.toLowerCase())) return;
+  const chip = document.createElement('span');
+  chip.className = 'arla-grupo-chip';
+  chip.dataset.email = email;
+  chip.style.cssText = 'display:inline-flex;align-items:center;gap:5px;background:var(--bg3);border:1px solid var(--border);border-radius:4px;padding:3px 8px;font-size:11px;color:var(--text1);white-space:nowrap;max-width:100%';
+  const label = document.createElement('span');
+  label.textContent = email;
+  label.style.cssText = 'min-width:0;overflow-wrap:anywhere;white-space:normal';
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.textContent = '×';
+  button.title = 'Remover';
+  button.setAttribute('aria-label','Remover '+email);
+  button.style.cssText = 'background:none;border:none;color:var(--text3);cursor:pointer;font-size:13px;line-height:1;padding:0;margin-left:2px';
+  button.addEventListener('click',()=>{chip.remove();arlaGrupoChipSyncHidden();});
+  chip.append(label,button);
+  wrap.insertBefore(chip,input);
+  arlaGrupoChipSyncHidden();
+}
+function arlaGrupoChipConsume(input) {
+  const parts = input.value.split(/[,;\s]+/).map(v=>v.trim()).filter(Boolean);
+  const invalid = parts.filter(v=>!/^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/.test(v));
+  parts.filter(v=>!invalid.includes(v)).forEach(arlaGrupoChipAdd);
+  input.value = invalid.join(', ');
+  if (invalid.length) { showToast('Confira os e-mails inválidos antes de continuar','error'); return false; }
+  return true;
+}
+function arlaGrupoChipKeydown(e,input) {
+  if (e.key==='Enter'||e.key===','||e.key===';') {
+    e.preventDefault();
+    arlaGrupoChipConsume(input);
+  } else if (e.key==='Backspace'&&!input.value) {
+    const chips = document.querySelectorAll('#arla-grupo-chips-wrap .arla-grupo-chip');
+    if (chips.length) { chips[chips.length-1].remove(); arlaGrupoChipSyncHidden(); }
+  }
+}
+function arlaGrupoChipPaste(e,input) {
+  const clipboard = e.clipboardData || window.clipboardData;
+  if (!clipboard) return;
+  e.preventDefault();
+  const text = clipboard.getData('text');
+  input.value = [input.value,text].filter(Boolean).join(', ');
+  arlaGrupoChipConsume(input);
+}
+function arlaGrupoChipClear() {
+  const wrap = document.getElementById('arla-grupo-chips-wrap');
+  if (wrap) wrap.querySelectorAll('.arla-grupo-chip').forEach(c=>c.remove());
+  const input = document.getElementById('arla-grupo-chips-input');
+  if (input) input.value = '';
+  arlaGrupoChipSyncHidden();
+}
+function arlaGrupoChipLoad(emails) {
+  arlaGrupoChipClear();
+  String(emails || '').split(/[,;\n]+/).map(e=>e.trim()).filter(Boolean).forEach(arlaGrupoChipAdd);
+}
+
 function arlaSalvarGrupo() {
   const nome = document.getElementById('arla-grupo-nome').value.trim();
+  const input = document.getElementById('arla-grupo-chips-input');
+  if (input && !arlaGrupoChipConsume(input)) return;
+  arlaGrupoChipSyncHidden();
   const emails = document.getElementById('arla-grupo-emails').value.trim();
   const ops = [...document.querySelectorAll('.arla-grupo-op-check:checked')].map(c => c.value);
   const obs = (document.getElementById('arla-grupo-obs')?.value || '').trim();
@@ -13920,7 +13994,7 @@ function arlaSalvarGrupo() {
 
 function arlaLimparFormGrupo() {
   document.getElementById('arla-grupo-nome').value = '';
-  document.getElementById('arla-grupo-emails').value = '';
+  arlaGrupoChipClear();
   document.getElementById('arla-grupo-edit-id').value = '';
   const busca = document.getElementById('arla-grupo-ops-busca');
   if (busca) busca.value = '';
@@ -13933,7 +14007,7 @@ function arlaEditarGrupo(id) {
   const g = window._arlaState.grupos.find(g => g.id === id);
   if (!g) return;
   document.getElementById('arla-grupo-nome').value = g.nome;
-  document.getElementById('arla-grupo-emails').value = g.emails;
+  arlaGrupoChipLoad(g.emails);
   document.getElementById('arla-grupo-edit-id').value = id;
   // Preenche obs se existir
   const obsEl = document.getElementById('arla-grupo-obs');
