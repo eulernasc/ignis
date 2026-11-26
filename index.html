@@ -762,8 +762,15 @@ window.fbUnificarArlaJundiai = async function() {
     if(!snap.exists())return null;
     const data=snap.data()||{};
     if(Number(data._storageVersion||0)!==FB_STORAGE_VERSION)return null;
-    const grupos=window.arlaPlanejarUnificacaoJundiai(data.arlaGrupos);
-    if(!grupos)return null;
+    const current=data.arlaGrupos;
+    const grupos=window.arlaPlanejarUnificacaoJundiai(current);
+    if(!grupos){
+      const norm=window.arlaJundiaiNormalizar;
+      const final=Array.isArray(current)?current.filter(g=>norm(g?.nome)==='AMBEV JUNDIAI'):[];
+      const antigos=Array.isArray(current)?current.filter(g=>['GESTORES AMBEV ACUCAR JUNDIAI','GESTORES AMBEV JUNDIAI / LATA JUNDIAI'].includes(norm(g?.nome))):[];
+      if(final.length===1&&antigos.length===0&&Array.isArray(final[0].ops)&&['AMBEV ACUCAR JUNDIAI','AMBEV EMPURRADA JUNDIAI','AMBEV LATA JUNDIAI'].every(op=>final[0].ops.some(o=>norm(o)===op)))return {grupos:current,revision:String(data._revision||''),savedAt:Number(data._savedAt||0),already:true};
+      return {blocked:true,reason:!Array.isArray(current)?'Os grupos ARLA não estão disponíveis no documento da nuvem.':'Os dois grupos ou suas operações não correspondem à unificação esperada.'};
+    }
     const savedAt=Date.now();
     const revision='arla-jundiai-'+savedAt+'-'+Math.random().toString(36).slice(2,10);
     transaction.update(mainRef,{arlaGrupos:grupos,_revision:revision,_savedAt:savedAt});
@@ -13142,9 +13149,13 @@ window._arlaState = {
 };
 
 // Migração pontual autorizada: consolidar os dois grupos ARLA de Jundiaí.
+function arlaJundiaiNormalizar(v) {
+  return String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/_/g,' ').replace(/\s*\/\s*/g,' / ').replace(/\s+/g,' ').trim().toUpperCase();
+}
+window.arlaJundiaiNormalizar=arlaJundiaiNormalizar;
 function arlaPlanejarUnificacaoJundiai(grupos) {
   if(!Array.isArray(grupos))return null;
-  const norm=v=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/_/g,' ').replace(/\s+/g,' ').trim().toUpperCase();
+  const norm=arlaJundiaiNormalizar;
   const alvo='AMBEV Jundiaí';
   if(grupos.some(g=>norm(g?.nome)===norm(alvo)))return null;
   const a=grupos.filter(g=>norm(g?.nome)==='GESTORES AMBEV ACUCAR JUNDIAI');
@@ -13163,6 +13174,7 @@ function arlaPlanejarUnificacaoJundiai(grupos) {
   const merged={...second,nome:alvo,emails:[...emailMap.values()].join(','),ops:[...first.ops,...second.ops],obs:msgs.join('\n\n')};
   return grupos.filter(g=>g!==first).map(g=>g===second?merged:g);
 }
+window.arlaPlanejarUnificacaoJundiai=arlaPlanejarUnificacaoJundiai;
 
 function arlaInit() {
   // Carrega EGR: prioridade = state (Firebase) > localStorage > defaults
@@ -13312,15 +13324,19 @@ function arlaLembreteBannerHTML(msg, tipo) {
 
 let _arlaJundiaiMergeInFlight=false;
 let _arlaJundiaiMergeConfirmed=false;
-async function arlaUnificarJundiaiSeNecessario() {
+async function arlaUnificarJundiaiSeNecessario(avisar=false) {
   if(_arlaJundiaiMergeInFlight||_arlaJundiaiMergeConfirmed||!ignisIsAdmMaster()||window._dadosCarregados!==true||window._ignisMaintenanceState?.active||window._ignisSyncConflict)return;
   if(_firebaseSaveInFlight||_firebasePendingSnapshot||typeof window.fbUnificarArlaJundiai!=='function')return;
-  // Nunca aciona uma migração a partir de cache local desatualizado.
-  if(!arlaPlanejarUnificacaoJundiai(state.arlaGrupos)||JSON.stringify(state.arlaGrupos)!==JSON.stringify(window._firebaseLightBaseline?.arlaGrupos))return;
+  // O servidor é a única fonte da migração; não depende do cache nem do baseline local.
+  // Consulta apenas quando os grupos antigos aparecem na interface/estado, ou ao abrir Grupos.
+  if(!avisar&&!arlaPlanejarUnificacaoJundiai(state.arlaGrupos)&&!arlaPlanejarUnificacaoJundiai(window._arlaState.grupos))return;
   _arlaJundiaiMergeInFlight=true;
   try {
     const result=await window.fbUnificarArlaJundiai();
-    if(!result)return;
+    if(!result||result.blocked){
+      if(avisar)showToast(result?.reason||'Não foi possível confirmar a unificação de Jundiaí na nuvem.','error');
+      return;
+    }
     _arlaJundiaiMergeConfirmed=true;
     state.arlaGrupos=result.grupos;
     window._arlaState.grupos=result.grupos;
@@ -13335,8 +13351,8 @@ async function arlaUnificarJundiaiSeNecessario() {
       localStorage.setItem('fueltracker_v3',JSON.stringify(lean));
     }catch(e){}
     if(document.getElementById('page-arla')?.classList.contains('active'))arlaRenderGrupos();
-    showToast('Grupos ARLA de Jundiaí unificados: AMBEV Jundiaí.','success');
-  }catch(e){console.warn('IGNIS: unificação ARLA Jundiaí não confirmada pelo Firebase.',e);}
+    if(!result.already)showToast('Grupos ARLA de Jundiaí unificados: AMBEV Jundiaí.','success');
+  }catch(e){console.warn('IGNIS: unificação ARLA Jundiaí não confirmada pelo Firebase.',e);if(avisar)showToast('Firebase não confirmou a unificação: '+(e?.code||e?.message||'erro desconhecido'),'error');}
   finally{_arlaJundiaiMergeInFlight=false;}
 }
 document.addEventListener('ignis:data-ready',()=>{arlaUnificarJundiaiSeNecessario();});
@@ -13362,6 +13378,7 @@ function arlaSetTab(tab, el) {
   document.querySelectorAll('.arla-tab').forEach(b => b.classList.remove('active'));
   if (el) el.classList.add('active');
   if (tab === 'segmentos') { arlaRenderSegmentosTabela(); }
+  if (tab === 'grupos') { arlaUnificarJundiaiSeNecessario(true); }
 }
 
 // ── SEGMENTOS: tabela de faixas editável ──────────────────────────────────────
