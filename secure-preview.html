@@ -753,26 +753,24 @@ window.fbSave = async function(data) {
   }
 };
 
-// Altera exclusivamente arlaGrupos no manifesto atual; sem reenviar cache ou séries.
-window.fbUnificarArlaJundiai = async function() {
+// Transação pontual: altera somente os grupos ARLA a partir da versão atual da nuvem.
+window.fbUnificarArlaPampulha = async function() {
   if(window._authUser?.role!=='adm'||window._dadosCarregados!==true||window._ignisMaintenanceState?.active)return null;
   const mainRef=doc(db,'fueltracker',FB_MAIN_DOC);
   return await withTimeout(runTransaction(db,async transaction=>{
     const snap=await transaction.get(mainRef);
-    if(!snap.exists())return null;
+    if(!snap.exists())return {blocked:true,reason:'Documento ARLA indisponível na nuvem.'};
     const data=snap.data()||{};
-    if(Number(data._storageVersion||0)!==FB_STORAGE_VERSION)return null;
+    if(Number(data._storageVersion||0)!==FB_STORAGE_VERSION)return {blocked:true,reason:'Versão de armazenamento não confirmada.'};
     const current=data.arlaGrupos;
-    const grupos=window.arlaPlanejarUnificacaoJundiai(current);
+    const grupos=window.arlaPlanejarUnificacaoPampulha(current);
     if(!grupos){
-      const norm=window.arlaJundiaiNormalizar;
-      const final=Array.isArray(current)?current.filter(g=>norm(g?.nome)==='AMBEV JUNDIAI'):[];
-      const antigos=Array.isArray(current)?current.filter(g=>['GESTORES AMBEV ACUCAR JUNDIAI','GESTORES AMBEV JUNDIAI / LATA JUNDIAI'].includes(norm(g?.nome))):[];
-      if(final.length===1&&antigos.length===0&&Array.isArray(final[0].ops)&&['AMBEV ACUCAR JUNDIAI','AMBEV EMPURRADA JUNDIAI','AMBEV LATA JUNDIAI'].every(op=>final[0].ops.some(o=>norm(o)===op)))return {grupos:current,revision:String(data._revision||''),savedAt:Number(data._savedAt||0),already:true};
-      return {blocked:true,reason:!Array.isArray(current)?'Os grupos ARLA não estão disponíveis no documento da nuvem.':'Os dois grupos ou suas operações não correspondem à unificação esperada.'};
+      const found=window.arlaPampulhaCandidatos(current);
+      if(found.length===1&&window.arlaPampulhaNormalizar(found[0].nome)==='AMBEV PAMPULHA'&&Array.isArray(found[0].ops)&&found[0].ops.some(o=>window.arlaPampulhaNormalizar(o)==='AMBEV ROTA PAMPULHA'))return {grupos:current,revision:String(data._revision||''),savedAt:Number(data._savedAt||0),already:true};
+      return {blocked:true,reason:'Pampulha: os dois grupos AMBEV não foram identificados com segurança na nuvem ('+found.length+' encontrados). Nenhum dado alterado.'};
     }
     const savedAt=Date.now();
-    const revision='arla-jundiai-'+savedAt+'-'+Math.random().toString(36).slice(2,10);
+    const revision='arla-pampulha-'+savedAt+'-'+Math.random().toString(36).slice(2,10);
     transaction.update(mainRef,{arlaGrupos:grupos,_revision:revision,_savedAt:savedAt});
     return {grupos,revision,savedAt};
   }),25000);
@@ -13148,33 +13146,39 @@ window._arlaState = {
   segmentos: {}    // vazio por padrão — só populado pela importação da planilha de fechamento
 };
 
-// Migração pontual autorizada: consolidar os dois grupos ARLA de Jundiaí.
-function arlaJundiaiNormalizar(v) {
-  return String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/_/g,' ').replace(/\s*\/\s*/g,' / ').replace(/\s+/g,' ').trim().toUpperCase();
+// Migração pontual: unificar apenas os dois grupos ARLA de Pampulha.
+function arlaPampulhaNormalizar(v) {
+  return String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/_/g,' ').replace(/\s+/g,' ').trim().toUpperCase();
 }
-window.arlaJundiaiNormalizar=arlaJundiaiNormalizar;
-function arlaPlanejarUnificacaoJundiai(grupos) {
-  if(!Array.isArray(grupos))return null;
-  const norm=arlaJundiaiNormalizar;
-  const alvo='AMBEV Jundiaí';
-  if(grupos.some(g=>norm(g?.nome)===norm(alvo)))return null;
-  const a=grupos.filter(g=>norm(g?.nome)==='GESTORES AMBEV ACUCAR JUNDIAI');
-  const b=grupos.filter(g=>norm(g?.nome)==='GESTORES AMBEV JUNDIAI / LATA JUNDIAI');
-  if(a.length!==1||b.length!==1||!a[0].id||!b[0].id||a[0].id===b[0].id)return null;
-  const [first]=a,[second]=b;
-  const expectedA=['AMBEV ACUCAR JUNDIAI'];
-  const expectedB=['AMBEV EMPURRADA JUNDIAI','AMBEV LATA JUNDIAI'];
-  const matches=(g,expected)=>Array.isArray(g.ops)&&g.ops.length===expected.length&&expected.every(op=>g.ops.some(v=>norm(v)===op));
-  if(!matches(first,expectedA)||!matches(second,expectedB))return null;
-  if(typeof first.emails!=='string'||typeof second.emails!=='string')return null;
-  const emailMap=new Map();
-  [first.emails,second.emails].forEach(v=>v.split(/[,;\n]+/).map(e=>e.trim()).filter(Boolean).forEach(e=>{if(!emailMap.has(e.toLowerCase()))emailMap.set(e.toLowerCase(),e);}));
+function arlaPampulhaCandidatos(grupos) {
+  if(!Array.isArray(grupos))return [];
+  return grupos.filter(g=>/\bPAMPULHA\b/.test(arlaPampulhaNormalizar(g?.nome)));
+}
+function arlaPlanejarUnificacaoPampulha(grupos) {
+  const norm=arlaPampulhaNormalizar;
+  const candidatos=arlaPampulhaCandidatos(grupos);
+  if(candidatos.length!==2)return null;
+  const anchors=candidatos.filter(g=>norm(g.nome)==='GESTORES AMBEV ROTA PAMPULHA'&&Array.isArray(g.ops)&&g.ops.some(o=>norm(o)==='AMBEV ROTA PAMPULHA'));
+  if(!anchors.length)return null;
+  const [first,second]=candidatos;
+  if(!first.id||!second.id||first.id===second.id)return null;
+  // Não confundir grupos de outras operações que apenas tenham nome semelhante.
+  if(!candidatos.every(g=>Array.isArray(g.ops)&&g.ops.some(o=>/\bAMBEV\b/.test(norm(o))&&/\bPAMPULHA\b/.test(norm(o)))&&typeof g.emails==='string'))return null;
+  const base=candidatos.find(g=>norm(g.nome)==='AMBEV PAMPULHA')||anchors[0];
+  const redundant=candidatos.find(g=>g!==base);
+  const emailMap=new Map(),opMap=new Map();
+  candidatos.forEach(g=>{
+    g.emails.split(/[,;\n]+/).map(e=>e.trim()).filter(Boolean).forEach(e=>{if(!emailMap.has(e.toLowerCase()))emailMap.set(e.toLowerCase(),e);});
+    g.ops.forEach(o=>{if(norm(o)&&!opMap.has(norm(o)))opMap.set(norm(o),o);});
+  });
   if(!emailMap.size)return null;
-  const msgs=[...new Set([first.obs,second.obs].map(v=>String(v||'').trim()).filter(Boolean))];
-  const merged={...second,nome:alvo,emails:[...emailMap.values()].join(','),ops:[...first.ops,...second.ops],obs:msgs.join('\n\n')};
-  return grupos.filter(g=>g!==first).map(g=>g===second?merged:g);
+  const msgs=[...new Set(candidatos.map(g=>String(g.obs||'').trim()).filter(Boolean))];
+  const merged={...base,nome:'AMBEV Pampulha',emails:[...emailMap.values()].join(','),ops:[...opMap.values()],obs:msgs.join('\n\n')};
+  return grupos.filter(g=>g!==redundant).map(g=>g===base?merged:g);
 }
-window.arlaPlanejarUnificacaoJundiai=arlaPlanejarUnificacaoJundiai;
+window.arlaPampulhaNormalizar=arlaPampulhaNormalizar;
+window.arlaPampulhaCandidatos=arlaPampulhaCandidatos;
+window.arlaPlanejarUnificacaoPampulha=arlaPlanejarUnificacaoPampulha;
 
 function arlaInit() {
   // Carrega EGR: prioridade = state (Firebase) > localStorage > defaults
@@ -13322,22 +13326,22 @@ function arlaLembreteBannerHTML(msg, tipo) {
     '</div>';
 }
 
-let _arlaJundiaiMergeInFlight=false;
-let _arlaJundiaiMergeConfirmed=false;
-async function arlaUnificarJundiaiSeNecessario(avisar=false) {
-  if(_arlaJundiaiMergeInFlight||_arlaJundiaiMergeConfirmed||!ignisIsAdmMaster()||window._dadosCarregados!==true||window._ignisMaintenanceState?.active||window._ignisSyncConflict)return;
-  if(_firebaseSaveInFlight||_firebasePendingSnapshot||typeof window.fbUnificarArlaJundiai!=='function')return;
+let _arlaPampulhaMergeInFlight=false;
+let _arlaPampulhaMergeConfirmed=false;
+async function arlaUnificarPampulhaSeNecessario(avisar=false) {
+  if(_arlaPampulhaMergeInFlight||_arlaPampulhaMergeConfirmed||!ignisIsAdmMaster()||window._dadosCarregados!==true||window._ignisMaintenanceState?.active||window._ignisSyncConflict)return;
+  if(_firebaseSaveInFlight||_firebasePendingSnapshot||typeof window.fbUnificarArlaPampulha!=='function')return;
   // O servidor é a única fonte da migração; não depende do cache nem do baseline local.
   // Consulta apenas quando os grupos antigos aparecem na interface/estado, ou ao abrir Grupos.
-  if(!avisar&&!arlaPlanejarUnificacaoJundiai(state.arlaGrupos)&&!arlaPlanejarUnificacaoJundiai(window._arlaState.grupos))return;
-  _arlaJundiaiMergeInFlight=true;
+  if(!avisar&&!arlaPlanejarUnificacaoPampulha(state.arlaGrupos)&&!arlaPlanejarUnificacaoPampulha(window._arlaState.grupos))return;
+  _arlaPampulhaMergeInFlight=true;
   try {
-    const result=await window.fbUnificarArlaJundiai();
+    const result=await window.fbUnificarArlaPampulha();
     if(!result||result.blocked){
-      if(avisar)showToast(result?.reason||'Não foi possível confirmar a unificação de Jundiaí na nuvem.','error');
+      if(avisar)showToast(result?.reason||'Não foi possível confirmar a unificação de Pampulha na nuvem.','error');
       return;
     }
-    _arlaJundiaiMergeConfirmed=true;
+    _arlaPampulhaMergeConfirmed=true;
     state.arlaGrupos=result.grupos;
     window._arlaState.grupos=result.grupos;
     window._firebaseRevision=result.revision;
@@ -13351,14 +13355,14 @@ async function arlaUnificarJundiaiSeNecessario(avisar=false) {
       localStorage.setItem('fueltracker_v3',JSON.stringify(lean));
     }catch(e){}
     if(document.getElementById('page-arla')?.classList.contains('active'))arlaRenderGrupos();
-    if(!result.already)showToast('Grupos ARLA de Jundiaí unificados: AMBEV Jundiaí.','success');
-  }catch(e){console.warn('IGNIS: unificação ARLA Jundiaí não confirmada pelo Firebase.',e);if(avisar)showToast('Firebase não confirmou a unificação: '+(e?.code||e?.message||'erro desconhecido'),'error');}
-  finally{_arlaJundiaiMergeInFlight=false;}
+    if(!result.already)showToast('Grupos ARLA de Pampulha unificados: AMBEV Pampulha.','success');
+  }catch(e){console.warn('IGNIS: unificação ARLA Pampulha não confirmada pelo Firebase.',e);if(avisar)showToast('Firebase não confirmou a unificação: '+(e?.code||e?.message||'erro desconhecido'),'error');}
+  finally{_arlaPampulhaMergeInFlight=false;}
 }
-document.addEventListener('ignis:data-ready',()=>{arlaUnificarJundiaiSeNecessario();});
+document.addEventListener('ignis:data-ready',()=>{arlaUnificarPampulhaSeNecessario();});
 
 function arlaOnShow() {
-  arlaUnificarJundiaiSeNecessario();
+  arlaUnificarPampulhaSeNecessario();
   arlaInit();
   arlaChecarLembrete();
   arlaRenderBancoEGR();
@@ -13378,7 +13382,7 @@ function arlaSetTab(tab, el) {
   document.querySelectorAll('.arla-tab').forEach(b => b.classList.remove('active'));
   if (el) el.classList.add('active');
   if (tab === 'segmentos') { arlaRenderSegmentosTabela(); }
-  if (tab === 'grupos') { arlaUnificarJundiaiSeNecessario(true); }
+  if (tab === 'grupos') { arlaUnificarPampulhaSeNecessario(true); }
 }
 
 // ── SEGMENTOS: tabela de faixas editável ──────────────────────────────────────
